@@ -7,6 +7,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
 
 <style>
 :root {
@@ -160,7 +163,10 @@ canvas.pad.eraser{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org
 .chip{font-size:11.5px;font-weight:500;padding:5px 11px;border-radius:999px;
   background:var(--pri-s);color:var(--pri-d)}
 .chip.gho{background:#F4F2FB;color:var(--sub)}
-.q{font-family:'Jua',sans-serif;font-size:clamp(18px,2.5vw,24px);line-height:1.55;margin:0 0 18px}
+.q{font-family:'Noto Sans KR',sans-serif;font-weight:700;font-size:clamp(16px,2.2vw,21px);line-height:1.75;margin:0 0 18px;word-break:keep-all}
+.blk p{margin:0;font-size:14.5px;line-height:1.95}
+.katex-display{overflow-x:auto;overflow-y:hidden;padding:6px 0}
+.katex{font-size:1.05em}
 .msgcard{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;padding:38px 22px}
 .result{display:flex;flex-direction:column;gap:15px}
 .verdict{display:flex;align-items:center;gap:9px;font-family:'Jua',sans-serif;font-size:19px}
@@ -171,7 +177,6 @@ canvas.pad.eraser{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org
 .verdict .sc{margin-left:auto;font-size:13px;color:var(--sub);font-family:'Noto Sans KR'}
 .blk{border-top:1px solid var(--line);padding-top:13px}
 .blk .bl{font-family:'Jua',sans-serif;font-size:12px;letter-spacing:.5px;color:var(--sub);margin-bottom:6px}
-.blk p{margin:0;font-size:14.5px;line-height:1.8}
 .blk.why p{color:#7A4FB0}
 .blk.deeper{background:#F1FBF7;border:1px solid #D6F2E8;border-radius:16px;padding:14px}
 .nextrow{display:flex;justify-content:space-between;align-items:center;gap:12px;
@@ -881,7 +886,7 @@ function Study({deck:initial,subjects}){
     setConcept(c);last.current=c.id;
     try{
       const r=await callClaude(
-        "너는 능동 회상 튜터야. 자료와 목표 개념에 대해 학습자가 스스로 설명/계산해야 하는 회상형 질문 하나를 한국어로 만들어. 왜·어떻게·언제 쓰는지·반례를 선호. 난이도: "+diffLong(c.box)+". 자료 범위 안에서만. JSON만: {\"question\":\"...\",\"key_points\":[\"채점 핵심 3~5개\"]}",
+        "너는 능동 회상 튜터야. 자료와 목표 개념에 대해 학습자가 스스로 설명/계산해야 하는 회상형 질문 하나를 한국어로 만들어. 왜·어떻게·언제 쓰는지·반례를 선호. 난이도: "+diffLong(c.box)+". 자료 범위 안에서만. 수식·행렬·그리스 문자는 LaTeX로: 인라인은 $...$, 블록은 $$...$$ 사용. JSON만: {\"question\":\"...\",\"key_points\":[\"채점 핵심 3~5개\"]}",
         "목표 개념: "+c.name+"\n\n자료:\n"+d.material.slice(0,12000),true);
       setQ(r);setPhase("answering");setTimeout(()=>ansRef.current&&ansRef.current.focus(),50);
     }catch(e){setPhase("error");setErrMsg("질문 생성 실패: "+e.message);}
@@ -893,7 +898,7 @@ function Study({deck:initial,subjects}){
     setPhase("grading");
     try{
       const r=await callClaude(
-        "너는 채점 조교야. 관대하되 정확하게 채점해. JSON만: {\"verdict\":\"correct|partial|incorrect\",\"score\":0-100,\"feedback\":\"맞은것/빠진것 2~4문장 (반말, 친근)\",\"why\":\"왜 그런지 자료 근거로 2~3문장\",\"model_answer\":\"모범답안 3~5문장\"}",
+        "너는 채점 조교야. 관대하되 정확하게 채점해. 수식·행렬·그리스 문자는 LaTeX로: 인라인은 $...$, 블록은 $$...$$ 사용. JSON만: {\"verdict\":\"correct|partial|incorrect\",\"score\":0-100,\"feedback\":\"맞은것/빠진것 2~4문장 (반말, 친근)\",\"why\":\"왜 그런지 자료 근거로 2~3문장\",\"model_answer\":\"모범답안 3~5문장\"}",
         "목표 개념: "+concept.name+"\n질문: "+q.question+"\n채점 핵심: "+JSON.stringify(q.key_points||[])+"\n\n학습자 답:\n"+answer+"\n\n자료:\n"+deck.material.slice(0,9000),true);
       setEv(r);
       const v=["correct","partial","incorrect"].includes(r.verdict)?r.verdict:"partial";
@@ -905,7 +910,7 @@ function Study({deck:initial,subjects}){
 
   async function explainMore(){
     setDeepBusy(true);
-    try{const r=await callClaude("너는 친절한 튜터야. 자료에 근거해 더 깊이 직관적으로(비유·예시·왜) 반말로 4~6문장.",
+    try{const r=await callClaude("너는 친절한 튜터야. 자료에 근거해 더 깊이 직관적으로(비유·예시·왜) 반말로 4~6문장. 수식·행렬·그리스 문자는 LaTeX로: 인라인은 $...$, 블록은 $$...$$ 사용.",
       "개념: "+concept.name+"\n질문: "+q.question+"\n모범답안: "+(ev?.model_answer||"")+"\n\n자료:\n"+deck.material.slice(0,9000),false);
       setDeeper(r);}
     catch(e){setDeeper("실패: "+e.message);}
@@ -952,7 +957,7 @@ function Study({deck:initial,subjects}){
               <span className="chip">{concept?.name}</span>
               <span className="chip gho">{diffWord(concept?.box)}</span>
             </div>
-            <h2 className="q">{q?.question}</h2>
+            <MathText text={q?.question} tag="h2" className="q"/>
 
             {(phase==="answering"||phase==="grading")&&(
               <>
@@ -979,11 +984,11 @@ function Study({deck:initial,subjects}){
                   <span className="dot"/>{vLabel}
                   {typeof ev.score==="number"&&<span className="sc">{ev.score}/100</span>}
                 </div>
-                <div className="blk"><div className="bl">피드백</div><p>{ev.feedback}</p></div>
-                {ev.why&&<div className="blk why"><div className="bl">왜 그런지</div><p>{ev.why}</p></div>}
-                <div className="blk"><div className="bl">이렇게 답하면 완벽</div><p>{ev.model_answer}</p></div>
+                <div className="blk"><div className="bl">피드백</div><MathText text={ev.feedback}/></div>
+                {ev.why&&<div className="blk why"><div className="bl">왜 그런지</div><MathText text={ev.why}/></div>}
+                <div className="blk"><div className="bl">이렇게 답하면 완벽</div><MathText text={ev.model_answer}/></div>
                 {deeper?(
-                  <div className="blk deeper"><div className="bl">더 풀어서</div><p>{deeper}</p></div>
+                  <div className="blk deeper"><div className="bl">더 풀어서</div><MathText text={deeper}/></div>
                 ):(
                   <button className="btn gho sm" onClick={explainMore} disabled={deepBusy}>{deepBusy?"불러오는 중…":"더 풀어서 설명해줘"}</button>
                 )}
@@ -998,6 +1003,29 @@ function Study({deck:initial,subjects}){
       </div>
     </section>
   );
+}
+
+/* ── 수식 렌더러 ── */
+function MathText({text,tag:Tag="p",className,style}){
+  const ref=useRef(null);
+  const safe=text
+    ?text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br/>")
+    :"";
+  useEffect(()=>{
+    if(!ref.current)return;
+    if(window.renderMathInElement){
+      try{renderMathInElement(ref.current,{
+        delimiters:[
+          {left:"$$",right:"$$",display:true},
+          {left:"$",right:"$",display:false},
+          {left:"\\(",right:"\\)",display:false},
+          {left:"\\[",right:"\\]",display:true},
+        ],
+        throwOnError:false,
+      });}catch(_){}
+    }
+  },[text]);
+  return <Tag ref={ref} className={className} style={style} dangerouslySetInnerHTML={{__html:safe}}/>;
 }
 
 function Meter({box}){
