@@ -165,8 +165,9 @@ canvas.pad.eraser{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org
 .chip.gho{background:#F4F2FB;color:var(--sub)}
 .q{font-family:'Noto Sans KR',sans-serif;font-weight:700;font-size:clamp(16px,2.2vw,21px);line-height:1.75;margin:0 0 18px;word-break:keep-all}
 .blk p{margin:0;font-size:14.5px;line-height:1.95}
-.katex-display{overflow-x:auto;overflow-y:hidden;padding:6px 0}
-.katex{font-size:1.05em}
+.katex-display{overflow-x:auto !important;overflow-y:hidden;padding:4px 0;margin:6px 0 !important}
+.katex{font-size:1.08em}
+.katex-display>.katex{text-align:center}
 .msgcard{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;padding:38px 22px}
 .result{display:flex;flex-direction:column;gap:15px}
 .verdict{display:flex;align-items:center;gap:9px;font-family:'Jua',sans-serif;font-size:19px}
@@ -1005,42 +1006,42 @@ function Study({deck:initial,subjects}){
   );
 }
 
-/* ── 수식 렌더러 ── */
+/* ── 수식 렌더러 ──
+   split(캡처그룹) → 홀수 인덱스=수식, 짝수 인덱스=일반텍스트
+   텍스트는 React 텍스트 노드, 수식만 katex.renderToString 사용
+── */
 function MathText({text,tag:Tag="p",className,style}){
-  const segs=React.useMemo(()=>{
-    if(!text)return[];
-    const out=[];
-    const re=/(\$\$[\s\S]*?\$\$|\$[^\n$]*?\$)/g;
-    let last=0,m;
-    while((m=re.exec(text))!==null){
-      if(m.index>last)out.push({t:"str",v:text.slice(last,m.index)});
-      const d=m[0].startsWith("$$");
-      out.push({t:"math",v:m[0].slice(d?2:1,d?-2:-1),d});
-      last=m.index+m[0].length;
-    }
-    if(last<text.length)out.push({t:"str",v:text.slice(last)});
-    return out;
-  },[text]);
-  return(
-    <Tag className={className} style={style}>
-      {segs.map((seg,i)=>{
-        if(seg.t==="str"){
-          const lines=seg.v.split("\n");
-          return lines.map((line,j)=>(
-            <React.Fragment key={"s"+i+"l"+j}>{line}{j<lines.length-1&&<br/>}</React.Fragment>
-          ));
-        }
-        if(!window.katex)return <span key={"m"+i}>{seg.v}</span>;
+  if(!text)return <Tag className={className} style={style}/>;
+  // 캡처그룹 split: 홀수 인덱스에 매칭된 수식이 들어옴
+  const parts=text.split(/(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/);
+  const nodes=[];
+  parts.forEach(function(part,i){
+    if(i%2===0){
+      // 일반 텍스트 — 줄바꿈 처리
+      var lines=part.split("\n");
+      lines.forEach(function(line,j){
+        if(line)nodes.push(line);
+        if(j<lines.length-1)nodes.push(React.createElement("br",{key:"br"+i+"_"+j}));
+      });
+    }else{
+      // 수식 — $...$ 또는 $$...$$
+      var disp=part.charAt(1)==="$";
+      var latex=part.slice(disp?2:1,disp?-2:-1).trim();
+      if(window.katex){
         try{
-          return <span key={"m"+i}
-            style={seg.d?{display:"block",overflowX:"auto",margin:"6px 0"}:undefined}
-            dangerouslySetInnerHTML={{__html:
-              window.katex.renderToString(seg.v,{displayMode:seg.d,throwOnError:false})
-            }}/>;
-        }catch(_){return <span key={"m"+i}>{seg.v}</span>;}
-      })}
-    </Tag>
-  );
+          var html=window.katex.renderToString(latex,{displayMode:disp,throwOnError:false,strict:false});
+          nodes.push(React.createElement("span",{
+            key:"k"+i,
+            style:disp?{display:"block",textAlign:"center",overflowX:"auto",margin:"10px 0"}:undefined,
+            dangerouslySetInnerHTML:{__html:html}
+          }));
+          return;
+        }catch(e){console.warn("KaTeX:",latex,e);}
+      }
+      nodes.push(React.createElement("span",{key:"k"+i},part));
+    }
+  });
+  return React.createElement(Tag,{className:className,style:style},nodes);
 }
 
 function Meter({box}){
