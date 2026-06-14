@@ -142,24 +142,23 @@ canvas.pad.eraser{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org
 .tools .note{font-size:11.5px;color:var(--sub)}
 
 /* ── STUDY ── */
-.study{display:grid;grid-template-columns:220px 1fr;gap:20px;align-items:start}
-.ans-layout{display:grid;grid-template-columns:1fr 1.5fr;gap:16px;align-items:start}
-.ans-layout .pad{height:320px}
-.crow{display:flex;align-items:center;gap:9px;padding:8px;border-radius:12px;transition:background .2s;cursor:pointer;user-select:none}
-.rail{padding:16px;border-radius:20px;display:flex;flex-direction:column;gap:13px;position:sticky;top:14px}
-.rail .top{display:flex;flex-direction:column;gap:3px}
-.rail .nm{font-family:'Jua',sans-serif;font-size:15px}
-.rail .prog{display:flex;gap:14px;padding-bottom:12px;border-bottom:1px solid var(--line)}
-.clist{display:flex;flex-direction:column;gap:2px;max-height:46vh;overflow:auto;margin:-4px;padding:4px}
+.study{display:flex;flex-direction:column;gap:12px}
+.study-bar{display:flex;align-items:center;gap:10px;padding:10px 16px;flex-wrap:wrap;border-radius:18px}
+.study-bar .snm{font-family:'Jua',sans-serif;font-size:15px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.study-bar .prog{display:flex;gap:10px;flex:none}
+.clist-panel{display:flex;flex-wrap:wrap;gap:4px;padding:10px 14px;border-radius:18px;animation:pop .25s ease}
+.ans-layout{display:grid;grid-template-columns:1fr 2fr;gap:14px;align-items:start}
+.ans-layout .pad{height:calc(100vh - 300px);min-height:420px}
+.crow{display:flex;align-items:center;gap:7px;padding:5px 9px;border-radius:10px;transition:background .15s;cursor:pointer;user-select:none}
 .crow.active{background:var(--pri-s)}
-.crow .cn{font-size:12.5px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.crow.active .cn{color:var(--pri-d);font-weight:500}
+.crow .cn{font-size:12px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px}
+.crow.active .cn{color:var(--pri-d);font-weight:600}
 .meter{display:inline-flex;gap:3px;flex:none}
-.meter i{width:7px;height:7px;border-radius:50%;background:#E3DDF4}
+.meter i{width:6px;height:6px;border-radius:50%;background:#E3DDF4}
 .meter i.on{background:var(--pri)}
 .meter i.on.full{background:var(--mint)}
 .stage{min-height:60vh}
-.qcard{padding:clamp(20px,3vw,30px);border-radius:24px;animation:pop .4s cubic-bezier(.2,.8,.2,1)}
+.qcard{padding:clamp(16px,2.5vw,24px);border-radius:22px;animation:pop .4s cubic-bezier(.2,.8,.2,1)}
 @keyframes pop{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
 .qcard .chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
 .chip{font-size:11.5px;font-weight:500;padding:5px 11px;border-radius:999px;
@@ -198,13 +197,9 @@ a{color:var(--pri-d)}
 
 @media(max-width:900px){
   .ans-layout{grid-template-columns:1fr}
-  .ans-layout .pad{height:260px}
+  .ans-layout .pad{height:55vw;min-height:280px}
 }
 @media(max-width:740px){
-  .study{grid-template-columns:1fr}
-  .rail{position:static;order:2}
-  .clist{max-height:none}
-  .stage{order:1}
   .hero{flex-direction:column;text-align:center}
   canvas.pad{height:260px}
 }
@@ -947,6 +942,7 @@ function Study({deck:initial,subjects}){
     setDeepBusy(false);
   }
 
+  const [showInfo,setShowInfo]=useState(false);
   const subj=subjects?.find(s=>s.id===deck.subjId);
   const s=deckSummary(deck);
   const v=ev?.verdict;
@@ -956,26 +952,32 @@ function Study({deck:initial,subjects}){
 
   return(
     <section className="study">
-      <aside className="card rail">
-        <div className="top">
-          {subj&&<div style={{fontSize:11,fontWeight:700,color:subj.color,marginBottom:2}}>{subj.name}</div>}
-          <div className="nm">{deck.name}</div>
-          <div className="muted" style={{fontSize:11.5}}>이번 세션 · {count}문제</div>
-        </div>
-        <div className="prog">
+      {/* ── 상단 바 ── */}
+      <div className="card study-bar">
+        {subj&&<span style={{fontSize:11,fontWeight:700,color:subj.color,flexShrink:0}}>{subj.name}</span>}
+        <span className="snm">{deck.name}</span>
+        <div className="prog" style={{gap:8}}>
           <Stat n={s.mastered} l="익힘" t="mint"/>
           <Stat n={s.due} l="대기" t="pri"/>
           <Stat n={s.weak} l="약함" t="rose"/>
         </div>
-        <div className="clist">
+        <span className="muted" style={{fontSize:11,flexShrink:0}}>{count}문제</span>
+        <button className="btn gho xs" style={{flexShrink:0}} onClick={()=>setShowInfo(v=>!v)}>
+          {showInfo?"▲ 닫기":"▼ 개념 목록"}
+        </button>
+      </div>
+
+      {/* ── 개념 목록 토글 ── */}
+      {showInfo&&(
+        <div className="card clist-panel">
           {deck.concepts.slice().sort((a,b)=>(a.box||1)-(b.box||1)).map(c=>(
             <div key={c.id} className={"crow"+(concept&&c.id===concept.id?" active":"")}
-              onClick={()=>{if(phase!=="loading"&&phase!=="grading")next(deck,c.id);}}>
+              onClick={()=>{if(phase!=="loading"&&phase!=="grading"){setShowInfo(false);next(deck,c.id);}}}>
               <Meter box={c.box||1}/><span className="cn">{c.name}</span>
             </div>
           ))}
         </div>
-      </aside>
+      )}
 
       <div className="stage">
         {phase==="error"&&(
