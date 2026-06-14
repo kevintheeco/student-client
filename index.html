@@ -316,8 +316,15 @@ function pickConcept(d,avoidId){
   if(pool.length>1&&pool[0].id===avoidId){const alt=pool.find(c=>c.id!==avoidId);if(alt)return alt}
   return pool[0];
 }
-const diffWord=(box)=>(box||1)<=1?"기초":box<=3?"보통":"응용";
-const diffLong=(box)=>(box||1)<=1?"기초 (정의·직관)":box<=3?"보통 (왜·연결)":"응용 (계산·반례·적용)";
+const diffWord=(box)=>(box||1)<=1?"기초":box<=2?"초중급":box<=3?"중급":box<=4?"고급":"심화";
+const diffLong=(box)=>{
+  const b=box||1;
+  if(b<=1)return"기초: 개념 정의·직관 이해. '~란 무엇인가', '~의 의미는' 수준";
+  if(b<=2)return"초중급: 이유·메커니즘. '왜 ~가 발생하는가', '~의 작동 원리는' 수준";
+  if(b<=3)return"중급: 개념 비교·연결·단순 수치 계산. '~와 ~의 차이', '주어진 수치로 ~를 구하라' 수준";
+  if(b<=4)return"고급: 복잡한 계산·그래프 분석·반례. '균형 수치를 직접 구하라', '이 주장의 반례를 들어라' 수준";
+  return"심화: 복합 상황 분석·정책 효과 추론·창의 응용. '~정책의 단기/장기 영향을 비교 분석하라' 수준";
+};
 
 /* ── 마스코트 ── */
 function Prof({size=56}){
@@ -980,7 +987,7 @@ function Study({deck:initial,subjects}){
     setPhase("dontknow");setDontknow("");setDontknowBusy(true);
     try{
       const r=await callClaude(
-        "너는 친절한 튜터야. 학습자가 이 개념을 전혀 모른다고 했어. 처음 배우는 사람에게 직관적으로(비유·예시·왜 중요한지) 설명해줘. 반말로 5~8문장. 수식은 LaTeX($...$). 그래프가 도움이 되면 SVG로 그려줘(코드블록 없이 <svg> 태그 직접, width≤380 height≤260 viewBox 사용, 축·레이블 포함, 색상: 축=#221C39, 곡선은 #6C5CE7·#27C2A0·#FF6B8A·#FFC24B, bg=#FFFDF8).\n\n자료:\n"+studyMat,
+        "너는 친절한 튜터야. 바로 설명 시작 — 인사말·사고 과정·'설명할게' 같은 메타 문장 없이. 학습자가 이 개념을 전혀 모르니 처음 배우는 사람에게 직관적으로(비유·예시·왜 중요한지) 반말로 5~8문장 설명해줘. 수식은 LaTeX($...$). 그래프가 도움이 되면 SVG로 그려줘(코드블록 없이 <svg> 태그 직접, width≤380 height≤260 viewBox 사용, 축·레이블 포함, 색상: 축=#221C39, 곡선은 #6C5CE7·#27C2A0·#FF6B8A·#FFC24B, bg=#FFFDF8).\n\n자료:\n"+studyMat,
         "개념: "+concept.name+(q?"\n원래 질문: "+q.question:""),
         false,{cache:true,maxTok:1400});
       setDontknow(r);
