@@ -144,13 +144,13 @@ canvas.pad.eraser{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org
 /* ── STUDY ── */
 .study{display:grid;grid-template-columns:220px 1fr;gap:20px;align-items:start}
 .ans-layout{display:grid;grid-template-columns:1fr 1.5fr;gap:16px;align-items:start}
-.ans-layout .pad{height:480px}
+.ans-layout .pad{height:320px}
+.crow{display:flex;align-items:center;gap:9px;padding:8px;border-radius:12px;transition:background .2s;cursor:pointer;user-select:none}
 .rail{padding:16px;border-radius:20px;display:flex;flex-direction:column;gap:13px;position:sticky;top:14px}
 .rail .top{display:flex;flex-direction:column;gap:3px}
 .rail .nm{font-family:'Jua',sans-serif;font-size:15px}
 .rail .prog{display:flex;gap:14px;padding-bottom:12px;border-bottom:1px solid var(--line)}
 .clist{display:flex;flex-direction:column;gap:2px;max-height:46vh;overflow:auto;margin:-4px;padding:4px}
-.crow{display:flex;align-items:center;gap:9px;padding:8px;border-radius:12px;transition:background .2s}
 .crow.active{background:var(--pri-s)}
 .crow .cn{font-size:12.5px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .crow.active .cn{color:var(--pri-d);font-weight:500}
@@ -198,7 +198,7 @@ a{color:var(--pri-d)}
 
 @media(max-width:900px){
   .ans-layout{grid-template-columns:1fr}
-  .ans-layout .pad{height:320px}
+  .ans-layout .pad{height:260px}
 }
 @media(max-width:740px){
   .study{grid-template-columns:1fr}
@@ -617,7 +617,7 @@ function FileDropZone({files,onChange}){
 const PEN_COLORS=["#221C39","#2563EB","#DC2626"];
 const PEN_LABELS=["검정","파랑","빨강"];
 
-const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr},fwdRef){
+const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penOnlyDefault=false},fwdRef){
   const canvasRef=useRef(null);
   const strokes=useRef([]);
   const drawing=useRef(false);
@@ -627,6 +627,7 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr},fwd
   const [busy,setBusy]=useState(false);
   const [padErr,setPadErr]=useState("");
   const [hasInk,setHasInk]=useState(false);
+  const [penOnly,setPenOnly]=useState(penOnlyDefault);
 
   React.useImperativeHandle(fwdRef,()=>({
     getImageBase64:()=>canvasRef.current?canvasRef.current.toDataURL("image/png").split(",")[1]:null,
@@ -666,12 +667,15 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr},fwd
   const pt=(e)=>{const r=canvasRef.current.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top,p:e.pressure||.5};};
   function down(e){
     if(disabled)return;
+    if(penOnly&&e.pointerType!=="pen")return;
     e.preventDefault();drawing.current=true;
     strokes.current.push({pts:[pt(e)],col:color,sz:size,eraser:tool==="eraser"});
     try{e.target.setPointerCapture(e.pointerId);}catch(_){}
   }
   function move(e){
-    if(!drawing.current||disabled)return;e.preventDefault();
+    if(!drawing.current||disabled)return;
+    if(penOnly&&e.pointerType!=="pen"){drawing.current=false;return;}
+    e.preventDefault();
     const st=strokes.current[strokes.current.length-1];const p=pt(e);st.pts.push(p);
     const ctx=canvasRef.current.getContext("2d");
     if(st.pts.length>1){
@@ -718,6 +722,11 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr},fwd
         <div className="sep"/>
         <button className="btn gho xs" onClick={undo} disabled={busy||disabled}>↩ 취소</button>
         <button className="btn gho xs" onClick={clearPad} disabled={busy||disabled}>🗑️ 전체</button>
+        <div className="sep"/>
+        <button className={"btn gho xs"+(penOnly?" on":"")} onClick={()=>setPenOnly(v=>!v)}
+          title={penOnly?"S펜 전용 ON — 터치 무시 중":"터치도 허용 중"}>
+          ✒️ {penOnly?"S펜":"터치"}
+        </button>
       </div>
       <canvas ref={canvasRef} className={"pad"+(tool==="eraser"?" eraser":"")}
         style={disabled?{opacity:.55,pointerEvents:"none"}:undefined}
@@ -875,6 +884,7 @@ function Study({deck:initial,subjects}){
   const [concept,setConcept]=useState(null);
   const [q,setQ]=useState(null);
   const [phase,setPhase]=useState("loading");
+  const [answer,setAnswer]=useState("");
   const [ev,setEv]=useState(null);
   const [errMsg,setErrMsg]=useState("");
   const [submitErr,setSubmitErr]=useState("");
@@ -886,11 +896,11 @@ function Study({deck:initial,subjects}){
 
   function persist(d){setDeck(d);LS.set(dk(d.id),d);}
 
-  async function next(d){
+  async function next(d,forceId){
     d=d||deck;
-    setPhase("loading");setQ(null);setEv(null);setDeeper("");setErrMsg("");setSubmitErr("");
+    setPhase("loading");setQ(null);setEv(null);setAnswer("");setDeeper("");setErrMsg("");setSubmitErr("");
     padRef.current?.clear();
-    const c=pickConcept(d,last.current);
+    const c=forceId?(d.concepts||[]).find(x=>x.id===forceId)||pickConcept(d,last.current):pickConcept(d,last.current);
     if(!c){setPhase("error");setErrMsg("질문할 개념이 없어.");return;}
     setConcept(c);last.current=c.id;
     try{
@@ -904,16 +914,22 @@ function Study({deck:initial,subjects}){
 
   async function submit(){
     if(phase!=="answering")return;
-    if(!padRef.current?.hasStrokes()){setSubmitErr("오른쪽 노트에 답을 써봐!");return;}
-    const img=padRef.current.getImageBase64();
-    if(!img){setSubmitErr("캔버스 오류. 다시 시도해봐.");return;}
+    const hasInk=padRef.current?.hasStrokes();
+    const hasTxt=answer.trim().length>0;
+    if(!hasInk&&!hasTxt){setSubmitErr("노트에 써보거나 텍스트로 답을 입력해봐!");return;}
+    const img=hasInk?padRef.current.getImageBase64():null;
     setPhase("grading");setSubmitErr("");
     try{
+      const userBlocks=[];
+      if(img)userBlocks.push({type:"image",source:{type:"base64",media_type:"image/png",data:img}});
+      const textParts=["목표 개념: "+concept.name,"질문: "+q.question,"채점 핵심: "+JSON.stringify(q.key_points||[])];
+      if(hasTxt)textParts.push("\n학습자 텍스트 답안:\n"+answer.trim());
+      if(img)textParts.push("\n학습자가 위 이미지에 손으로 쓴 답도 포함돼. 이미지 속 내용을 읽고 함께 채점해줘.");
+      textParts.push("\n\n자료:\n"+deck.material.slice(0,9000));
+      userBlocks.push({type:"text",text:textParts.join("\n")});
       const r=await callClaude(
-        "너는 채점 조교야. 학습자가 손으로 쓴 답안 이미지를 보고 관대하되 정확하게 채점해. 수식·행렬·그리스 문자는 LaTeX로: 인라인은 $...$, 블록은 $$...$$ 사용. JSON만: {\"verdict\":\"correct|partial|incorrect\",\"score\":0-100,\"feedback\":\"맞은것/빠진것 2~4문장 (반말, 친근)\",\"why\":\"왜 그런지 자료 근거로 2~3문장\",\"model_answer\":\"모범답안 3~5문장\"}",
-        [{type:"image",source:{type:"base64",media_type:"image/png",data:img}},
-         {type:"text",text:"목표 개념: "+concept.name+"\n질문: "+q.question+"\n채점 핵심: "+JSON.stringify(q.key_points||[])+"\n\n학습자가 위 이미지에 손으로 쓴 답이야. 이미지 속 내용을 읽고 채점해줘.\n\n자료:\n"+deck.material.slice(0,9000)}],
-        true);
+        "너는 채점 조교야. 학습자 답안(텍스트, 손글씨 이미지, 또는 둘 다)을 보고 관대하되 정확하게 채점해. 수식·행렬·그리스 문자는 LaTeX로: 인라인은 $...$, 블록은 $$...$$ 사용. JSON만: {\"verdict\":\"correct|partial|incorrect\",\"score\":0-100,\"feedback\":\"맞은것/빠진것 2~4문장 (반말, 친근)\",\"why\":\"왜 그런지 자료 근거로 2~3문장\",\"model_answer\":\"모범답안 3~5문장\"}",
+        userBlocks,true);
       setEv(r);
       const v=["correct","partial","incorrect"].includes(r.verdict)?r.verdict:"partial";
       const uc=schedule(concept,v);
@@ -953,7 +969,8 @@ function Study({deck:initial,subjects}){
         </div>
         <div className="clist">
           {deck.concepts.slice().sort((a,b)=>(a.box||1)-(b.box||1)).map(c=>(
-            <div key={c.id} className={"crow"+(concept&&c.id===concept.id?" active":"")}>
+            <div key={c.id} className={"crow"+(concept&&c.id===concept.id?" active":"")}
+              onClick={()=>{if(phase!=="loading"&&phase!=="grading")next(deck,c.id);}}>
               <Meter box={c.box||1}/><span className="cn">{c.name}</span>
             </div>
           ))}
@@ -1011,7 +1028,18 @@ function Study({deck:initial,subjects}){
                   <span className="muted" style={{fontSize:13}}>채점 중…</span>
                 </div>
               )}
-              <PenPad ref={padRef} kind="answer" hideOcr disabled={phase==="grading"||phase==="result"}/>
+              <PenPad ref={padRef} kind="answer" hideOcr penOnlyDefault={true} disabled={phase==="grading"||phase==="result"}/>
+              {phase!=="result"&&(
+                <textarea
+                  value={answer}
+                  onChange={e=>setAnswer(e.target.value)}
+                  disabled={phase==="grading"}
+                  placeholder="텍스트로도 답할 수 있어 (선택사항)"
+                  style={{width:"100%",minHeight:72,padding:"8px 10px",borderRadius:10,
+                    border:"1.5px solid var(--line)",fontFamily:"'Noto Sans KR',sans-serif",
+                    fontSize:13,resize:"vertical",outline:"none",background:"var(--bg)",color:"var(--ink)"}}
+                />
+              )}
               {phase!=="result"&&(
                 <>
                   {submitErr&&<div className="err">{submitErr}</div>}
