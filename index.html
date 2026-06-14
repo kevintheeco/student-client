@@ -269,13 +269,20 @@ async function callClaude(system,userContent,wantJson,opts={}){
 
 async function transcribeFile(base64,mediaType,kind){
   const hint=kind==="answer"?"이건 학습자가 손으로 쓴 답안이야.":"이건 학습자의 공부 노트야.";
-  const isPdf=mediaType==="application/pdf";
-  const fileBlock=isPdf
-    ?{type:"document",source:{type:"base64",media_type:"application/pdf",data:base64}}
-    :{type:"image",source:{type:"base64",media_type:mediaType||"image/png",data:base64}};
+  const fileBlock={type:"image",source:{type:"base64",media_type:mediaType||"image/png",data:base64}};
   return await callClaude(
-    isPdf?"너는 PDF 문서 내용 추출 도우미야.":"너는 손글씨 OCR 도우미야.",
+    "너는 손글씨 OCR 도우미야.",
     [fileBlock,{type:"text",text:hint+" 내용을 한국어로 정확히 옮겨줘. 수식은 ^ _ 기호로 풀어 써. 텍스트만 출력."}],false);
+}
+
+// PDF는 텍스트 변환 없이 직접 분석 — summary+concepts 한 번에 추출
+async function processPdf(base64){
+  const r=await callClaude(
+    "너는 학습 자료 분석 전문가야. PDF를 읽고 학습에 필요한 핵심 내용을 추출해.",
+    [{type:"document",source:{type:"base64",media_type:"application/pdf",data:base64}},
+     {type:"text",text:"이 PDF의 학습 내용을 분석해줘. JSON만: {\"summary\":\"핵심 개념·공식·예시 압축 요약 (3000자 이내, 수식은 LaTeX 형식 그대로 유지)\",\"concepts\":[\"능동 회상으로 시험 볼 만한 핵심 개념 10~20개 (짧은 명사구)\"]}"}],
+    true,{maxTok:3000});
+  return r;
 }
 
 /* 파일 → base64 */
@@ -796,6 +803,7 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
   const [material,setMaterial]=useState("");
   const [files,setFiles]=useState([]);
   const [busy,setBusy]=useState(false);
+  const [busyMsg,setBusyMsg]=useState("");
   const [err,setErr]=useState("");
   const [pen,setPen]=useState(false);
   const [newSubj,setNewSubj]=useState("");
@@ -810,35 +818,51 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
   }
 
   async function save(){
-    setBusy(true);setErr("");
+    setBusy(true);setErr("");setBusyMsg("준비 중…");
 
-    // 파일 → 텍스트 추출
-    let extra="";
+    // ── 파일 처리: PDF는 직접 분석, 이미지는 OCR ──
+    const pdfResults=[];
+    let imageText="";
     for(const f of files){
+      const isPdf=f.type==="application/pdf";
+      if(isPdf&&f.size>30*1024*1024){setErr("PDF가 너무 커. 30MB 이하 파일만 지원해.");setBusy(false);return;}
       try{
         const b64=await toB64(f);
-        const mime=f.type||"image/jpeg";
-        const t=await transcribeFile(b64,mime,"note");
-        extra+=(t||"")+"\n";
-      }catch(e){console.warn("파일 인식 실패",f.name,e.message);}
+        if(isPdf){
+          setBusyMsg("PDF 분석 중… ("+f.name+")");
+          const r=await processPdf(b64);
+          if(r)pdfResults.push(r);
+        }else{
+          setBusyMsg("이미지 읽는 중… ("+f.name+")");
+          const t=await transcribeFile(b64,f.type||"image/jpeg","note");
+          imageText+=(t||"")+"\n";
+        }
+      }catch(e){console.warn("파일 처리 실패",f.name,e.message);}
     }
-    const fullMaterial=(material+"\n"+extra).trim();
+
+    // ── 자료 합치기 ──
+    const pdfSummaryText=pdfResults.map(r=>r.summary||"").filter(Boolean).join("\n\n");
+    const fullMaterial=[material,imageText,pdfSummaryText].map(s=>s.trim()).filter(Boolean).join("\n").trim();
     const finalName=name.trim()||"새 자료";
 
-    let concepts=[];
-    if(fullMaterial){
+    // ── 개념 추출: PDF가 이미 개념 제공하면 우선 사용 ──
+    setBusyMsg("핵심 개념 정리 중…");
+    let concepts=pdfResults.flatMap(r=>Array.isArray(r.concepts)?r.concepts:[]);
+    if(fullMaterial&&concepts.length<5){
       try{
         const r=await callClaude(
           "너는 학습 자료에서 핵심 개념을 뽑는 조교야. 능동 회상으로 시험 볼 만한 핵심 개념 8~15개를 짧은 명사구로 뽑아. 자료에 실제 있는 것만. JSON만: {\"concepts\":[\"...\"]}",
           "자료:\n\n"+fullMaterial.slice(0,12000),true,{maxTok:512});
-        concepts=Array.isArray(r.concepts)?r.concepts:[];
+        const extra=Array.isArray(r.concepts)?r.concepts:[];
+        concepts=[...concepts,...extra.filter(c=>!concepts.includes(c))];
       }catch(e){setErr("개념 뽑기 실패: "+e.message);setBusy(false);return;}
-      if(!concepts.length)concepts=["전체 자료"];
     }
+    if(!concepts.length)concepts=["전체 자료"];
 
-    // 요약본 생성 (2000자 이상일 때만 — 이후 학습 호출 토큰 절감용)
-    let summary="";
-    if(fullMaterial.length>2000){
+    // ── 요약: PDF 분석 결과를 그대로 사용, 없으면 텍스트에서 생성 ──
+    let summary=pdfSummaryText;
+    if(!summary&&fullMaterial.length>2000){
+      setBusyMsg("자료 요약 중…");
       try{
         summary=await callClaude(
           "너는 학습 자료 요약 전문가야. 핵심 개념·공식·예시를 빠짐없이 압축해. 수식·기호 원문 그대로. 텍스트만 출력.",
@@ -851,7 +875,7 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
       concepts:concepts.map(nm=>({id:uid(),name:String(nm).slice(0,80),box:1,dueAt:0,reps:0,lapses:0}))};
     LS.set(dk(id),deck);
     LS.set(DECKS_KEY,[{id,name:deck.name,subjId},...(LS.get(DECKS_KEY)||[])]);
-    setBusy(false);onDone();
+    setBusy(false);setBusyMsg("");onDone();
   }
 
   const selSubj=subjects.find(s=>s.id===subjId);
@@ -902,10 +926,10 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
 
       {err&&<div className="err">{err}</div>}
       <div className="row">
-        <button className="btn pri" onClick={save} disabled={busy}>{busy?"핵심 개념 뽑는 중…":"이거 외우자! 🎓"}</button>
+        <button className="btn pri" onClick={save} disabled={busy}>{busy?(busyMsg||"처리 중…"):"이거 외우자! 🎓"}</button>
         <button className="btn gho" onClick={onCancel} disabled={busy}>취소</button>
       </div>
-      <p className="hint">파일이 있으면 내용을 먼저 읽어서 자동으로 합쳐줘. PDF는 텍스트가 많은 페이지일수록 잘 돼.</p>
+      <p className="hint">PDF는 최대 50페이지·30MB까지 지원. 이미지·손글씨 노트도 첨부 가능.</p>
     </section>
   );
 }
