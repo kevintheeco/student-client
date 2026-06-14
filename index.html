@@ -25,7 +25,7 @@ body{font-family:'Noto Sans KR','Segoe UI Symbol','Apple Symbols','Symbola',syst
   background:radial-gradient(80% 50% at 100% 0%,#EFE6FF 0%,transparent 60%),
              radial-gradient(70% 45% at 0% 8%,#FFE9E0 0%,transparent 55%),var(--bg);
   min-height:100vh}
-#root{max-width:1040px;margin:0 auto;padding:18px clamp(14px,4vw,32px) 60px}
+#root{max-width:1440px;margin:0 auto;padding:18px clamp(14px,3vw,28px) 60px}
 
 /* ── BUTTONS ── */
 .btn{font-family:inherit;border:none;cursor:pointer;border-radius:14px;font-weight:700;
@@ -85,7 +85,7 @@ body{font-family:'Noto Sans KR','Segoe UI Symbol','Apple Symbols','Symbola',syst
   border:1.5px dashed #DCD6F0;background:#FBFAFF}
 
 /* ── FORM / ADD ── */
-.panel{max-width:700px;margin:0 auto;padding:26px;border-radius:24px;display:flex;flex-direction:column;gap:14px}
+.panel{max-width:900px;margin:0 auto;padding:26px;border-radius:24px;display:flex;flex-direction:column;gap:14px}
 .field{width:100%;font-family:inherit;font-size:14.5px;color:var(--ink);background:#FBFAFF;
   border:1.5px solid var(--line);border-radius:14px;padding:13px 15px;line-height:1.6}
 textarea.field{resize:vertical;min-height:110px}
@@ -147,8 +147,8 @@ canvas.pad.eraser{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org
 .study-bar .snm{font-family:'Jua',sans-serif;font-size:15px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .study-bar .prog{display:flex;gap:10px;flex:none}
 .clist-panel{display:flex;flex-wrap:wrap;gap:4px;padding:10px 14px;border-radius:18px;animation:pop .25s ease}
-.ans-layout{display:grid;grid-template-columns:1fr 3fr;gap:14px;align-items:start}
-.ans-layout .pad{height:calc(100vh - 300px);min-height:420px}
+.ans-layout{display:grid;grid-template-columns:1fr 4fr;gap:16px;align-items:start}
+.ans-layout .pad{height:calc(100vh - 270px);min-height:440px}
 .crow{display:flex;align-items:center;gap:7px;padding:5px 9px;border-radius:10px;transition:background .15s;cursor:pointer;user-select:none}
 .crow.active{background:var(--pri-s)}
 .crow .cn{font-size:12px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px}
@@ -210,9 +210,9 @@ a{color:var(--pri-d)}
 .annot-wrap{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px}
 .annot-answer{background:#F0FFF8;border:1px solid #B2DFD0;border-radius:12px;padding:12px 14px;font-size:13.5px;line-height:1.85}
 
-@media(max-width:900px){
+@media(max-width:960px){
   .ans-layout{grid-template-columns:1fr}
-  .ans-layout .pad{height:55vw;min-height:280px}
+  .ans-layout .pad{height:55vw;min-height:300px}
 }
 @media(max-width:740px){
   .hero{flex-direction:column;text-align:center}
@@ -984,8 +984,8 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
         <button className="btn gho xs" onClick={clearPad} disabled={busy||disabled}>🗑️ 전체</button>
         <div className="sep"/>
         <button className={"btn gho xs"+(penOnly?" on":"")} onClick={()=>setPenOnly(v=>!v)}
-          title={penOnly?"S펜 전용 ON — 터치 무시 중":"터치도 허용 중"}>
-          ✒️ {penOnly?"S펜":"터치"}
+          title={penOnly?"펜 전용 ON — 손가락 터치 무시 중 (S펜·Apple Pencil)":"터치·마우스도 허용 중"}>
+          ✒️ {penOnly?"펜 전용":"터치"}
         </button>
       </div>
       <canvas ref={canvasRef} className={"pad"+(tool==="eraser"?" eraser":"")}
@@ -1313,7 +1313,7 @@ function Study({deck:initial,subjects}){
     setPhase("dontknow");setDontknow("");setDontknowBusy(true);
     try{
       const r=await callAI(
-        "너는 친절한 튜터야. 바로 설명 시작 — 인사말·사고 과정·'설명할게' 같은 메타 문장 없이. 학습자가 이 개념을 전혀 모르니 처음 배우는 사람에게 직관적으로(비유·예시·왜 중요한지) 반말로 5~8문장 설명해줘. 수식·행렬·그리스 문자·수학 기호(⊥ ∥ ∈ ℝ ∇ 등)는 반드시 모두 LaTeX로($...$, $$...$$). 유니코드 기호 직접 사용 금지. 그래프가 도움이 되면 SVG로 그려줘(코드블록 없이 <svg> 태그 직접, width≤380 height≤260 viewBox 사용, 축·레이블 포함, 색상: 축=#221C39, 곡선은 #6C5CE7·#27C2A0·#FF6B8A·#FFC24B, bg=#FFFDF8).\n\n자료:\n"+studyMat,
+        "너는 친절한 튜터야. 출력 첫 글자부터 바로 설명 내용. 절대 금지: 인사·'알겠어'·'좋아'·'그럼'·'먼저'·'이 개념은'·'설명할게'·'~에 대해 설명해줄게' 같은 도입 문장, 사고 과정 나열, 요약 예고, 주제 재언급. 처음 배우는 학습자에게 비유·예시·왜 중요한지 포함해 반말로 5~8문장. 수식은 LaTeX($...$, $$...$$). SVG 그래프 필요 시 코드블록 없이 <svg> 태그 직접(width≤380 height≤260, 축·레이블 포함).\n\n자료:\n"+studyMat,
         "개념: "+concept.name+(q?"\n원래 질문: "+q.question:""),
         false,{cache:true,maxTok:1400});
       setDontknow(r);
@@ -1332,23 +1332,23 @@ function Study({deck:initial,subjects}){
     setDeepBusy(false);
   }
 
-  async function askAnnotation(){
+  async function askAnnotation(ctxText){
     const hasInk=annotPadRef.current?.hasStrokes();
     const hasTxt=annotQ.trim().length>0;
     if(!hasInk&&!hasTxt)return;
     setAnnotBusy(true);
     const img=hasInk?annotPadRef.current.getImageBase64():null;
-    const ctx=[ev?.feedback,ev?.why,ev?.model_answer].filter(Boolean).join("\n\n");
+    const ctx=ctxText||[ev?.feedback,ev?.why,ev?.model_answer].filter(Boolean).join("\n\n");
     const userBlocks=[];
     if(img)userBlocks.push({type:"image",source:{type:"base64",media_type:"image/png",data:img}});
     userBlocks.push({type:"text",text:
-      "학습자가 해설을 보다가 이해 안 되는 부분을 노란 형광펜으로 표시하고 초록 펜·텍스트로 의문을 남겼어. 표시된 내용에 대해 친절하게 설명해줘.\n"+
+      "학습자가 설명을 보다가 이해 안 되는 부분을 노란 형광펜으로 표시하고 초록 펜·텍스트로 의문을 남겼어. 표시된 내용에 대해 친절하게 바로 설명해. 메타 문장·도입 없이.\n"+
       (hasTxt?"타이핑 질문: "+annotQ.trim()+"\n\n":"")+
-      "해설 내용:\n"+ctx
+      "설명 내용:\n"+ctx
     });
     try{
       const r=await callAI(
-        "친절한 튜터. 바로 설명 시작 — 메타 문장 없이. 학습자 의문에 직접 답해. 수식은 LaTeX($...$). 반말.",
+        "친절한 튜터. 첫 글자부터 바로 설명 내용. 인사·'알겠어'·메타 문장 절대 금지. 수식은 LaTeX($...$). 반말.",
         userBlocks,false,{maxTok:1200,cache:true});
       setAnnotAnswer(r);
     }catch(e){setAnnotAnswer("실패: "+e.message);}
@@ -1546,6 +1546,29 @@ function Study({deck:initial,subjects}){
                   ?<div style={{display:"flex",gap:10,alignItems:"center"}}><div className="spinner" style={{width:20,height:20,borderWidth:2}}/><span className="muted" style={{fontSize:13}}>설명 불러오는 중…</span></div>
                   :<MathText text={dontknow} tag="div" style={{fontSize:14,lineHeight:1.9}}/>
                 }
+                {!dontknowBusy&&dontknow&&(
+                  <div className="annot-wrap">
+                    <button className={"btn gho sm"+(annotOpen?" on":"")} onClick={()=>setAnnotOpen(v=>!v)}>
+                      {annotOpen?"▲ 닫기":"✏️ 이해 안 되는 거 표시해봐"}
+                    </button>
+                    {annotOpen&&(
+                      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                        <p className="hint" style={{margin:0}}>🟡 형광펜으로 모르는 부분 · 🟢 초록 펜으로 의문 작성</p>
+                        <AnnotPad ref={annotPadRef} disabled={annotBusy}/>
+                        <textarea value={annotQ} onChange={e=>setAnnotQ(e.target.value)} disabled={annotBusy}
+                          placeholder="타이핑으로 질문해도 돼 (선택)"
+                          style={{width:"100%",minHeight:52,padding:"8px 10px",borderRadius:10,
+                            border:"1.5px solid var(--line)",fontFamily:"'Noto Sans KR',sans-serif",
+                            fontSize:13,resize:"none",outline:"none",background:"var(--bg)",color:"var(--ink)"}}/>
+                        <button className="btn pri sm" onClick={()=>askAnnotation(dontknow)}
+                          disabled={annotBusy||(!(annotPadRef.current?.hasStrokes())&&!annotQ.trim())}>
+                          {annotBusy?"답변 불러오는 중…":"질문하기 →"}
+                        </button>
+                      </div>
+                    )}
+                    {annotAnswer&&<div className="annot-answer"><MathText text={annotAnswer} tag="div"/></div>}
+                  </div>
+                )}
                 {!dontknowBusy&&(
                   <div className="row" style={{marginTop:6}}>
                     <button className="btn pri" onClick={()=>next(deck,concept.id)}>다시 도전 →</button>
