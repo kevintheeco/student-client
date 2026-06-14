@@ -289,7 +289,7 @@ async function processPdf(base64){
   const r=await callClaude(
     "너는 학습 자료 분석 전문가야. PDF를 읽고 학습에 필요한 핵심 내용을 추출해.",
     [{type:"document",source:{type:"base64",media_type:"application/pdf",data:base64}},
-     {type:"text",text:"이 PDF의 학습 내용을 분석해줘. JSON만: {\"summary\":\"핵심 개념·공식·예시 압축 요약 (3000자 이내, 수식은 LaTeX 형식 그대로 유지)\",\"concepts\":[\"능동 회상으로 시험 볼 만한 핵심 개념 10~20개 (짧은 명사구)\"]}"}],
+     {type:"text",text:"이 PDF가 무엇을 가르치려는지 핵심 주제와 목적을 먼저 파악해. 그런 다음 그 목적에 맞는 핵심 개념을 추출해. 단순히 등장하는 단어가 아니라, 이 자료의 학습 목표를 대표하는 개념이어야 해. JSON만: {\"summary\":\"핵심 개념·공식·예시 압축 요약 (3000자 이내, 수식은 LaTeX 형식 그대로 유지)\",\"concepts\":[\"이 자료의 핵심 학습 목표에 해당하는 개념 10~20개 (짧은 명사구, 자료의 주제를 반영\"]}"}],
     true,{maxTok:3000});
   return r;
 }
@@ -865,7 +865,7 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
     if(fullMaterial&&concepts.length<5){
       try{
         const r=await callClaude(
-          "너는 학습 자료에서 핵심 개념을 뽑는 조교야. 능동 회상으로 시험 볼 만한 핵심 개념 8~15개를 짧은 명사구로 뽑아. 자료에 실제 있는 것만. JSON만: {\"concepts\":[\"...\"]}",
+          "너는 학습 자료 분석 전문가야. 자료가 무엇을 가르치려는지 핵심 주제와 목적을 먼저 파악해. 그 목적에 맞는 핵심 개념 8~15개를 짧은 명사구로 뽑아. 단순히 등장하는 단어가 아니라 이 자료의 학습 목표를 대표하는 개념이어야 해. JSON만: {\"concepts\":[\"...\"]}",
           "자료:\n\n"+fullMaterial.slice(0,12000),true,{maxTok:512});
         const extra=Array.isArray(r.concepts)?r.concepts:[];
         concepts=[...concepts,...extra.filter(c=>!concepts.includes(c))];
@@ -981,7 +981,7 @@ function Study({deck:initial,subjects}){
     const practicalHint=practical?" 계산이나 수치를 직접 다루는 응용 문제를 선호해.":"";
     try{
       const r=await callClaude(
-        "능동 회상 튜터. 목표 개념 질문 하나 한국어로."+practicalHint+" 자료 범위만. 수식은 LaTeX($...$, $$...$$). JSON만: {\"question\":\"...\",\"key_points\":[\"채점 핵심 3~5개\"]}\n\n자료:\n"+studyMat.slice(0,5000),
+        "능동 회상 튜터. 자료의 핵심 주제·목적을 먼저 파악한 뒤, 목표 개념이 이 자료에서 어떤 맥락으로 쓰이는지 이해하고 질문을 만들어."+practicalHint+" 개념 이름만 보지 말고 자료 전체 맥락에서 이 개념의 핵심 역할을 묻는 질문이어야 해. 수식은 LaTeX($...$, $$...$$). JSON만: {\"question\":\"...\",\"key_points\":[\"채점 핵심 3~5개\"]}\n\n자료:\n"+studyMat.slice(0,6000),
         "목표 개념: "+c.name+"\n난이도: "+diffLong(c.box),
         true,{cache:true,maxTok:800,model:CFG.qmodel});
       setQ(r);setPhase("answering");
