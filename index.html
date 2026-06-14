@@ -209,6 +209,14 @@ a{color:var(--pri-d)}
 .derive-fb{font-size:12.5px;color:var(--sub);padding:4px 0}
 .annot-wrap{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px}
 .annot-answer{background:#F0FFF8;border:1px solid #B2DFD0;border-radius:12px;padding:12px 14px;font-size:13.5px;line-height:1.85}
+.qcard{position:sticky;top:16px;max-height:calc(100vh - 100px);overflow-y:auto;display:flex;flex-direction:column}
+.pg-nav{display:flex;align-items:center;justify-content:space-between;padding:4px 0 8px;border-bottom:1px solid var(--line);margin-bottom:4px}
+.pg-nav .pg-btn{background:none;border:none;font-size:20px;cursor:pointer;color:var(--pri);padding:2px 10px;border-radius:8px;line-height:1}
+.pg-nav .pg-btn:disabled{opacity:.2;cursor:default}
+.pg-nav .pg-info{font-size:12px;color:var(--sub);font-weight:600;letter-spacing:.04em}
+.pg-nav .pg-dots{display:flex;gap:5px;align-items:center}
+.pg-nav .pg-dots span{width:7px;height:7px;border-radius:50%;background:var(--line);transition:background .2s}
+.pg-nav .pg-dots span.on{background:var(--pri)}
 
 @media(max-width:960px){
   .ans-layout{grid-template-columns:1fr}
@@ -1185,6 +1193,7 @@ function Study({deck:initial,subjects}){
   const [annotBusy,setAnnotBusy]=useState(false);
   const [annotAnswer,setAnnotAnswer]=useState("");
   const annotPadRef=useRef(null);
+  const [leftPage,setLeftPage]=useState(0);
   const [derivePlan,setDerivePlan]=useState(null);
   const [deriveIdx,setDeriveIdx]=useState(0);
   const [deriveHistory,setDeriveHistory]=useState([]);
@@ -1203,7 +1212,7 @@ function Study({deck:initial,subjects}){
   async function next(d,forceId,practical){
     d=d||deck;
     setPhase("loading");setQ(null);setEv(null);setAnswer("");setDeeper("");setDontknow("");setErrMsg("");setSubmitErr("");
-    setAnnotOpen(false);setAnnotQ("");setAnnotBusy(false);setAnnotAnswer("");
+    setAnnotOpen(false);setAnnotQ("");setAnnotBusy(false);setAnnotAnswer("");setLeftPage(0);
     setDerivePlan(null);setDeriveIdx(0);setDeriveHistory([]);setDeriveFeedback("");setDeriveDone(false);setDeriveHintShow(false);setDeriveChecking(false);
     padRef.current?.clear();
     const c=forceId?(d.concepts||[]).find(x=>x.id===forceId)||pickConcept(d,last.current):pickConcept(d,last.current);
@@ -1456,40 +1465,65 @@ function Study({deck:initial,subjects}){
               )}
               {phase==="result"&&ev&&(
                 <div className="result" style={{marginTop:12}}>
-                  <div className={"verdict "+vTone}>
-                    <span className="dot"/>{vLabel}
-                    {typeof ev.score==="number"&&<span className="sc">{ev.score}/100</span>}
-                  </div>
-                  <div className="blk"><div className="bl">피드백</div><MathText text={ev.feedback}/></div>
-                  {ev.why&&<div className="blk why"><div className="bl">왜 그런지</div><MathText text={ev.why}/></div>}
-                  <div className="blk"><div className="bl">이렇게 답하면 완벽</div><MathText text={ev.model_answer}/></div>
-                  {deeper?(
-                    <div className="blk deeper"><div className="bl">더 풀어서</div><MathText text={deeper}/></div>
-                  ):(
-                    <button className="btn gho sm" onClick={explainMore} disabled={deepBusy}>{deepBusy?"불러오는 중…":"더 풀어서 설명해줘"}</button>
-                  )}
-                  {/* ── 해설 의문 표시 ── */}
-                  <div className="annot-wrap">
-                    <button className={"btn gho sm"+(annotOpen?" on":"")} onClick={()=>setAnnotOpen(v=>!v)}>
-                      {annotOpen?"▲ 닫기":"✏️ 이해 안 되는 거 표시해봐"}
-                    </button>
-                    {annotOpen&&(
-                      <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                        <p className="hint" style={{margin:0}}>🟡 형광펜으로 모르는 부분 밑줄 · 🟢 초록 펜으로 의문 작성</p>
-                        <AnnotPad ref={annotPadRef} disabled={annotBusy}/>
-                        <textarea value={annotQ} onChange={e=>setAnnotQ(e.target.value)} disabled={annotBusy}
-                          placeholder="타이핑으로 질문해도 돼 (선택)"
-                          style={{width:"100%",minHeight:52,padding:"8px 10px",borderRadius:10,
-                            border:"1.5px solid var(--line)",fontFamily:"'Noto Sans KR',sans-serif",
-                            fontSize:13,resize:"none",outline:"none",background:"var(--bg)",color:"var(--ink)"}}/>
-                        <button className="btn pri sm" onClick={askAnnotation}
-                          disabled={annotBusy||(!(annotPadRef.current?.hasStrokes())&&!annotQ.trim())}>
-                          {annotBusy?"답변 불러오는 중…":"질문하기 →"}
-                        </button>
+                  {/* ── 페이지 네비 ── */}
+                  <div className="pg-nav">
+                    <button className="pg-btn" onClick={()=>setLeftPage(0)} disabled={leftPage===0}>‹</button>
+                    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+                      <span className="pg-info">{leftPage===0?"채점 결과":"해설"}</span>
+                      <div className="pg-dots">
+                        <span className={leftPage===0?"on":""}/>
+                        <span className={leftPage===1?"on":""}/>
                       </div>
-                    )}
-                    {annotAnswer&&<div className="annot-answer"><MathText text={annotAnswer} tag="div"/></div>}
+                    </div>
+                    <button className="pg-btn" onClick={()=>setLeftPage(1)} disabled={leftPage===1}>›</button>
                   </div>
+
+                  {/* ── Page 0: 채점 결과 ── */}
+                  {leftPage===0&&(
+                    <>
+                      <div className={"verdict "+vTone}>
+                        <span className="dot"/>{vLabel}
+                        {typeof ev.score==="number"&&<span className="sc">{ev.score}/100</span>}
+                      </div>
+                      <div className="blk"><div className="bl">피드백</div><MathText text={ev.feedback}/></div>
+                      {ev.why&&<div className="blk why"><div className="bl">왜 그런지</div><MathText text={ev.why}/></div>}
+                      <button className="btn gho sm" style={{alignSelf:"flex-end",marginTop:4}} onClick={()=>setLeftPage(1)}>모범 답안 보기 ›</button>
+                    </>
+                  )}
+
+                  {/* ── Page 1: 해설 ── */}
+                  {leftPage===1&&(
+                    <>
+                      <div className="blk"><div className="bl">이렇게 답하면 완벽</div><MathText text={ev.model_answer}/></div>
+                      {deeper?(
+                        <div className="blk deeper"><div className="bl">더 풀어서</div><MathText text={deeper}/></div>
+                      ):(
+                        <button className="btn gho sm" onClick={explainMore} disabled={deepBusy}>{deepBusy?"불러오는 중…":"더 풀어서 설명해줘"}</button>
+                      )}
+                      <div className="annot-wrap">
+                        <button className={"btn gho sm"+(annotOpen?" on":"")} onClick={()=>setAnnotOpen(v=>!v)}>
+                          {annotOpen?"▲ 닫기":"✏️ 이해 안 되는 거 표시해봐"}
+                        </button>
+                        {annotOpen&&(
+                          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                            <p className="hint" style={{margin:0}}>🟡 형광펜으로 모르는 부분 밑줄 · 🟢 초록 펜으로 의문 작성</p>
+                            <AnnotPad ref={annotPadRef} disabled={annotBusy}/>
+                            <textarea value={annotQ} onChange={e=>setAnnotQ(e.target.value)} disabled={annotBusy}
+                              placeholder="타이핑으로 질문해도 돼 (선택)"
+                              style={{width:"100%",minHeight:52,padding:"8px 10px",borderRadius:10,
+                                border:"1.5px solid var(--line)",fontFamily:"'Noto Sans KR',sans-serif",
+                                fontSize:13,resize:"none",outline:"none",background:"var(--bg)",color:"var(--ink)"}}/>
+                            <button className="btn pri sm" onClick={askAnnotation}
+                              disabled={annotBusy||(!(annotPadRef.current?.hasStrokes())&&!annotQ.trim())}>
+                              {annotBusy?"답변 불러오는 중…":"질문하기 →"}
+                            </button>
+                          </div>
+                        )}
+                        {annotAnswer&&<div className="annot-answer"><MathText text={annotAnswer} tag="div"/></div>}
+                      </div>
+                    </>
+                  )}
+
                   <div className="nextrow">
                     <span className="nn">{v==="correct"?"다음 복습은 더 뒤로 미뤄둘게 👍":"이건 곧 또 물어볼 거야"}</span>
                     <button className="btn pri" onClick={()=>next(deck,null,true)}>넘어가요 →</button>
