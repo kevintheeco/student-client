@@ -252,6 +252,24 @@ const QMODELS=[
 ];
 
 // opts: { cache:bool, maxTok:number, model:string }
+function fixJson(str){
+  let out="",inStr=false,i=0;
+  while(i<str.length){
+    const c=str[i];
+    if(!inStr){out+=c;if(c==='"')inStr=true;i++;}
+    else if(c==='\\'){
+      const n=str[i+1];
+      if('"\\\/bfnrt'.indexOf(n)!==-1){out+=c+n;i+=2;}
+      else if(n==='u'&&/[0-9a-fA-F]{4}/.test(str.slice(i+2,i+6))){out+=str.slice(i,i+6);i+=6;}
+      else{out+='\\\\';i++;}
+    }
+    else if(c==='"'){out+=c;inStr=false;i++;}
+    else if(c==='\n'){out+='\\n';i++;}
+    else if(c==='\r'){out+='\\r';i++;}
+    else{out+=c;i++;}
+  }
+  return out;
+}
 async function callClaude(system,userContent,wantJson,opts={}){
   if(!CFG.key)throw new Error("NO_KEY");
   const maxTok=opts.maxTok||(wantJson?2048:1024);
@@ -273,13 +291,7 @@ async function callClaude(system,userContent,wantJson,opts={}){
   let clean=text.replace(/```json\s*/gi,"").replace(/```/g,"").trim();
   const s=clean.indexOf("{"),e=clean.lastIndexOf("}");
   if(s===-1||e===-1||e<=s)throw new Error("JSON 응답 없음 — 다시 시도해봐");
-  let jsonStr=clean.slice(s,e+1);
-  // Fix unescaped backslashes in JSON string values (e.g. LaTeX \frac → \\frac)
-  jsonStr=jsonStr.replace(/"((?:[^"\\]|\\.)*)"/g,(_,inner)=>{
-    const fixed=inner.replace(/\\(?!["\\/bfnrtu])/g,"\\\\");
-    return `"${fixed}"`;
-  });
-  return JSON.parse(jsonStr);
+  return JSON.parse(fixJson(clean.slice(s,e+1)));
 }
 
 async function transcribeFile(base64,mediaType,kind){
