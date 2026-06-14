@@ -207,6 +207,8 @@ a{color:var(--pri-d)}
 .derive-prompt{background:var(--pri-s);border-radius:12px;padding:10px 14px;font-size:13.5px;line-height:1.75;color:var(--pri-d);font-weight:500}
 .derive-hint{background:#FFF6E9;border:1px solid #FBE3B8;border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.75;color:#8A5A12}
 .derive-fb{font-size:12.5px;color:var(--sub);padding:4px 0}
+.annot-wrap{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px}
+.annot-answer{background:#F0FFF8;border:1px solid #B2DFD0;border-radius:12px;padding:12px 14px;font-size:13.5px;line-height:1.85}
 
 @media(max-width:900px){
   .ans-layout{grid-template-columns:1fr}
@@ -249,19 +251,56 @@ const CFG={
   key:LS.get("ng:key")||"",
   model:LS.get("ng:model")||"claude-sonnet-4-6",
   qmodel:LS.get("ng:qmodel")||"claude-haiku-4-5-20251001",
+  geminiKey:LS.get("ng:geminiKey")||"",
 };
 const MODELS=[
   {id:"claude-sonnet-4-6",label:"Sonnet 4.6 · 추천"},
+  {id:"gemini-2.0-flash",label:"Gemini 2.0 Flash · 무료 가능"},
   {id:"claude-haiku-4-5-20251001",label:"Haiku 4.5 · 가장 저렴"},
   {id:"claude-opus-4-8",label:"Opus 4.8 · 가장 똑똑"},
 ];
 const QMODELS=[
   {id:"claude-haiku-4-5-20251001",label:"Haiku 4.5 · 빠름 (권장)"},
+  {id:"gemini-2.0-flash",label:"Gemini 2.0 Flash · 무료"},
   {id:"claude-sonnet-4-6",label:"Sonnet 4.6 · 정확"},
   {id:"claude-opus-4-8",label:"Opus 4.8 · 최고 품질"},
 ];
 
 // opts: { cache:bool, maxTok:number, model:string }
+async function callGemini(system,userContent,wantJson,opts={}){
+  if(!CFG.geminiKey)throw new Error("Gemini API 키가 없어 — 설정에서 추가해줘");
+  const model=(opts.model||"gemini-2.0-flash");
+  const maxTok=opts.maxTok||(wantJson?2048:1024);
+  const parts=[];
+  if(typeof userContent==="string"){parts.push({text:userContent});}
+  else{for(const b of userContent){
+    if(b.type==="text")parts.push({text:b.text});
+    else if(b.type==="image")parts.push({inline_data:{mime_type:b.source.media_type,data:b.source.data}});
+    else if(b.type==="document")parts.push({inline_data:{mime_type:"application/pdf",data:b.source.data}});
+  }}
+  const body={
+    system_instruction:{parts:[{text:system}]},
+    contents:[{role:"user",parts}],
+    generationConfig:{maxOutputTokens:maxTok,temperature:0.3},
+  };
+  const res=await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${CFG.geminiKey}`,
+    {method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)}
+  );
+  if(!res.ok){let m="Gemini "+res.status;try{const j=await res.json();m=j.error?.message||m}catch{}throw new Error(m)}
+  const data=await res.json();
+  const text=(data.candidates?.[0]?.content?.parts||[]).map(p=>p.text||"").join("").trim();
+  if(!wantJson)return text;
+  let clean=text.replace(/```json\s*/gi,"").replace(/```/g,"").trim();
+  const s=clean.indexOf("{"),e=clean.lastIndexOf("}");
+  if(s===-1||e===-1||e<=s)throw new Error("JSON 응답 없음");
+  return JSON.parse(fixJson(clean.slice(s,e+1)));
+}
+function callAI(system,userContent,wantJson,opts={}){
+  const m=opts.model||CFG.model;
+  if(m.startsWith("gemini"))return callGemini(system,userContent,wantJson,opts);
+  return callClaude(system,userContent,wantJson,opts);
+}
 function fixJson(str){
   let out="",inStr=false,i=0;
   while(i<str.length){
@@ -597,17 +636,20 @@ function Settings({onDone}){
 }
 function KeyForm({onSaved,cta,showCancel,onCancel}){
   const [key,setKey]=useState(CFG.key);
+  const [geminiKey,setGeminiKey]=useState(CFG.geminiKey);
   const [model,setModel]=useState(CFG.model);
   const [qmodel,setQmodel]=useState(CFG.qmodel);
   const [testing,setTesting]=useState(false);
   const [err,setErr]=useState("");
   async function save(){
-    if(!key.trim()){setErr("API 키를 넣어줘.");return;}
+    const hasA=key.trim().length>0,hasG=geminiKey.trim().length>0;
+    if(!hasA&&!hasG){setErr("최소 하나의 API 키를 입력해줘.");return;}
     setTesting(true);setErr("");
-    CFG.key=key.trim();CFG.model=model;CFG.qmodel=qmodel;
+    CFG.key=key.trim();CFG.model=model;CFG.qmodel=qmodel;CFG.geminiKey=geminiKey.trim();
     try{
-      await callClaude("ping","'ok'라고만 답해.",false);
-      LS.set("ng:key",CFG.key);LS.set("ng:model",CFG.model);LS.set("ng:qmodel",CFG.qmodel);
+      if(hasA)await callClaude("ping","'ok'라고만 답해.",false);
+      else await callGemini("ping","'ok'라고만 답해.",false,{model:"gemini-2.0-flash"});
+      LS.set("ng:key",CFG.key);LS.set("ng:model",CFG.model);LS.set("ng:qmodel",CFG.qmodel);LS.set("ng:geminiKey",CFG.geminiKey);
       setTesting(false);onSaved();
     }catch(e){setTesting(false);setErr("연결 실패: "+e.message);}
   }
@@ -616,6 +658,11 @@ function KeyForm({onSaved,cta,showCancel,onCancel}){
       <div className="selectrow"><label>Anthropic API 키</label>
         <input className="field" type="password" placeholder="sk-ant-..." value={key}
           onChange={e=>setKey(e.target.value)} autoComplete="off"/></div>
+      <div className="selectrow"><label>Google Gemini API 키 <span className="muted" style={{fontWeight:400}}>(선택 · 무료 티어 있음)</span></label>
+        <input className="field" type="password" placeholder="AIzaSy..." value={geminiKey}
+          onChange={e=>setGeminiKey(e.target.value)} autoComplete="off"/></div>
+      <p className="hint" style={{marginTop:-6}}>Gemini 무료: 분당 15회·일 1500회.
+        <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener"> 키 발급 →</a></p>
       <div className="selectrow"><label>채점·해설 모델</label>
         <select className="field" value={model} onChange={e=>setModel(e.target.value)}>
           {MODELS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}
@@ -624,8 +671,8 @@ function KeyForm({onSaved,cta,showCancel,onCancel}){
         <select className="field" value={qmodel} onChange={e=>setQmodel(e.target.value)}>
           {QMODELS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}
         </select></div>
-      <div className="warn">키는 <b>이 기기 브라우저에만</b> 저장돼. 파일을 공개 웹에 올릴 때 키를 하드코딩하지 마.
-        키 발급·사용량: <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a></div>
+      <div className="warn">키는 <b>이 기기 브라우저에만</b> 저장돼.
+        Anthropic: <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a></div>
       {err&&<div className="err">{err}</div>}
       <div className="row">
         <button className="btn pri" onClick={save} disabled={testing}>{testing?"연결 확인 중…":cta}</button>
@@ -738,6 +785,80 @@ function FileDropZone({files,onChange}){
     </div>
   );
 }
+
+/* ── 해설 주석 패드 (형광펜 + 초록 펜) ── */
+const AnnotPad=React.forwardRef(function AnnotPad({disabled},fwdRef){
+  const cvs=useRef(null);
+  const strokes=useRef([]);
+  const drawing=useRef(false);
+  const [tool,setTool]=useState("hl");
+  React.useImperativeHandle(fwdRef,()=>({
+    getImageBase64:()=>cvs.current?.toDataURL("image/png").split(",")[1]||null,
+    hasStrokes:()=>strokes.current.length>0,
+    clear:()=>{strokes.current=[];redraw();},
+  }));
+  const getDpr=()=>window.devicePixelRatio||1;
+  function setup(){
+    const c=cvs.current;if(!c)return;
+    const r=c.getBoundingClientRect(),dpr=getDpr();
+    c.width=Math.round(r.width*dpr);c.height=Math.round(r.height*dpr);
+    const ctx=c.getContext("2d");ctx.setTransform(1,0,0,1,0,0);ctx.scale(dpr,dpr);
+    redraw();
+  }
+  function redraw(){
+    const c=cvs.current;if(!c)return;
+    const ctx=c.getContext("2d"),dpr=getDpr(),w=c.width/dpr,h=c.height/dpr;
+    ctx.fillStyle="#FFFDF8";ctx.fillRect(0,0,w,h);
+    ctx.strokeStyle="#EDE9F0";ctx.lineWidth=1;
+    for(let y=28;y<h;y+=28){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
+    strokes.current.forEach(({pts,col,sz})=>{
+      if(pts.length<2)return;
+      ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle=col;ctx.lineWidth=sz;
+      ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);
+      for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i].x,pts[i].y);
+      ctx.stroke();
+    });
+  }
+  useEffect(()=>{setup();const f=()=>setup();window.addEventListener("resize",f);return()=>window.removeEventListener("resize",f);},[]);
+  const pt=(e)=>{const r=cvs.current.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};};
+  function eraseAt(x,y){
+    const R=16*16,prev=strokes.current.length;
+    strokes.current=strokes.current.filter(({pts})=>!pts.some(p=>(p.x-x)**2+(p.y-y)**2<R));
+    if(strokes.current.length!==prev)redraw();
+  }
+  function down(e){
+    if(disabled)return;e.preventDefault();drawing.current=true;
+    try{e.target.setPointerCapture(e.pointerId);}catch(_){}
+    const p=pt(e);
+    if(tool==="eraser"){eraseAt(p.x,p.y);return;}
+    const isHl=tool==="hl";
+    strokes.current.push({pts:[p],col:isHl?"rgba(255,215,0,0.45)":"#27AE60",sz:isHl?18:2});
+  }
+  function move(e){
+    if(!drawing.current||disabled)return;e.preventDefault();
+    const p=pt(e);
+    if(tool==="eraser"){eraseAt(p.x,p.y);return;}
+    const st=strokes.current[strokes.current.length-1];if(!st)return;
+    st.pts.push(p);
+    const ctx=cvs.current.getContext("2d");
+    ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle=st.col;ctx.lineWidth=st.sz;
+    if(st.pts.length>1){ctx.beginPath();ctx.moveTo(st.pts[st.pts.length-2].x,st.pts[st.pts.length-2].y);ctx.lineTo(p.x,p.y);ctx.stroke();}
+  }
+  const up=()=>{drawing.current=false;};
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+      <div className="tools">
+        <button className={"btn gho xs"+(tool==="hl"?" on":"")} onClick={()=>setTool("hl")}>🟡 형광펜</button>
+        <button className={"btn gho xs"+(tool==="pen"?" on":"")} onClick={()=>setTool("pen")}>🟢 펜</button>
+        <button className={"btn gho xs"+(tool==="eraser"?" on":"")} onClick={()=>setTool("eraser")}>🧽</button>
+        <button className="btn gho xs" onClick={()=>{strokes.current=[];redraw();}}>🗑️</button>
+        <span className="note">{tool==="hl"?"형광펜: 모르는 부분 표시":tool==="pen"?"초록 펜: 의문점 작성":""}</span>
+      </div>
+      <canvas ref={cvs} className="pad" style={{height:140,cursor:disabled?"not-allowed":"crosshair",borderRadius:12}}
+        onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerLeave={up}/>
+    </div>
+  );
+});
 
 /* ── 풀사이즈 펜 패드 ── */
 const PEN_COLORS=["#221C39","#2563EB","#DC2626"];
@@ -1059,6 +1180,11 @@ function Study({deck:initial,subjects}){
   const [dontknow,setDontknow]=useState("");
   const [dontknowBusy,setDontknowBusy]=useState(false);
   const [count,setCount]=useState(0);
+  const [annotOpen,setAnnotOpen]=useState(false);
+  const [annotQ,setAnnotQ]=useState("");
+  const [annotBusy,setAnnotBusy]=useState(false);
+  const [annotAnswer,setAnnotAnswer]=useState("");
+  const annotPadRef=useRef(null);
   const [derivePlan,setDerivePlan]=useState(null);
   const [deriveIdx,setDeriveIdx]=useState(0);
   const [deriveHistory,setDeriveHistory]=useState([]);
@@ -1077,6 +1203,7 @@ function Study({deck:initial,subjects}){
   async function next(d,forceId,practical){
     d=d||deck;
     setPhase("loading");setQ(null);setEv(null);setAnswer("");setDeeper("");setDontknow("");setErrMsg("");setSubmitErr("");
+    setAnnotOpen(false);setAnnotQ("");setAnnotBusy(false);setAnnotAnswer("");
     setDerivePlan(null);setDeriveIdx(0);setDeriveHistory([]);setDeriveFeedback("");setDeriveDone(false);setDeriveHintShow(false);setDeriveChecking(false);
     padRef.current?.clear();
     const c=forceId?(d.concepts||[]).find(x=>x.id===forceId)||pickConcept(d,last.current):pickConcept(d,last.current);
@@ -1084,7 +1211,7 @@ function Study({deck:initial,subjects}){
     setConcept(c);last.current=c.id;
     const practicalHint=practical?" 계산이나 수치를 직접 다루는 응용 문제를 선호해.":"";
     try{
-      const raw=await callClaude(
+      const raw=await callAI(
         "능동 회상 튜터. 자료의 핵심 주제·목적을 먼저 파악한 뒤, 목표 개념이 이 자료에서 어떤 맥락으로 쓰이는지 이해하고 질문을 만들어."+practicalHint+" 개념 이름만 보지 말고 자료 전체 맥락에서 이 개념의 핵심 역할을 묻는 질문이어야 해. 수식은 LaTeX($...$, $$...$$). 다음 형식으로만 출력:\nQUESTION: 질문 내용\nPOINTS: 핵심1 | 핵심2 | 핵심3 (| 구분, 3~5개)\n\n자료:\n"+studyMat.slice(0,6000),
         "목표 개념: "+c.name+"\n난이도: "+diffLong(c.box),
         false,{cache:true,maxTok:800,model:CFG.qmodel});
@@ -1107,7 +1234,7 @@ function Study({deck:initial,subjects}){
       if(hasTxt)textParts.push("\n학습자 텍스트 답안:\n"+answer.trim());
       if(img)textParts.push("\n학습자가 위 이미지에 손으로 쓴 답도 포함돼. 이미지 속 내용을 읽고 함께 채점해줘.");
       userBlocks.push({type:"text",text:textParts.join("\n")});
-      const gradingRaw=await callClaude(
+      const gradingRaw=await callAI(
         "너는 채점 조교야. 학습자 답안(텍스트, 손글씨 이미지, 또는 둘 다)을 보고 관대하되 정확하게 채점해. 수식·행렬·그리스 문자·수학 기호(⊥ ∥ ∈ ∉ ⊆ ℝ ∇ 등)는 반드시 모두 LaTeX로: 인라인은 $...$, 블록은 $$..$$. 유니코드 기호 직접 사용 금지. 모범답안에 그래프가 필요하면 SVG로 그려줘(코드블록 없이 <svg> 태그 직접 사용, width≤380 height≤260 viewBox 사용, 축·레이블 포함, 색상: 축=#221C39, 곡선은 #6C5CE7·#27C2A0·#FF6B8A·#FFC24B, bg=#FFFDF8). 다음 형식으로만 출력 (JSON·코드블록 없이):\nVERDICT: correct 또는 partial 또는 incorrect\nSCORE: 0-100 숫자만\nFEEDBACK: 맞은 것·빠진 것 2~4문장 (반말, 친근)\nWHY: 왜 그런지 자료 근거 2~3문장\nANSWER: 모범답안 3~5문장 (필요시 SVG 그래프 포함)\n\n자료:\n"+studyMat,
         userBlocks,false,{cache:true,maxTok:2048});
       const r=parseGrading(gradingRaw);setEv(r);
@@ -1128,7 +1255,7 @@ function Study({deck:initial,subjects}){
     setDerivePlan(null);setDeriveIdx(0);setDeriveHistory([]);setDeriveFeedback("");setDeriveDone(false);setDeriveHintShow(false);
     setPhase("derive_load");
     try{
-      const raw=await callClaude(
+      const raw=await callAI(
         "수식 유도 튜터. 학습자가 한 단계씩 공식을 직접 유도할 수 있도록 계획을 세워. 각 단계는 한 줄~두 줄 수식 하나로 분리해. 수식은 LaTeX($...$).",
         "개념: "+concept.name+"\n자료:\n"+studyMat.slice(0,4000)+"\n\n다음 형식으로만 출력:\nSTEPS: 단계수(3~6)\nSTART: 시작 안내 문장\nHINT1: 1단계 힌트\nHINT2: 2단계 힌트\n... (단계수만큼)",
         false,{maxTok:700,model:CFG.qmodel});
@@ -1153,7 +1280,7 @@ function Study({deck:initial,subjects}){
       "다음 형식으로 평가:\nCORRECT: yes 또는 no\nDONE: yes 또는 no (마지막 단계가 맞을 때만)\nFEEDBACK: 1~2문장 반말\nNEXT: 다음 단계 안내 (CORRECT=yes·DONE=no일 때만)"
     });
     try{
-      const raw=await callClaude(
+      const raw=await callAI(
         "수식 유도 단계 평가자. 표기가 완벽하지 않아도 수학적 방향이 맞으면 CORRECT: yes. 관대하게 평가해.",
         userBlocks,false,{maxTok:350});
       const res=parseDeriveCheck(raw);
@@ -1185,7 +1312,7 @@ function Study({deck:initial,subjects}){
     setConcept(uc);
     setPhase("dontknow");setDontknow("");setDontknowBusy(true);
     try{
-      const r=await callClaude(
+      const r=await callAI(
         "너는 친절한 튜터야. 바로 설명 시작 — 인사말·사고 과정·'설명할게' 같은 메타 문장 없이. 학습자가 이 개념을 전혀 모르니 처음 배우는 사람에게 직관적으로(비유·예시·왜 중요한지) 반말로 5~8문장 설명해줘. 수식·행렬·그리스 문자·수학 기호(⊥ ∥ ∈ ℝ ∇ 등)는 반드시 모두 LaTeX로($...$, $$...$$). 유니코드 기호 직접 사용 금지. 그래프가 도움이 되면 SVG로 그려줘(코드블록 없이 <svg> 태그 직접, width≤380 height≤260 viewBox 사용, 축·레이블 포함, 색상: 축=#221C39, 곡선은 #6C5CE7·#27C2A0·#FF6B8A·#FFC24B, bg=#FFFDF8).\n\n자료:\n"+studyMat,
         "개념: "+concept.name+(q?"\n원래 질문: "+q.question:""),
         false,{cache:true,maxTok:1400});
@@ -1196,13 +1323,36 @@ function Study({deck:initial,subjects}){
 
   async function explainMore(){
     setDeepBusy(true);
-    try{const r=await callClaude(
+    try{const r=await callAI(
       "너는 친절한 튜터야. 자료에 근거해 더 깊이 직관적으로(비유·예시·왜) 반말로 설명해. 수식·행렬·그리스 문자·수학 기호(⊥ ∥ ∈ ∉ ⊆ ℝ ∇ × · 등)는 반드시 모두 LaTeX로: 인라인은 $...$, 블록은 $$..$$. 유니코드 기호 직접 사용 금지. 그래프·곡선·다이어그램이 이해에 도움이 되면 SVG로 그려줘(코드블록 없이 <svg> 태그 직접 사용, width≤380 height≤260 viewBox 사용, 축·레이블 포함, font-size 11~13, 색상: 축선=#221C39, 곡선은 #6C5CE7·#27C2A0·#FF6B8A·#FFC24B, 균형점=원형 #FFC24B, 배경=#FFFDF8).\n\n자료:\n"+studyMat,
       "개념: "+concept.name+"\n질문: "+q.question+"\n모범답안: "+(ev?.model_answer||""),
       false,{cache:true,maxTok:1200});
       setDeeper(r);}
     catch(e){setDeeper("실패: "+e.message);}
     setDeepBusy(false);
+  }
+
+  async function askAnnotation(){
+    const hasInk=annotPadRef.current?.hasStrokes();
+    const hasTxt=annotQ.trim().length>0;
+    if(!hasInk&&!hasTxt)return;
+    setAnnotBusy(true);
+    const img=hasInk?annotPadRef.current.getImageBase64():null;
+    const ctx=[ev?.feedback,ev?.why,ev?.model_answer].filter(Boolean).join("\n\n");
+    const userBlocks=[];
+    if(img)userBlocks.push({type:"image",source:{type:"base64",media_type:"image/png",data:img}});
+    userBlocks.push({type:"text",text:
+      "학습자가 해설을 보다가 이해 안 되는 부분을 노란 형광펜으로 표시하고 초록 펜·텍스트로 의문을 남겼어. 표시된 내용에 대해 친절하게 설명해줘.\n"+
+      (hasTxt?"타이핑 질문: "+annotQ.trim()+"\n\n":"")+
+      "해설 내용:\n"+ctx
+    });
+    try{
+      const r=await callAI(
+        "친절한 튜터. 바로 설명 시작 — 메타 문장 없이. 학습자 의문에 직접 답해. 수식은 LaTeX($...$). 반말.",
+        userBlocks,false,{maxTok:1200,cache:true});
+      setAnnotAnswer(r);
+    }catch(e){setAnnotAnswer("실패: "+e.message);}
+    setAnnotBusy(false);
   }
 
   const [showInfo,setShowInfo]=useState(false);
@@ -1318,6 +1468,28 @@ function Study({deck:initial,subjects}){
                   ):(
                     <button className="btn gho sm" onClick={explainMore} disabled={deepBusy}>{deepBusy?"불러오는 중…":"더 풀어서 설명해줘"}</button>
                   )}
+                  {/* ── 해설 의문 표시 ── */}
+                  <div className="annot-wrap">
+                    <button className={"btn gho sm"+(annotOpen?" on":"")} onClick={()=>setAnnotOpen(v=>!v)}>
+                      {annotOpen?"▲ 닫기":"✏️ 이해 안 되는 거 표시해봐"}
+                    </button>
+                    {annotOpen&&(
+                      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                        <p className="hint" style={{margin:0}}>🟡 형광펜으로 모르는 부분 밑줄 · 🟢 초록 펜으로 의문 작성</p>
+                        <AnnotPad ref={annotPadRef} disabled={annotBusy}/>
+                        <textarea value={annotQ} onChange={e=>setAnnotQ(e.target.value)} disabled={annotBusy}
+                          placeholder="타이핑으로 질문해도 돼 (선택)"
+                          style={{width:"100%",minHeight:52,padding:"8px 10px",borderRadius:10,
+                            border:"1.5px solid var(--line)",fontFamily:"'Noto Sans KR',sans-serif",
+                            fontSize:13,resize:"none",outline:"none",background:"var(--bg)",color:"var(--ink)"}}/>
+                        <button className="btn pri sm" onClick={askAnnotation}
+                          disabled={annotBusy||(!(annotPadRef.current?.hasStrokes())&&!annotQ.trim())}>
+                          {annotBusy?"답변 불러오는 중…":"질문하기 →"}
+                        </button>
+                      </div>
+                    )}
+                    {annotAnswer&&<div className="annot-answer"><MathText text={annotAnswer} tag="div"/></div>}
+                  </div>
                   <div className="nextrow">
                     <span className="nn">{v==="correct"?"다음 복습은 더 뒤로 미뤄둘게 👍":"이건 곧 또 물어볼 거야"}</span>
                     <button className="btn pri" onClick={()=>next(deck,null,true)}>넘어가요 →</button>
