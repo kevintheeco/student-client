@@ -992,6 +992,7 @@ function Home({decks,subjects,onAdd,onOpen,onNotes,onChanged,nick}){
                     <Stat n={s.total} l="개념"/>
                     <Stat n={s.mastered} l="익힘" t="mint"/>
                     <Stat n={s.due} l="대기" t="pri"/>
+                    <Stat n={s.weak} l="약함" t="rose"/>
                   </div>
                   <Bar mastered={s.mastered} total={s.total}/>
                 </>):<div className="muted">준비 중…</div>}
@@ -1794,6 +1795,17 @@ function Study({deck:initial,subjects}){
 
   // 세션 전체에서 캐시 공유: summary 있으면 우선 사용 (8000자 이하)
   const studyMat=deck.summary||deck.material.slice(0,8000);
+
+  function skipConcept(){
+    // 페널티 없는 스킵: box(레벨)는 그대로 두고 dueAt만 내일로 미뤄 오늘은 다시 안 나오게 함
+    const c=concept;let d=deckRef.current;
+    if(c){
+      const uc={...c,dueAt:Date.now()+DAY,lastSeen:Date.now()};
+      d={...d,concepts:(d.concepts||[]).map(x=>x.id===c.id?uc:x)};
+      persist(d);
+    }
+    next(d);
+  }
 
   async function next(d,forceId,practical){
     d=d||deck;
@@ -2673,6 +2685,7 @@ function Study({deck:initial,subjects}){
                     <div className="row">
                       <button className="btn pri" onClick={submit} disabled={phase==="grading"}>제출 ✓</button>
                       <button className="btn gho" onClick={handleDontKnow} disabled={phase==="grading"}>몰라요 😅</button>
+                      <button className="btn gho" onClick={skipConcept} disabled={phase==="grading"} title="이 개념은 오늘 패스 (레벨 안 깎임)">패스 ⏭️</button>
                     </div>
                   </>
                 )}
