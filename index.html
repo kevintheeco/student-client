@@ -1592,6 +1592,7 @@ function Study({deck:initial,subjects}){
   const [followupHint,setFollowupHint]=useState("");
   const [followupHintBusy,setFollowupHintBusy]=useState(false);
   const [followupSuccess,setFollowupSuccess]=useState(false);
+  const [gradeProg,setGradeProg]=useState(0);
   const [ocrHighlights,setOcrHighlights]=useState([]);
   const [ocrImg,setOcrImg]=useState(null);
   const [ocrImgSize,setOcrImgSize]=useState({w:800,h:680});
@@ -1698,6 +1699,18 @@ function Study({deck:initial,subjects}){
     }catch(e){if(genId.current===myId&&e.name!=="AbortError"){setPhase("error");setErrMsg("질문 생성 실패: "+e.message);}}
   }
   useEffect(()=>{next(initial);return()=>{abortRef.current?.abort();};},[]);
+
+  // 채점 가짜 진행률 (0→93 천천히, 끝나면 100% 후 리셋)
+  useEffect(()=>{
+    const grading=phase==="grading"||followupBusy;
+    if(!grading)return;
+    setGradeProg(5);let p=5;
+    const id=setInterval(()=>{
+      if(p<70)p+=2;else if(p<93)p+=0.5;
+      setGradeProg(Math.min(93,Math.round(p)));
+    },70);
+    return()=>{clearInterval(id);setGradeProg(100);setTimeout(()=>setGradeProg(0),450);};
+  },[phase,followupBusy]);
 
   async function submit(){
     if(phase!=="answering"&&phase!=="ocr_check")return;
@@ -2427,9 +2440,18 @@ function Study({deck:initial,subjects}){
             ):(
               <div className="card" style={{padding:14,display:"flex",flexDirection:"column",gap:10}}>
                 {(phase==="grading"||followupBusy)&&(
-                  <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0"}}>
-                    <div className="spinner" style={{width:20,height:20,borderWidth:2}}/>
-                    <span className="muted" style={{fontSize:13}}>채점 중…</span>
+                  <div style={{display:"flex",flexDirection:"column",gap:7,padding:"4px 0 6px"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span style={{fontSize:13,fontWeight:600,color:gradeProg>=100?"var(--mint)":"var(--pri-d)"}}>
+                        🧠 {gradeProg<40?"답안 읽는 중…":gradeProg<75?"개념이랑 비교하는 중…":gradeProg>=100?"완료!":"피드백 정리하는 중…"}
+                      </span>
+                      <span style={{fontSize:14,fontWeight:700,color:gradeProg>=100?"var(--mint)":"var(--pri-d)"}}>{gradeProg}%</span>
+                    </div>
+                    <div style={{height:10,borderRadius:8,background:"#F0EDFA",overflow:"hidden"}}>
+                      <div style={{height:"100%",borderRadius:8,
+                        background:gradeProg>=100?"var(--mint)":"linear-gradient(90deg,var(--pri),var(--mint))",
+                        width:gradeProg+"%",transition:"width .3s ease"}}/>
+                    </div>
                   </div>
                 )}
                 <PenPad ref={padRef} kind="answer" hideOcr penOnlyDefault={true} disabled={phase==="grading"||followupBusy}/>
