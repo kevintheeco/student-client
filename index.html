@@ -580,7 +580,7 @@ function App(){
           <Prof size={44}/><div><h1>니가 교수</h1><div className="tag">니가 설명해봐, 내가 채점할게</div></div>
         </div>
         <div className="hd-r">
-          {view!=="home"&&CFG.key&&<button className="btn gho sm" onClick={()=>setView("home")}>← 목록</button>}
+          {view!=="home"&&CFG.key&&<button className="btn gho sm" onClick={()=>{refresh();setView("home");}}>← 목록</button>}
           <button className="btn gho sm" onClick={()=>setView("settings")}>⚙️ 설정</button>
         </div>
       </div>
@@ -595,7 +595,7 @@ function App(){
       )}
       {view==="add"&&<AddMaterial subjects={subjects} onSave={saveSubjects} onDone={()=>{refresh();setView("home");}} onCancel={()=>setView("home")}/>}
       {view==="study"&&activeDeck&&<Study deck={activeDeck} subjects={subjects}/>}
-      {view==="notes"&&noteDeck&&<WeakNotes deck={noteDeck} onBack={()=>setView("home")} onStudy={studyWeak}/>}
+      {view==="notes"&&noteDeck&&<WeakNotes deck={noteDeck} onBack={()=>{refresh();setView("home");}} onStudy={studyWeak}/>}
 
       <div className="footer">키와 자료는 이 기기에만 저장 · {MODELS.find(m=>m.id===CFG.model)?.label.split(" ·")[0]||"Claude"}</div>
     </>
