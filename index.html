@@ -10,6 +10,8 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 
 <style>
 :root {
@@ -356,6 +358,26 @@ function ocrModel(){
   if(CFG.geminiKey)return"gemini-2.0-flash";
   return CFG.model;
 }
+
+/* ── Firebase 구글 로그인 (선택 기능 — 실패해도 앱은 정상 동작) ── */
+const FIREBASE_CONFIG={
+  apiKey:"AIzaSyD0ObaK3aKotOjKjtg1MGz_SB4qHX0DhdA",
+  authDomain:"yourprofessor-94a2d.firebaseapp.com",
+  projectId:"yourprofessor-94a2d",
+  storageBucket:"yourprofessor-94a2d.firebasestorage.app",
+  messagingSenderId:"307018527457",
+  appId:"1:307018527457:web:83c46611055283c427bda0"
+};
+let _auth=null;
+function initFirebase(){
+  try{
+    if(window.firebase&&FIREBASE_CONFIG.apiKey&&!window.firebase.apps.length){
+      window.firebase.initializeApp(FIREBASE_CONFIG);
+    }
+    if(window.firebase)_auth=window.firebase.auth();
+  }catch(e){console.warn("[firebase] 초기화 실패 — 로그인 비활성",e);_auth=null;}
+}
+function nickKey(uid){return"ng:nick:"+uid;}
 const MODELS=[
   {id:"claude-sonnet-4-6",label:"Sonnet 4.6 · 추천"},
   {id:"gemini-2.0-flash",label:"Gemini 2.0 Flash · 무료 가능"},
@@ -648,9 +670,38 @@ function App(){
   const [filterSubj,setFilterSubj]=useState("all");
   const [activeDeck,setActiveDeck]=useState(null);
   const [noteDeck,setNoteDeck]=useState(null);
+  const [user,setUser]=useState(null);
+  const [nick,setNick]=useState("");
+  const [showProfile,setShowProfile]=useState(false);
 
   const refresh=()=>setDecks(LS.get(DECKS_KEY)||[]);
   useEffect(()=>{refresh();},[]);
+
+  // 구글 로그인 상태 구독
+  useEffect(()=>{
+    if(!_auth)return;
+    return _auth.onAuthStateChanged(u=>{
+      setUser(u);
+      if(u){
+        const stored=LS.get(nickKey(u.uid));
+        const n=stored||u.displayName||(u.email?u.email.split("@")[0]:"학습자");
+        if(!stored)LS.set(nickKey(u.uid),n);
+        setNick(n);
+      }else setNick("");
+    });
+  },[]);
+
+  async function login(){
+    if(!_auth){alert("로그인 기능을 쓸 수 없어. 인터넷 연결이나 설정을 확인해줘.");return;}
+    try{
+      await _auth.signInWithPopup(new window.firebase.auth.GoogleAuthProvider());
+    }catch(e){
+      if(e.code==="auth/popup-closed-by-user"||e.code==="auth/cancelled-popup-request")return;
+      alert("로그인 실패: "+(e.message||e.code));
+    }
+  }
+  async function logout(){try{await _auth.signOut();}catch(e){}setShowProfile(false);}
+  function saveNick(n){const v=(n||"").trim();if(!v||!user)return;setNick(v);LS.set(nickKey(user.uid),v);}
 
   function openStudy(id){const d=LS.get(dk(id));if(d){setActiveDeck(d);setView("study");}}
   function openNotes(id){const d=LS.get(dk(id));if(d){setNoteDeck(d);setView("notes");}}
@@ -674,16 +725,45 @@ function App(){
         </div>
         <div className="hd-r">
           {view!=="home"&&CFG.key&&<button className="btn gho sm" onClick={()=>{refresh();setView("home");}}>← 목록</button>}
+          {_auth&&(user
+            ?<button className="btn gho sm" onClick={()=>setShowProfile(true)} title="내 프로필">
+                {user.photoURL&&<img src={user.photoURL} alt="" style={{width:18,height:18,borderRadius:"50%",verticalAlign:"middle",marginRight:6}}/>}
+                {nick||"내 프로필"}
+              </button>
+            :<button className="btn gho sm" onClick={login}>🔑 로그인</button>
+          )}
           <button className="btn gho sm" onClick={()=>setView("settings")}>⚙️ 설정</button>
         </div>
       </div>
+
+      {showProfile&&user&&(
+        <div onClick={()=>setShowProfile(false)} style={{position:"fixed",inset:0,background:"rgba(34,28,57,.42)",zIndex:60,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div onClick={e=>e.stopPropagation()} className="card" style={{maxWidth:340,width:"100%",padding:22,display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              {user.photoURL&&<img src={user.photoURL} alt="" style={{width:46,height:46,borderRadius:"50%"}}/>}
+              <div style={{minWidth:0}}>
+                <div style={{fontFamily:"'Jua',sans-serif",fontSize:16,color:"var(--ink)"}}>{nick}</div>
+                <div style={{fontSize:12,color:"var(--sub)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.email}</div>
+              </div>
+            </div>
+            <div className="selectrow">
+              <label>닉네임</label>
+              <input className="field" value={nick} maxLength={20} onChange={e=>setNick(e.target.value)} onBlur={e=>saveNick(e.target.value)}/>
+            </div>
+            <div className="row">
+              <button className="btn pri" onClick={()=>{saveNick(nick);setShowProfile(false);}}>저장</button>
+              <button className="btn gho" onClick={logout}>로그아웃</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {view==="onboard"&&<Onboard onDone={()=>setView("home")}/>}
       {view==="settings"&&<Settings onDone={()=>setView(CFG.key?"home":"onboard")}/>}
       {view==="home"&&(
         <>
           <SubjectTabs subjects={subjects} active={filterSubj} onChange={setFilterSubj} onSave={saveSubjects}/>
-          <Home decks={filteredDecks} subjects={subjects} onAdd={()=>setView("add")} onOpen={openStudy} onNotes={openNotes} onChanged={refresh}/>
+          <Home decks={filteredDecks} subjects={subjects} onAdd={()=>setView("add")} onOpen={openStudy} onNotes={openNotes} onChanged={refresh} nick={nick}/>
         </>
       )}
       {view==="add"&&<AddMaterial subjects={subjects} onSave={saveSubjects} onDone={()=>{refresh();setView("home");}} onCancel={()=>setView("home")}/>}
@@ -864,7 +944,7 @@ function KeyForm({onSaved,cta,showCancel,onCancel}){
 }
 
 /* ── 홈 ── */
-function Home({decks,subjects,onAdd,onOpen,onNotes,onChanged}){
+function Home({decks,subjects,onAdd,onOpen,onNotes,onChanged,nick}){
   const [det,setDet]=useState({});
   useEffect(()=>{
     const o={};decks.forEach(d=>{const f=LS.get(dk(d.id));if(f)o[d.id]={...deckSummary(f),createdAt:f.createdAt,isExam:f.isExam,examCount:(f.examQuestions||[]).length};});setDet(o);
@@ -883,6 +963,7 @@ function Home({decks,subjects,onAdd,onOpen,onNotes,onChanged}){
       <div className="hero">
         <Prof size={66}/>
         <div>
+          {nick&&<div style={{fontFamily:"'Jua',sans-serif",fontSize:15,color:"var(--pri)",marginBottom:4}}>안녕, {nick}! 👋</div>}
           <h2>공부한 거,<br/>다시 안 까먹게 해줄게</h2>
           <p>자료를 넣어주면 핵심을 뽑아 무작위로 물어봐.<br/>맞히면 뜸하게, 틀리면 자주 — 그게 장기기억의 비결이야.</p>
         </div>
@@ -2725,11 +2806,11 @@ function Meter({box}){
 }
 
 initStorage().then(()=>{
-  loadCFG();
+  loadCFG();initFirebase();
   ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 }).catch(e=>{
   console.error("[boot]",e);
-  loadCFG();
+  loadCFG();initFirebase();
   ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 });
 </script>
