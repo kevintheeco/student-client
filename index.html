@@ -554,11 +554,13 @@ function App(){
   const [subjects,setSubjects]=useState(defaultSubjects());
   const [filterSubj,setFilterSubj]=useState("all");
   const [activeDeck,setActiveDeck]=useState(null);
+  const [noteDeck,setNoteDeck]=useState(null);
 
   const refresh=()=>setDecks(LS.get(DECKS_KEY)||[]);
   useEffect(()=>{refresh();},[]);
 
   function openStudy(id){const d=LS.get(dk(id));if(d){setActiveDeck(d);setView("study");}}
+  function openNotes(id){const d=LS.get(dk(id));if(d){setNoteDeck(d);setView("notes");}}
 
   function saveSubjects(s){setSubjects(s);LS.set(SUBJS_KEY,s);}
 
@@ -581,11 +583,12 @@ function App(){
       {view==="home"&&(
         <>
           <SubjectTabs subjects={subjects} active={filterSubj} onChange={setFilterSubj} onSave={saveSubjects}/>
-          <Home decks={filteredDecks} subjects={subjects} onAdd={()=>setView("add")} onOpen={openStudy} onChanged={refresh}/>
+          <Home decks={filteredDecks} subjects={subjects} onAdd={()=>setView("add")} onOpen={openStudy} onNotes={openNotes} onChanged={refresh}/>
         </>
       )}
       {view==="add"&&<AddMaterial subjects={subjects} onSave={saveSubjects} onDone={()=>{refresh();setView("home");}} onCancel={()=>setView("home")}/>}
       {view==="study"&&activeDeck&&<Study deck={activeDeck} subjects={subjects}/>}
+      {view==="notes"&&noteDeck&&<WeakNotes deck={noteDeck} onBack={()=>setView("home")}/>}
 
       <div className="footer">키와 자료는 이 기기에만 저장 · {MODELS.find(m=>m.id===CFG.model)?.label.split(" ·")[0]||"Claude"}</div>
     </>
@@ -742,7 +745,7 @@ function KeyForm({onSaved,cta,showCancel,onCancel}){
 }
 
 /* ── 홈 ── */
-function Home({decks,subjects,onAdd,onOpen,onChanged}){
+function Home({decks,subjects,onAdd,onOpen,onNotes,onChanged}){
   const [det,setDet]=useState({});
   useEffect(()=>{
     const o={};decks.forEach(d=>{const f=LS.get(dk(d.id));if(f)o[d.id]={...deckSummary(f),createdAt:f.createdAt};});setDet(o);
@@ -793,6 +796,7 @@ function Home({decks,subjects,onAdd,onOpen,onChanged}){
                   <button className="btn pri sm" onClick={()=>onOpen(d.id)}>
                     공부 시작{s&&s.due>0?" · "+s.due+"개":""}
                   </button>
+                  <button className="btn gho sm" onClick={()=>onNotes(d.id)}>📓</button>
                   <button className="btn gho sm" onClick={()=>del(d.id,d.name)}>삭제</button>
                 </div>
               </article>
@@ -1445,6 +1449,58 @@ function DepthGauge({depth}){
   );
 }
 
+/* ── 오답 노트 ── */
+function WeakNotes({deck,onBack}){
+  const concepts=deck.concepts||[];
+  const weak=concepts.filter(c=>(c.box||1)<=3||c.lapses>0||c.lastGap)
+    .sort((a,b)=>(a.box||1)-(b.box||1)||(b.lapses||0)-(a.lapses||0));
+  const noData=weak.every(c=>!c.lastGap&&!c.lastAnswer);
+  return(
+    <section className="card panel">
+      <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+        <button className="btn gho sm" onClick={onBack}>← 뒤로</button>
+        <div>
+          <div className="eyebrow">오답 노트</div>
+          <div style={{fontSize:14,fontWeight:700,color:"var(--ink)"}}>{deck.name}</div>
+        </div>
+      </div>
+      {weak.length===0?(
+        <div className="empty">아직 틀린 개념이 없어! 공부를 시작해봐 📚</div>
+      ):noData?(
+        <div className="empty" style={{textAlign:"left",padding:"20px"}}>
+          <p style={{margin:0,fontSize:13.5,color:"var(--sub)",lineHeight:1.7}}>공부를 더 하면 여기에 빠진 개념과 내 답이 쌓여. 지금 공부하고 돌아와봐!</p>
+        </div>
+      ):(
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {weak.map(c=>(
+            <div key={c.id} style={{border:"1.5px solid var(--line)",borderRadius:14,padding:"14px 16px",background:"#FFFDF8"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:(c.lastGap&&c.lastGap!=="없음")||c.lastAnswer?10:0}}>
+                <Meter box={c.box||1}/>
+                <span style={{fontFamily:"'Jua',sans-serif",fontSize:15,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</span>
+                {c.lapses>0&&<span style={{fontSize:11,background:"#FEE2E2",color:"#B91C1C",borderRadius:6,padding:"2px 7px",fontWeight:600,flexShrink:0}}>틀림 {c.lapses}회</span>}
+                <span style={{fontSize:11,color:"var(--sub)",flexShrink:0}}>Lv.{c.box||1}</span>
+              </div>
+              {c.lastGap&&c.lastGap!=="없음"&&(
+                <div style={{background:"#FFF5F5",borderRadius:10,padding:"8px 12px",marginBottom:6}}>
+                  <div style={{fontSize:10,fontWeight:700,color:"#DC2626",letterSpacing:".4px",marginBottom:4}}>빠진 개념</div>
+                  <MathText text={c.lastGap} tag="div" style={{fontSize:13,color:"#7F1D1D",lineHeight:1.6}}/>
+                </div>
+              )}
+              {c.lastAnswer&&c.lastAnswer!=="[손글씨]"&&(
+                <div style={{background:"var(--bg)",borderRadius:10,padding:"8px 12px"}}>
+                  <div style={{fontSize:10,fontWeight:700,color:"var(--sub)",letterSpacing:".4px",marginBottom:4}}>내 마지막 답</div>
+                  <div style={{fontSize:13,color:"var(--ink)",lineHeight:1.7,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{c.lastAnswer}</div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="hint">Lv.3 이하이거나 틀린 적 있는 개념 표시. 공부할수록 줄어들어!</p>
+    </section>
+  );
+}
+
 /* ── 학습 세션 ── */
 function Study({deck:initial,subjects}){
   const [deck,setDeck]=useState(initial);
@@ -1495,6 +1551,7 @@ function Study({deck:initial,subjects}){
   const followupSubmitting=useRef(false);
   const genId=useRef(0);
   const abortRef=useRef(null);
+  const lastAnswerRef=useRef({});
 
   function persist(d){
     deckRef.current=d;
@@ -1612,8 +1669,10 @@ function Study({deck:initial,subjects}){
         userBlocks,false,{cache:true,maxTok:2048});
       const r=parseGrading(gradingRaw);setEv(r);
       const v=["correct","partial","incorrect"].includes(r.verdict)?r.verdict:"partial";
+      lastAnswerRef.current={answer:hasTxt?answer.trim():"[손글씨]",gap:r.gap||"",gapType:r.gap_type||""};
+      const enrichConcept=(c)=>({...c,lastAnswer:lastAnswerRef.current.answer,lastGap:lastAnswerRef.current.gap,lastGapType:lastAnswerRef.current.gapType});
       if(v==="correct"){
-        const uc=schedule(concept,v);
+        const uc=schedule(enrichConcept(concept),v);
         persist({...deckRef.current,concepts:deckRef.current.concepts.map(c=>c.id===concept.id?uc:c)});
         setConcept(uc);setCount(n=>n+1);setPhase("result");
         setTimeout(()=>padRef.current?.forceColor(PEN_COLORS[2]),50);
@@ -1624,7 +1683,7 @@ function Study({deck:initial,subjects}){
           setFollowupCount(1);setFollowupHistory([]);setFollowupEv(null);setFollowupSuccess(false);
           await generateFollowup(r.gap,[]);
         }else{
-          const uc=schedule(concept,v);
+          const uc=schedule(enrichConcept(concept),v);
           persist({...deckRef.current,concepts:deckRef.current.concepts.map(c=>c.id===concept.id?uc:c)});
           setConcept(uc);setCount(n=>n+1);setPhase("result");
         }
@@ -1677,7 +1736,8 @@ function Study({deck:initial,subjects}){
       const newCount=followupCount+1;
       setFollowupSuccess(r.verdict==="correct");
       const finalVerdict=r.verdict==="correct"?"partial":(ev?.verdict||"incorrect");
-      const uc=schedule(concept,finalVerdict);
+      const la=lastAnswerRef.current;
+      const uc=schedule({...concept,...(la.answer?{lastAnswer:la.answer,lastGap:la.gap,lastGapType:la.gapType}:{})},finalVerdict);
       persist({...deckRef.current,concepts:deckRef.current.concepts.map(c=>c.id===concept.id?uc:c)});
       setConcept(uc);setCount(n=>n+1);
       padRef.current?.clear();setAnswer("");
@@ -1854,16 +1914,18 @@ function Study({deck:initial,subjects}){
 
             {/* ── 왼쪽: 문제 (+ 결과일 때 해설) ── */}
             <div className="card qcard">
-              <div className="chips">
-                <span className="chip">{concept?.name}</span>
-                <span className="chip gho">{diffWord(concept?.box)}</span>
-                {q?.qtype&&<span className="chip" style={{
-                  background:q.qtype==='recall'?"#FFF0E6":q.qtype==='apply'?"#E6F7FF":"#F0EDFF",
-                  color:q.qtype==='recall'?"#C05A00":q.qtype==='apply'?"#0066A3":"#5B21B6",
-                  border:"none",fontSize:11
-                }}>{q.qtype==='recall'?"암기":q.qtype==='apply'?"응용":"이해"}</span>}
+              <div style={{position:"sticky",top:0,background:"var(--card)",zIndex:3,paddingBottom:phase==="result"?8:0,borderBottom:phase==="result"?"1px solid var(--line)":"none",marginBottom:phase==="result"?10:0}}>
+                <div className="chips">
+                  <span className="chip">{concept?.name}</span>
+                  <span className="chip gho">{diffWord(concept?.box)}</span>
+                  {q?.qtype&&<span className="chip" style={{
+                    background:q.qtype==='recall'?"#FFF0E6":q.qtype==='apply'?"#E6F7FF":"#F0EDFF",
+                    color:q.qtype==='recall'?"#C05A00":q.qtype==='apply'?"#0066A3":"#5B21B6",
+                    border:"none",fontSize:11
+                  }}>{q.qtype==='recall'?"암기":q.qtype==='apply'?"응용":"이해"}</span>}
+                </div>
+                {phase!=="followup"&&<MathText text={q?.question} tag="h2" className="q" style={{margin:"8px 0 0",overflowWrap:"break-word"}}/>}
               </div>
-              {phase!=="followup"&&<MathText text={q?.question} tag="h2" className="q"/>}
               {phase==="followup"&&(
                 <div style={{display:"flex",flexDirection:"column",gap:10,flex:1}}>
                   <div style={{fontSize:12.5,color:"var(--sub)",lineHeight:1.65,padding:"8px 12px",background:"var(--bg)",borderRadius:10,borderLeft:"3px solid var(--line)"}}>
@@ -1930,7 +1992,7 @@ function Study({deck:initial,subjects}){
                 </div>
               )}
               {!isDeriving&&phase!=="result"&&phase!=="followup"&&(
-                <p className="hint" style={{margin:"4px 0 0"}}>오른쪽 노트에 직접 써봐 ✍️</p>
+                <p className="hint" style={{margin:"4px 0 0",overflowWrap:"break-word"}}>오른쪽 노트에 직접 써봐 ✍️</p>
               )}
               {phase==="result"&&ev&&(
                 <div className="result" style={{marginTop:12}}>
