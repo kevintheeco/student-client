@@ -1629,6 +1629,36 @@ function Study({deck:initial,subjects}){
     if(!c){setPhase("error");setErrMsg("질문할 개념이 없어.");return;}
     setConcept(c);last.current=c.id;
     const box=c.box||1;
+
+    // ── 기출/족보 덱: box 레벨로 출제 모드 자동 결정 ──
+    const examPool=(!practical&&d.isExam&&Array.isArray(d.examQuestions))
+      ?d.examQuestions.filter(eq=>eq&&eq.question&&eq.concept===c.name):[];
+    if(examPool.length){
+      const picked=examPool[(c.reps||0)%examPool.length];
+      // box 2 → 원본 기출 그대로 출제 (AI 호출 없음)
+      if(box===2){
+        setQ({qtype:"apply",question:picked.question,key_points:[],source:"기출",examAnswer:picked.answer||""});
+        setPhase("answering");return;
+      }
+      // box 3~4 → 변형, box 5 → 심화
+      if(box>=3){
+        const deep=box>=5;
+        const sys=deep
+          ?"너는 심화문제 출제 전문가야. 아래 [원본 기출문제]가 다루는 개념을 더 깊이 파고드는 심화문제 하나를 만들어. 원본보다 어렵게: 여러 개념을 연결하거나, '왜/어떤 경우에'를 묻거나, 한 단계 더 응용하게. 수식은 LaTeX($...$). 반드시 형식으로만 출력:\nQTYPE: understand 또는 apply\nQUESTION: 질문 내용\nPOINTS: 핵심1 | 핵심2 | 핵심3"
+          :"너는 기출문제 변형 출제 전문가야. 아래 [원본 기출문제]와 같은 개념·유형을 묻되 숫자·상황·예시만 바꾼 변형문제 하나를 만들어."+(box>=4?" 난이도는 원본보다 살짝 높여 응용을 더해.":" 난이도는 원본과 비슷하게.")+" 수식은 LaTeX($...$). 반드시 형식으로만 출력:\nQTYPE: recall 또는 understand 또는 apply\nQUESTION: 질문 내용\nPOINTS: 핵심1 | 핵심2 | 핵심3";
+        try{
+          const raw=await callAI(sys+"\n\n자료:\n"+studyMat.slice(0,4000),
+            "개념: "+c.name+"\n[원본 기출문제]:\n"+picked.question,
+            false,{maxTok:800,model:CFG.qmodel},ctrl.signal);
+          if(genId.current!==myId)return;
+          const pq=parseQuestion(raw);pq.source=deep?"심화":"변형";
+          setQ(pq);setPhase("answering");
+        }catch(e){if(genId.current===myId&&e.name!=="AbortError"){setPhase("error");setErrMsg("문제 생성 실패: "+e.message);}}
+        return;
+      }
+      // box 1 → 아래 일반 개념 암기(recall) 생성으로 진행
+    }
+
     const qtypeRule=practical
       ?"▶ QTYPE: apply 고정 — 수치나 조건을 직접 주고 계산·풀이를 요구하는 문제."
       :box<=2
