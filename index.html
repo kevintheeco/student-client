@@ -1550,6 +1550,8 @@ function Study({deck:initial,subjects}){
   const [followupHistory,setFollowupHistory]=useState([]);
   const [followupBusy,setFollowupBusy]=useState(false);
   const [followupEv,setFollowupEv]=useState(null);
+  const [followupHint,setFollowupHint]=useState("");
+  const [followupHintBusy,setFollowupHintBusy]=useState(false);
   const [followupSuccess,setFollowupSuccess]=useState(false);
   const [ocrHighlights,setOcrHighlights]=useState([]);
   const [ocrImg,setOcrImg]=useState(null);
@@ -1713,6 +1715,7 @@ function Study({deck:initial,subjects}){
         false,{maxTok:200,model:CFG.qmodel}
       );
       setFollowupQ((raw||"").trim());
+      setFollowupHint("");setFollowupHintBusy(false);
       setPhase("followup");
     }catch(e){
       setSubmitErr("후속 질문 생성 실패: "+e.message);
@@ -1833,6 +1836,20 @@ function Study({deck:initial,subjects}){
       setDontknow(r);
     }catch(e){setDontknow("설명 불러오기 실패: "+e.message);}
     setDontknowBusy(false);
+  }
+
+  async function handleFollowupHint(){
+    if(followupHintBusy)return;
+    setFollowupHintBusy(true);setFollowupHint("");
+    try{
+      const gap=ev?.gap&&ev.gap!=="없음"?ev.gap:"";
+      const r=await callAI(
+        "너는 친절한 튜터야. 학습자가 후속 질문에 막혔어. 반말로 핵심만 짧게 (3~5문장) 힌트를 줘. 정답을 직접 말하지 말고 생각할 수 있게 유도해줘.\n\n출력 형식: ## 소제목 없이, **굵게** 강조만 허용, 수식은 LaTeX($...$), >> --- ASCII 기호 금지.",
+        "개념: "+concept.name+"\n후속 질문: "+followupQ+(gap?"\n빠진 부분: "+gap:""),
+        false,{maxTok:400,cache:true});
+      setFollowupHint(r);
+    }catch(e){setFollowupHint("힌트 불러오기 실패: "+e.message);}
+    setFollowupHintBusy(false);
   }
 
   async function explainMore(){
@@ -1959,10 +1976,19 @@ function Study({deck:initial,subjects}){
                     </div>
                   ):(
                     <div style={{background:"#FFF6E9",border:"1.5px solid #FBD38D",borderRadius:14,padding:"14px 16px"}}>
-                      <div style={{fontFamily:"'Jua',sans-serif",fontSize:11,letterSpacing:".5px",color:"#92620A",marginBottom:8}}>
-                        보충 질문
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                        <div style={{fontFamily:"'Jua',sans-serif",fontSize:11,letterSpacing:".5px",color:"#92620A"}}>보충 질문</div>
+                        {!followupHint&&<button className="btn gho sm" style={{fontSize:11,padding:"3px 10px"}} onClick={handleFollowupHint} disabled={followupHintBusy}>
+                          {followupHintBusy?<><span className="spinner" style={{width:10,height:10,borderWidth:1.5,display:"inline-block",verticalAlign:"middle",marginRight:4}}/>힌트 중…</>:"💡 힌트 주세요"}
+                        </button>}
                       </div>
                       <MathText text={followupQ} tag="div" style={{fontSize:15,lineHeight:1.9,fontWeight:600,color:"var(--ink)"}}/>
+                    </div>
+                  )}
+                  {followupHint&&(
+                    <div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:12,padding:"12px 14px"}}>
+                      <div style={{fontSize:10,fontWeight:700,color:"#166534",letterSpacing:".4px",marginBottom:6}}>💡 힌트</div>
+                      <MathText text={followupHint} tag="div" style={{fontSize:13,color:"#14532D",lineHeight:1.75}}/>
                     </div>
                   )}
                   <p className="hint" style={{margin:0}}>오른쪽에 보충 답변을 써봐 ✍️</p>
