@@ -770,7 +770,7 @@ function KeyForm({onSaved,cta,showCancel,onCancel}){
 function Home({decks,subjects,onAdd,onOpen,onNotes,onChanged}){
   const [det,setDet]=useState({});
   useEffect(()=>{
-    const o={};decks.forEach(d=>{const f=LS.get(dk(d.id));if(f)o[d.id]={...deckSummary(f),createdAt:f.createdAt};});setDet(o);
+    const o={};decks.forEach(d=>{const f=LS.get(dk(d.id));if(f)o[d.id]={...deckSummary(f),createdAt:f.createdAt,isExam:f.isExam,examCount:(f.examQuestions||[]).length};});setDet(o);
   },[decks]);
 
   function del(id,name){
@@ -802,7 +802,10 @@ function Home({decks,subjects,onAdd,onOpen,onNotes,onChanged}){
             return(
               <article key={d.id} className="card deck">
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:6}}>
-                  {subj&&<div className="subj-badge" style={{background:subj.color+"22",color:subj.color}}>{subj.name}</div>}
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {subj&&<div className="subj-badge" style={{background:subj.color+"22",color:subj.color}}>{subj.name}</div>}
+                    {s?.isExam&&<div className="subj-badge" style={{background:"#FFF7E0",color:"#946200"}}>📜 기출</div>}
+                  </div>
                   {s?.createdAt&&<span style={{fontSize:11,color:"var(--sub)",flexShrink:0,marginTop:2}}>{new Date(s.createdAt).toLocaleDateString("ko-KR",{year:"numeric",month:"short",day:"numeric"})}</span>}
                 </div>
                 <div className="nm">{d.name}</div>
@@ -1741,6 +1744,7 @@ function Study({deck:initial,subjects}){
         ?"이 문제는 【응용·계산】 유형이야. 수치·풀이 과정이 맞는지가 핵심이야. 과정과 결과가 맞으면 correct, 방향은 맞는데 실수 있으면 partial."
         :"이 문제는 【이해 확인】 유형이야. 개념을 얼마나 이해했는지가 핵심이야.";
       const textParts=["문제 유형: "+qtype,"목표 개념: "+concept.name,"질문: "+q.question,"채점 핵심: "+JSON.stringify(q.key_points||[])];
+      if(q?.examAnswer)textParts.push("\n[이 기출문제의 공식 정답·해설 — 이 기준으로 채점하고 ANSWER에는 이 정답을 정리해 써]\n"+q.examAnswer);
       if(hasTxt)textParts.push("\n학습자 텍스트 답안:\n"+answer.trim());
       if(img)textParts.push("\n학습자가 위 이미지에 손으로 쓴 답도 포함돼. 이미지 속 내용을 읽고 함께 채점해줘.");
       userBlocks.push({type:"text",text:textParts.join("\n")});
@@ -2013,6 +2017,11 @@ function Study({deck:initial,subjects}){
                 <div className="chips">
                   <span className="chip">{concept?.name}</span>
                   <span className="chip gho">{diffWord(concept?.box)}</span>
+                  {q?.source&&<span className="chip" style={{
+                    background:q.source==="기출"?"#FFF7E0":q.source==="심화"?"#FFE4EC":"#EFE7FF",
+                    color:q.source==="기출"?"#946200":q.source==="심화"?"#C2185B":"#5B21B6",
+                    border:"none",fontSize:11,fontWeight:700
+                  }}>{q.source==="기출"?"📜 기출":q.source==="심화"?"🔥 심화":"🔄 변형"}</span>}
                   {q?.qtype&&<span className="chip" style={{
                     background:q.qtype==='recall'?"#FFF0E6":q.qtype==='apply'?"#E6F7FF":"#F0EDFF",
                     color:q.qtype==='recall'?"#C05A00":q.qtype==='apply'?"#0066A3":"#5B21B6",
