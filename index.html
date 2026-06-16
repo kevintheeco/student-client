@@ -1954,9 +1954,10 @@ function Study({deck:initial,subjects}){
       }else{
         const coreGap=r.gap&&r.gap!=="없음"&&(r.gap_type==="개념누락"||r.gap_type==="핵심비껴감");
         if(coreGap){
-          padRef.current?.clear();setAnswer("");
+          // 원래 답안(손글씨/텍스트)은 그대로 두고 빨간펜으로 빠진 부분만 보완하게 함
           setFollowupCount(1);setFollowupHistory([]);setFollowupEv(null);setFollowupSuccess(false);
-          await generateFollowup(r.gap,[]);
+          setTimeout(()=>padRef.current?.forceColor(PEN_COLORS[2]),50);
+          await generateFollowup(r,[],hasTxt?answer.trim():"");
         }else{
           const uc=schedule(enrichConcept(concept),v);
           persist({...deckRef.current,concepts:deckRef.current.concepts.map(c=>c.id===concept.id?uc:c)});
@@ -1967,13 +1968,29 @@ function Study({deck:initial,subjects}){
     finally{submitting.current=false;}
   }
 
-  async function generateFollowup(gap,history){
+  async function generateFollowup(ev0,history,myAnswer){
     setFollowupBusy(true);
     try{
-      const histTxt=history.length?"이전 보충 답변:\n"+history.map((h,i)=>(i+1)+". "+h.answer+" → "+h.verdict).join("\n")+"\n\n":"";
+      const histTxt=history.length?"이전 보충 시도:\n"+history.map((h,i)=>(i+1)+". "+h.answer+" → "+h.verdict).join("\n")+"\n\n":"";
+      const myAns=(myAnswer&&myAnswer.trim())?myAnswer.trim():"(손글씨로 답함 — 아래 GOT_IT/GAP 분석을 학습자가 실제로 쓴 내용으로 보고 질문을 만들 것)";
+      const gapTxt=(ev0&&ev0.gap)?ev0.gap:(typeof ev0==="string"?ev0:"");
+      const userCtx=
+        "개념: "+concept.name+"\n"+
+        "원래 질문: "+q.question+"\n"+
+        "── 학습자가 실제로 쓴 답 ──\n"+myAns+"\n\n"+
+        "이 답에서 학습자가 이미 맞게 한 부분(GOT_IT): "+((ev0&&ev0.got_it)||"-")+"\n"+
+        "이 답에서 빠지거나 비껴간 핵심(GAP): "+(gapTxt||"-")+"\n"+
+        "이 갭을 메우려면 보강할 것(NEXT): "+((ev0&&ev0.next)||"-")+"\n\n"+
+        histTxt+"후속 질문만 출력:";
       const raw=await callAI(
-        "너는 소크라테스식 학습 튜터야. 학습자가 개념의 빠진 부분을 스스로 채울 수 있도록 후속 질문을 딱 하나만 만들어. 규칙: ①절대 정답·모범답안을 알려주지 말 것 ②발견된 갭(빠진 핵심)을 정확히 겨냥한 질문 ③'왜', '그렇다면', '어떤 경우에' 형식의 소크라테스식 ④반말, 친근하게 ⑤질문 한 문장만 출력, 설명·안내 없이\n\n자료:\n"+studyMat.slice(0,4000),
-        "개념: "+concept.name+"\n원래 질문: "+q.question+"\n핵심 포인트: "+(q.key_points||[]).join(", ")+"\n발견된 갭: "+gap+"\n\n"+histTxt+"후속 질문만 출력:",
+        "너는 소크라테스식 학습 튜터야. 학습자가 '자기가 쓴 답의 빠진 부분'을 스스로 떠올려 채우도록, 후속 질문을 딱 하나만 만들어.\n"+
+        "규칙:\n"+
+        "① 반드시 위 GAP(이 학습자 답의 빠진 핵심)만 정조준해. 개념 전체나 새로운 주제로 넘어가지 말 것 — 학습자 답과 동떨어진 엉뚱한 질문은 절대 금지.\n"+
+        "② 학습자가 이미 쓴 답(GOT_IT)을 출발점으로 삼아, '네가 ~라고 했는데, 그럼 …?' 처럼 그 답에 이어 붙는 질문으로 만들어. 학습자가 흐릿하게 기억하는 부분을 스스로 끄집어내도록 유도해.\n"+
+        "③ 절대 정답·모범답안을 알려주지 말 것. 답을 떠먹여주지 말고 떠올리게만 해.\n"+
+        "④ '왜', '그렇다면', '어떤 경우에' 같은 소크라테스식, 반말, 친근하게.\n"+
+        "⑤ 질문 한 문장만 출력 (설명·안내 없이).\n\n자료:\n"+studyMat.slice(0,4000),
+        userCtx,
         false,{maxTok:200,model:CFG.qmodel},abortRef.current?.signal
       );
       setFollowupQ((raw||"").trim());
@@ -2000,7 +2017,7 @@ function Study({deck:initial,subjects}){
       if(img)userBlocks.push({type:"image",source:{type:"base64",media_type:"image/png",data:img}});
       const textParts=["개념: "+concept.name,"원래 질문: "+q.question,"후속 질문: "+followupQ];
       if(hasTxt)textParts.push("\n학습자 답변:\n"+answer.trim());
-      if(img)textParts.push("\n학습자 손글씨 답도 이미지로 포함.");
+      if(img)textParts.push("\n이미지에는 학습자의 '원래 답(검은펜/파란펜)'과 후속 질문에 답하려고 새로 보탠 '빨간펜 보완'이 함께 있어. 빨간펜으로 새로 보탠 내용을 중심으로, 후속 질문에 제대로 답했는지 평가해줘.");
       userBlocks.push({type:"text",text:textParts.join("\n")});
       const raw=await callAI(
         "너는 학습 분석 튜터야. 후속 질문에 대한 답변만 갭 분석해. 이 후속 질문이 묻는 부분만 평가해 (전체 모범답안 기준 아님). 다음 형식으로만 출력:\nESSENCE: 이 후속 질문이 묻는 핵심\nGOT_IT: 맞게 표현한 부분 (반말)\nGAP: 여전히 부족한 부분 (없으면 정확히 '없음')\nGAP_TYPE: 개념누락 / 이해얕음 / 핵심비껴감 / 표현부족 / 갭없음 중 하나\nDEPTH: 암기 수준 / 이해 수준 / 설명가능 수준 / 응용가능 수준 중 하나\nNEXT: 1문장 (반말)\nVERDICT: correct 또는 partial 또는 incorrect\nANSWER: \n\n자료:\n"+studyMat,
@@ -2259,7 +2276,7 @@ function Study({deck:initial,subjects}){
                       <MathText text={followupHint} tag="div" style={{fontSize:13,color:"#14532D",lineHeight:1.75}}/>
                     </div>
                   )}
-                  <p className="hint" style={{margin:0}}>오른쪽에 보충 답변을 써봐 ✍️</p>
+                  <p className="hint" style={{margin:0}}>원래 답은 그대로 두고, <b style={{color:"#DC2626"}}>빨간펜</b>으로 빠진 부분을 보완해봐 ✍️</p>
                 </div>
               )}
               {isDeriving&&(
