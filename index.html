@@ -422,6 +422,7 @@ async function callGemini(system,userContent,wantJson,opts={},signal){
   return JSON.parse(fixJson(clean.slice(s,e+1)));
 }
 function callAI(system,userContent,wantJson,opts={},signal){
+  if(opts.lang==="en")system=system+"\n\n[OUTPUT LANGUAGE = ENGLISH] Write the QUESTION and all human-readable text (feedback, GOT_IT, GAP, NEXT, ESSENCE, hints, explanations, model ANSWER) in natural English. BUT keep the structured field VALUES exactly as the Korean tokens specified in the format above — QTYPE stays recall/understand/apply, and GAP_TYPE/DEPTH/VERDICT must remain the exact Korean option words (개념누락/이해얕음/핵심비껴감/표현부족/갭없음, 암기 수준/이해 수준/설명가능 수준/응용가능 수준, correct/partial/incorrect). Do not translate those tokens.";
   const m=opts.model||CFG.model;
   if(m.startsWith("gemini"))return callGemini(system,userContent,wantJson,opts,signal);
   return callClaude(system,userContent,wantJson,opts,signal);
@@ -1455,6 +1456,7 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
   const [pen,setPen]=useState(false);
   const [newSubj,setNewSubj]=useState("");
   const [isExam,setIsExam]=useState(false);
+  const [lang,setLang]=useState("ko");
   const append=(t)=>{if(t)setMaterial(p=>(p.trim()?p.trim()+"\n":"")+t);};
 
   // 새 과목 빠른 추가
@@ -1539,7 +1541,7 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
       try{
         const r=await callAI(
           "너는 학습 자료 분석 전문가야. 자료가 무엇을 가르치려는지 핵심 주제와 목적을 먼저 파악해. 그 목적에 맞는 핵심 개념 8~15개를 짧은 명사구로 뽑아. 단순히 등장하는 단어가 아니라 이 자료의 학습 목표를 대표하는 개념이어야 해. JSON만: {\"concepts\":[\"...\"]}",
-          "자료:\n\n"+fullMaterial.slice(0,12000),true,{maxTok:512});
+          "자료:\n\n"+fullMaterial.slice(0,12000),true,{maxTok:512,lang});
         const extra=Array.isArray(r.concepts)?r.concepts:[];
         concepts=[...concepts,...extra.filter(c=>!concepts.includes(c))];
       }catch(e){
@@ -1569,7 +1571,7 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
     // ── 저장 ──
     const id=uid();
     const materialToStore=summary?fullMaterial.slice(0,5000):fullMaterial.slice(0,12000);
-    const deck={id,name:finalName,subjId,material:materialToStore,summary,createdAt:Date.now(),
+    const deck={id,name:finalName,subjId,material:materialToStore,summary,createdAt:Date.now(),lang,
       isExam:isExam&&examQuestions.length>0,examQuestions,
       concepts:concepts.map(nm=>({id:uid(),name:String(nm).slice(0,80),box:1,dueAt:0,reps:0,lapses:0}))};
 
@@ -1622,6 +1624,18 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
           <div style={{fontSize:11.5,color:"var(--sub)",marginTop:2,lineHeight:1.5}}>실제 문제를 뽑아서 그대로 풀고, 변형·심화문제까지 자동으로 만들어줘</div>
         </div>
       </label>
+
+      {/* 공부 언어 선택 */}
+      <div style={{padding:"12px 15px",border:"1.5px solid var(--line)",borderRadius:14,background:"#FBFAFF"}}>
+        <div style={{fontSize:13.5,fontWeight:700,color:"var(--ink)"}}>🌐 어떤 언어로 공부할래?</div>
+        <div style={{fontSize:11.5,color:"var(--sub)",margin:"2px 0 9px",lineHeight:1.5}}>영어 자료여도 한국어로 풀 수 있어. 문제·피드백·설명이 이 언어로 나와.</div>
+        <div style={{display:"flex",gap:8}}>
+          {[["ko","🇰🇷 한국어로"],["en","🇬🇧 English로"]].map(([v,lb])=>(
+            <button key={v} type="button" disabled={busy} onClick={()=>setLang(v)}
+              className={"btn sm"+(lang===v?" pri":" gho")} style={{flex:1}}>{lb}</button>
+          ))}
+        </div>
+      </div>
 
       {/* 내용 */}
       <textarea className="field" rows={7} disabled={busy} value={material}
@@ -1814,6 +1828,8 @@ function Study({deck:initial,subjects}){
 
   // 세션 전체에서 캐시 공유: summary 있으면 우선 사용 (8000자 이하)
   const studyMat=deck.summary||deck.material.slice(0,8000);
+  // 공부 언어: 'ko'(기본) | 'en' — 영어 자료를 영어로 공부할지 한국어로 공부할지
+  const studyLang=deck.lang==="en"?"en":"ko";
 
   async function retryVariant(){
     // 배운 걸로 굳히기: 같은 개념의 '변형 문제'(숫자·상황·표현만 바꿈)를 새로 만들어 다시 풀게 함
@@ -1833,7 +1849,7 @@ function Study({deck:initial,subjects}){
       const raw=await callAI(
         "너는 문제 변형 출제 전문가야. 아래 [원래 문제]와 똑같은 개념·유형을 묻되, 숫자·상황·예시·표현만 살짝 바꾼 변형문제 하나를 만들어. 방금 본 모범답안을 그대로 베껴 쓸 수 없고 새로 풀어야 하도록. 난이도는 원래와 비슷하게. 수식은 LaTeX($...$). 반드시 아래 형식으로만 출력 (코드블록 없이):\nQTYPE: recall 또는 understand 또는 apply\nQUESTION: 질문 내용\nPOINTS: 핵심1 | 핵심2 | 핵심3\n\n자료:\n"+studyMat.slice(0,4000),
         "개념: "+c.name+"\n원래 문제 유형: "+(baseQ?.qtype||"understand")+"\n[원래 문제]:\n"+(baseQ?.question||""),
-        false,{maxTok:800,model:CFG.qmodel},ctrl.signal);
+        false,{maxTok:800,model:CFG.qmodel,lang:studyLang},ctrl.signal);
       if(genId.current!==myId)return;
       const pq=parseQuestion(raw);
       if(baseQ?.qtype)pq.qtype=baseQ.qtype;
@@ -1893,7 +1909,7 @@ function Study({deck:initial,subjects}){
         try{
           const raw=await callAI(sys+"\n\n자료:\n"+studyMat.slice(0,4000),
             "개념: "+c.name+"\n[원본 기출문제]:\n"+picked.question,
-            false,{maxTok:800,model:CFG.qmodel},ctrl.signal);
+            false,{maxTok:800,model:CFG.qmodel,lang:studyLang},ctrl.signal);
           if(genId.current!==myId)return;
           const pq=parseQuestion(raw);pq.source=deep?"심화":"변형";
           setQ(pq);setPhase("answering");
@@ -1933,7 +1949,7 @@ function Study({deck:initial,subjects}){
         "apply: '$\\mathbf{a}=(1,2,3),\\,\\mathbf{b}=(4,0,-1)$일 때 $\\mathbf{a}\\times\\mathbf{b}$를 구하시오', '$T(x,y)=2x+y$가 선형변환인지 두 조건으로 보여라 (정의를 직접 적용해 검증하는 문제)'\n\n"+
         "수식은 LaTeX($...$, $$...$$). 반드시 아래 형식으로만 출력:\nQTYPE: recall 또는 understand 또는 apply\nQUESTION: 질문 내용\nPOINTS: 핵심1 | 핵심2 | 핵심3 (| 구분, 3~5개)\n\n자료:\n"+studyMat.slice(0,6000),
         "목표 개념: "+c.name+"\n복습 단계: "+diffLong(c.box),
-        false,{cache:true,maxTok:800,model:CFG.qmodel},ctrl.signal);
+        false,{cache:true,maxTok:800,model:CFG.qmodel,lang:studyLang},ctrl.signal);
       if(genId.current!==myId)return;
       setQ(parseQuestion(raw));setPhase("answering");
     }catch(e){if(genId.current===myId&&e.name!=="AbortError"){setPhase("error");setErrMsg("질문 생성 실패: "+e.message);}}
@@ -2001,7 +2017,7 @@ function Study({deck:initial,subjects}){
       userBlocks.push({type:"text",text:textParts.join("\n")});
       const gradingRaw=await callAI(
         "너는 학습 분석 튜터야. "+qtypeCtx+" 학습자 답안을 보고 '이 개념의 본질 대비 내 답의 갭'을 분석해. 수식·행렬·그리스 문자·수학 기호(⊥ ∥ ∈ ∉ ⊆ ℝ ∇ 등)는 반드시 LaTeX로: 인라인 $...$, 블록 $$...$$. 유니코드 기호 직접 사용 금지. 다음 형식으로만 출력 (JSON·코드블록 없이):\nESSENCE: 이 질문이 진짜 요구하는 핵심 요소 1~3가지 (학습자가 반드시 알아야 할 것)\nGOT_IT: 내 답이 제대로 담은 부분 (인정해줄 것, 반말)\nGAP: 본질 대비 빠지거나 얕거나 비껴간 핵심 부분 (없으면 정확히 '없음')\nGAP_TYPE: 개념누락 / 이해얕음 / 핵심비껴감 / 표현부족 / 갭없음 중 정확히 하나\nDEPTH: 암기 수준 / 이해 수준 / 설명가능 수준 / 응용가능 수준 중 정확히 하나\nNEXT: 이 갭을 메우려면 구체적으로 뭘 보강해야 하는지 (반말, 1~2문장)\nVERDICT: correct 또는 partial 또는 incorrect (갭없음이면 correct, 핵심 갭이면 partial, 본질 전체 누락이면 incorrect)\nANSWER: 모범답안 3~5문장 (수식 LaTeX, 그래프 필요시 <svg> 태그 직접 — 코드블록 없이, width≤380 height≤260 viewBox 사용, 축=#221C39, 곡선=#6C5CE7·#27C2A0·#FF6B8A·#FFC24B, bg=#FFFDF8)\n\n자료:\n"+studyMat,
-        userBlocks,false,{cache:true,maxTok:2048},abortRef.current?.signal);
+        userBlocks,false,{cache:true,maxTok:2048,lang:studyLang},abortRef.current?.signal);
       const r=parseGrading(gradingRaw);setEv(r);
       const v=["correct","partial","incorrect"].includes(r.verdict)?r.verdict:"partial";
       lastAnswerRef.current={answer:hasTxt?answer.trim():"[손글씨]",gap:r.gap||"",gapType:r.gap_type||""};
@@ -2051,7 +2067,7 @@ function Study({deck:initial,subjects}){
         "④ '왜', '그렇다면', '어떤 경우에' 같은 소크라테스식, 반말, 친근하게.\n"+
         "⑤ 질문 한 문장만 출력 (설명·안내 없이).\n\n자료:\n"+studyMat.slice(0,4000),
         userCtx,
-        false,{maxTok:200,model:CFG.qmodel},abortRef.current?.signal
+        false,{maxTok:200,model:CFG.qmodel,lang:studyLang},abortRef.current?.signal
       );
       setFollowupQ((raw||"").trim());
       setFollowupHint("");setFollowupHintBusy(false);
@@ -2081,7 +2097,7 @@ function Study({deck:initial,subjects}){
       userBlocks.push({type:"text",text:textParts.join("\n")});
       const raw=await callAI(
         "너는 학습 분석 튜터야. 후속 질문에 대한 답변만 갭 분석해. 이 후속 질문이 묻는 부분만 평가해 (전체 모범답안 기준 아님). 다음 형식으로만 출력:\nESSENCE: 이 후속 질문이 묻는 핵심\nGOT_IT: 맞게 표현한 부분 (반말)\nGAP: 여전히 부족한 부분 (없으면 정확히 '없음')\nGAP_TYPE: 개념누락 / 이해얕음 / 핵심비껴감 / 표현부족 / 갭없음 중 하나\nDEPTH: 암기 수준 / 이해 수준 / 설명가능 수준 / 응용가능 수준 중 하나\nNEXT: 1문장 (반말)\nVERDICT: correct 또는 partial 또는 incorrect\nANSWER: \n\n자료:\n"+studyMat,
-        userBlocks,false,{cache:true,maxTok:800},abortRef.current?.signal
+        userBlocks,false,{cache:true,maxTok:800,lang:studyLang},abortRef.current?.signal
       );
       const r=parseGrading(raw);
       setFollowupEv(r);
@@ -2115,7 +2131,7 @@ function Study({deck:initial,subjects}){
       const raw=await callAI(
         "수식 유도 튜터. 학습자가 한 단계씩 공식을 직접 유도할 수 있도록 계획을 세워. 각 단계는 한 줄~두 줄 수식 하나로 분리해. 수식은 LaTeX($...$).",
         "개념: "+concept.name+"\n자료:\n"+studyMat.slice(0,4000)+"\n\n다음 형식으로만 출력:\nSTEPS: 단계수(3~6)\nSTART: 시작 안내 문장\nHINT1: 1단계 힌트\nHINT2: 2단계 힌트\n... (단계수만큼)",
-        false,{maxTok:700,model:CFG.qmodel},abortRef.current?.signal);
+        false,{maxTok:700,model:CFG.qmodel,lang:studyLang},abortRef.current?.signal);
       setDerivePlan(parseDerivePlan(raw));
       setPhase("derive_step");
     }catch(e){if(e.name==="AbortError")return;setPhase("answering");setSubmitErr("유도 시작 실패: "+e.message);}
@@ -2139,7 +2155,7 @@ function Study({deck:initial,subjects}){
     try{
       const raw=await callAI(
         "수식 유도 단계 평가자. 표기가 완벽하지 않아도 수학적 방향이 맞으면 CORRECT: yes. 관대하게 평가해.",
-        userBlocks,false,{maxTok:350},abortRef.current?.signal);
+        userBlocks,false,{maxTok:350,lang:studyLang},abortRef.current?.signal);
       const res=parseDeriveCheck(raw);
       setDeriveFeedback(res.feedback);
       if(res.correct){
@@ -2172,7 +2188,7 @@ function Study({deck:initial,subjects}){
       const r=await callAI(
         "너는 친절한 튜터야. 학습자가 이 개념을 전혀 모르니 처음 배우는 사람에게 직관적으로(비유·예시·왜 중요한지) 반말로 설명해줘.\n\n출력 형식 규칙:\n① 제목은 ## 소제목은 ### ② 핵심 용어나 강조는 **굵게** ③ 목록은 - 기호 ④ 수식은 LaTeX($...$, $$...$$) ⑤ >> --- === 같은 ASCII 기호 금지 ⑥ 코드·XML·SVG 출력 금지\n\n자료:\n"+studyMat,
         "개념: "+concept.name+(q?"\n원래 질문: "+q.question:""),
-        false,{cache:true,maxTok:1400},abortRef.current?.signal);
+        false,{cache:true,maxTok:1400,lang:studyLang},abortRef.current?.signal);
       setDontknow(r);
     }catch(e){if(e.name==="AbortError")return;setDontknow("설명 불러오기 실패: "+e.message);}
     setDontknowBusy(false);
@@ -2186,7 +2202,7 @@ function Study({deck:initial,subjects}){
       const r=await callAI(
         "너는 친절한 튜터야. 학습자가 후속 질문에 막혔어. 반말로 핵심만 짧게 (3~5문장) 힌트를 줘. 정답을 직접 말하지 말고 생각할 수 있게 유도해줘.\n\n출력 형식: ## 소제목 없이, **굵게** 강조만 허용, 수식은 LaTeX($...$), >> --- ASCII 기호 금지.",
         "개념: "+concept.name+"\n후속 질문: "+followupQ+(gap?"\n빠진 부분: "+gap:""),
-        false,{maxTok:400,cache:true},abortRef.current?.signal);
+        false,{maxTok:400,cache:true,lang:studyLang},abortRef.current?.signal);
       setFollowupHint(r);
     }catch(e){if(e.name==="AbortError")return;setFollowupHint("힌트 불러오기 실패: "+e.message);}
     setFollowupHintBusy(false);
@@ -2197,7 +2213,7 @@ function Study({deck:initial,subjects}){
     try{const r=await callAI(
       "너는 친절한 튜터야. 자료에 근거해 더 깊이 직관적으로(비유·예시·왜) 반말로 설명해. 수식·행렬·그리스 문자·수학 기호(⊥ ∥ ∈ ∉ ⊆ ℝ ∇ × · 등)는 반드시 모두 LaTeX로: 인라인은 $...$, 블록은 $$..$$. 유니코드 기호 직접 사용 금지. 그래프·곡선·다이어그램이 이해에 도움이 되면 SVG로 그려줘(코드블록 없이 <svg> 태그 직접 사용, width≤380 height≤260 viewBox 사용, 축·레이블 포함, font-size 11~13, 색상: 축선=#221C39, 곡선은 #6C5CE7·#27C2A0·#FF6B8A·#FFC24B, 균형점=원형 #FFC24B, 배경=#FFFDF8).\n\n자료:\n"+studyMat,
       "개념: "+concept.name+"\n질문: "+q.question+"\n모범답안: "+(ev?.model_answer||""),
-      false,{cache:true,maxTok:1200},abortRef.current?.signal);
+      false,{cache:true,maxTok:1200,lang:studyLang},abortRef.current?.signal);
       setDeeper(r);}
     catch(e){if(e.name==="AbortError")return;setDeeper("실패: "+e.message);}
     setDeepBusy(false);
@@ -2222,7 +2238,7 @@ function Study({deck:initial,subjects}){
     try{
       const r=await callAI(
         "친절한 튜터. 첫 글자부터 바로 설명. 수식은 LaTeX($...$). 반말.",
-        userBlocks,false,{maxTok:1200,cache:true},abortRef.current?.signal);
+        userBlocks,false,{maxTok:1200,cache:true,lang:studyLang},abortRef.current?.signal);
       setAnnotAnswer(r);
     }catch(e){if(e.name==="AbortError")return;setAnnotAnswer("실패: "+e.message);}
     setAnnotBusy(false);
@@ -2249,6 +2265,10 @@ function Study({deck:initial,subjects}){
           <Stat n={s.weak} l="약함" t="rose"/>
         </div>
         <span className="muted" style={{fontSize:11,flexShrink:0}}>{count}문제</span>
+        <button className="btn gho xs" style={{flexShrink:0}} title="공부 언어 전환 — 다음 문제부터 적용 (문제·피드백·설명 언어)"
+          onClick={()=>persist({...deckRef.current,lang:studyLang==="en"?"ko":"en"})}>
+          {studyLang==="en"?"🇬🇧 EN":"🇰🇷 KO"}
+        </button>
         <button className="btn gho xs" style={{flexShrink:0}} onClick={()=>setShowInfo(v=>!v)}>
           {showInfo?"▲ 닫기":"▼ 개념 목록"}
         </button>
