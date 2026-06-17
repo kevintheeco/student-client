@@ -336,6 +336,7 @@ function formatSize(b){
   if(b<1048576)return(b/1024).toFixed(1)+"KB";
   return(b/1048576).toFixed(2)+"MB";
 }
+function fmtClock(ts){if(!ts)return"";const d=new Date(ts);return d.getHours()+":"+String(d.getMinutes()).padStart(2,"0");}
 const DECKS_KEY="ng:decks";
 const SUBJS_KEY="ng:subjects";
 const dk=(id)=>"ng:deck:"+id;
@@ -427,14 +428,22 @@ function nickKey(uid){return"ng:nick:"+uid;}
 let _uid=null;          // 현재 로그인 uid (null이면 동기화 안 함)
 let _syncing=false;     // 초기 병합 중(이 동안 푸시 억제)
 const _pending=new Set();let _pendTimer=null;
+// 동기화 상태를 UI에 알림: {busy, ok, at}
+let _syncCb=null;
+function setSyncListener(fn){_syncCb=fn;}
+function _emitSync(s){try{_syncCb&&_syncCb(s);}catch(_){}}
+// 약속이 일정 시간 내 안 끝나면 실패 처리(Firestore 미설정 시 매달림 방지)
+function withTimeout(p,ms,label){
+  return Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error((label||"작업")+" 시간초과")),ms))]);
+}
 function encKey(k){return encodeURIComponent(k).replace(/%/g,"_");}  // Firestore 문서 ID 안전화
 function _dataCol(uid){return _db.collection("users").doc(uid).collection("data");}
 async function cloudPushKey(uid,key){
   if(SYNC_EXCLUDE.has(key)||!_db)return;
   const v=Object.prototype.hasOwnProperty.call(_cache,key)?_cache[key]:null;
-  await _dataCol(uid).doc(encKey(key)).set({k:key,v:v===undefined?null:v,t:_meta[key]||Date.now()});
+  await withTimeout(_dataCol(uid).doc(encKey(key)).set({k:key,v:v===undefined?null:v,t:_meta[key]||Date.now()}),12000,"업로드");
 }
-async function cloudDeleteKey(uid,key){if(!_db)return;await _dataCol(uid).doc(encKey(key)).delete();}
+async function cloudDeleteKey(uid,key){if(!_db)return;await withTimeout(_dataCol(uid).doc(encKey(key)).delete(),12000,"삭제");}
 function cloudMaybePush(k){
   if(!_db||!_uid||_syncing||SYNC_EXCLUDE.has(k))return;
   _pending.add(k);clearTimeout(_pendTimer);_pendTimer=setTimeout(flushPending,1200);
@@ -442,18 +451,24 @@ function cloudMaybePush(k){
 async function flushPending(){
   if(!_db||!_uid)return;
   const keys=[..._pending];_pending.clear();
-  for(const k of keys){try{await cloudPushKey(_uid,k);}catch(e){console.warn("[cloud push]",k,e);}}
+  if(!keys.length)return;
+  _emitSync({busy:true});let ok=true;
+  for(const k of keys){try{await cloudPushKey(_uid,k);}catch(e){ok=false;console.warn("[cloud push]",k,e);}}
+  _emitSync({busy:false,ok,at:Date.now()});
 }
 function cloudMaybeDelete(k){
   if(!_db||!_uid||_syncing||SYNC_EXCLUDE.has(k))return;
-  cloudDeleteKey(_uid,k).catch(e=>console.warn("[cloud del]",k,e));
+  _emitSync({busy:true});
+  cloudDeleteKey(_uid,k).then(()=>_emitSync({busy:false,ok:true,at:Date.now()}))
+    .catch(e=>{console.warn("[cloud del]",k,e);_emitSync({busy:false,ok:false});});
 }
 // 로그인 시: 클라우드와 로컬을 시각 비교로 병합 (최신 우선, 비기면 로컬 유지+업로드)
 async function cloudSyncOnLogin(uid){
   if(!_db||!uid)return{pulled:0,pushed:0,ok:false};
   _syncing=true;let pulled=0,pushed=0,ok=true;
+  _emitSync({busy:true});
   try{
-    const snap=await _dataCol(uid).get();
+    const snap=await withTimeout(_dataCol(uid).get(),12000,"동기화");
     const cloud={};
     snap.forEach(d=>{const x=d.data();if(x&&typeof x.k==="string")cloud[x.k]={v:x.v,t:x.t||0};});
     const localKeys=Object.keys(_cache).filter(k=>k.startsWith("ng:")&&!SYNC_EXCLUDE.has(k));
@@ -472,7 +487,7 @@ async function cloudSyncOnLogin(uid){
     for(const key of toPush){if(!_meta[key])_meta[key]=Date.now();try{await cloudPushKey(uid,key);pushed++;}catch(e){console.warn("[cloud push]",key,e);}}
     if(pushed)_writeLocal(META_KEY,_meta);
   }catch(e){console.warn("[cloud] 로그인 동기화 실패 (Firestore 설정 확인)",e);ok=false;}
-  _syncing=false;return{pulled,pushed,ok};
+  _syncing=false;_emitSync({busy:false,ok,at:ok?Date.now():0});return{pulled,pushed,ok};
 }
 const MODELS=[
   {id:"claude-sonnet-4-6",label:"Sonnet 4.6 · 추천"},
@@ -773,8 +788,19 @@ function App(){
   const [user,setUser]=useState(null);
   const [nick,setNick]=useState("");
   const [showProfile,setShowProfile]=useState(false);
-  const [syncing,setSyncing]=useState(false);
+  const [syncBusy,setSyncBusy]=useState(false);
   const [cloudStatus,setCloudStatus]=useState("off");  // off | ok | error
+  const [lastSyncAt,setLastSyncAt]=useState(0);
+
+  // 클라우드 동기화 상태 구독 (초기 병합 + 이후 변경 저장 모두 반영)
+  useEffect(()=>{
+    setSyncListener(s=>{
+      if(s.busy!==undefined)setSyncBusy(s.busy);
+      if(s.ok!==undefined)setCloudStatus(s.ok?"ok":"error");
+      if(s.at)setLastSyncAt(s.at);
+    });
+    return ()=>setSyncListener(null);
+  },[]);
 
   const refresh=()=>setDecks(LS.get(DECKS_KEY)||[]);
   useEffect(()=>{refresh();},[]);
@@ -787,10 +813,7 @@ function App(){
       if(!u){_uid=null;setNick("");return;}
       _uid=u.uid;
       if(_db){
-        setSyncing(true);
-        let res={ok:false};
-        try{res=await cloudSyncOnLogin(u.uid);}catch(e){console.warn("[sync]",e);}
-        setSyncing(false);setCloudStatus(res.ok?"ok":"error");
+        try{await cloudSyncOnLogin(u.uid);}catch(e){console.warn("[sync]",e);}
         refresh();setSubjects(defaultSubjects());
       }
       const stored=LS.get(nickKey(u.uid));
@@ -835,9 +858,10 @@ function App(){
         <div className="hd-r">
           {view!=="home"&&CFG.key&&<button className="btn gho sm" onClick={()=>{refresh();setView("home");}}>{tr("← 목록","← Back")}</button>}
           {_auth&&(user
-            ?<button className="btn gho sm" onClick={()=>setShowProfile(true)} title={tr("내 프로필","My profile")}>
+            ?<button className="btn gho sm" onClick={()=>setShowProfile(true)} title={syncBusy?tr("동기화 중…","Syncing…"):cloudStatus==="ok"?tr("동기화 완료","Synced"):tr("내 프로필","My profile")}>
                 {user.photoURL&&<img src={user.photoURL} alt="" style={{width:18,height:18,borderRadius:"50%",verticalAlign:"middle",marginRight:6}}/>}
                 {nick||tr("내 프로필","My profile")}
+                <span style={{marginLeft:5}}>{syncBusy?"☁️…":cloudStatus==="ok"?"☁️✓":cloudStatus==="error"?"⚠️":""}</span>
               </button>
             :<button className="btn gho sm" onClick={login}>{tr("🔑 로그인","🔑 Sign in")}</button>
           )}
@@ -856,10 +880,11 @@ function App(){
               </div>
             </div>
             <div style={{fontSize:12.5,padding:"8px 12px",borderRadius:10,
-              background:cloudStatus==="ok"?"#F0FDF4":"#FFF6E9",border:"1px solid "+(cloudStatus==="ok"?"#B7EBC6":"#FBE3B8"),
-              color:cloudStatus==="ok"?"#166534":"#8A5A12",lineHeight:1.6}}>
-              {syncing?tr("☁️ 동기화 중…","☁️ Syncing…")
-               :cloudStatus==="ok"?tr("☁️ 클라우드 저장 켜짐 — 이 계정으로 로그인하면 어느 기기서든 이어집니다.","☁️ Cloud sync on — sign in on any device to continue.")
+              background:(!syncBusy&&cloudStatus==="ok")?"#F0FDF4":syncBusy?"#EEF2FF":"#FFF6E9",
+              border:"1px solid "+((!syncBusy&&cloudStatus==="ok")?"#B7EBC6":syncBusy?"#C7D2FE":"#FBE3B8"),
+              color:(!syncBusy&&cloudStatus==="ok")?"#166534":syncBusy?"#3730A3":"#8A5A12",lineHeight:1.6}}>
+              {syncBusy?tr("☁️ 동기화 중…","☁️ Syncing…")
+               :cloudStatus==="ok"?(tr("✅ 동기화 완료 — 어느 기기서든 이어집니다.","✅ Synced — continues on any device.")+(lastSyncAt?tr(" (마지막 "," (last ")+fmtClock(lastSyncAt)+")":""))
                :cloudStatus==="error"?tr("⚠️ 클라우드 연결 실패 — Firestore 설정을 확인해줘 (지금은 이 기기에만 저장).","⚠️ Cloud connection failed — check Firestore setup (saved on this device for now).")
                :tr("⚠️ 클라우드 미설정 — 이 기기에만 저장됩니다.","⚠️ Cloud not set up — saved on this device only.")}
             </div>
