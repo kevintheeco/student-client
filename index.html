@@ -437,7 +437,10 @@ async function callGemini(system,userContent,wantJson,opts={},signal){
   return JSON.parse(fixJson(clean.slice(s,e+1)));
 }
 function callAI(system,userContent,wantJson,opts={},signal){
-  if(opts.lang==="en")system=system+"\n\n[OUTPUT LANGUAGE = ENGLISH] Write the QUESTION and all human-readable text (feedback, GOT_IT, GAP, NEXT, ESSENCE, hints, explanations, model ANSWER) in natural English. BUT keep the structured field VALUES exactly as the Korean tokens specified in the format above — QTYPE stays recall/understand/apply, and GAP_TYPE/DEPTH/VERDICT must remain the exact Korean option words (개념누락/이해얕음/핵심비껴감/표현부족/갭없음, 암기 수준/이해 수준/설명가능 수준/응용가능 수준, correct/partial/incorrect). Do not translate those tokens.";
+  if(opts.lang==="en")system=
+    "WRITE YOUR ENTIRE RESPONSE IN ENGLISH. Even though the instructions below and the study material may be in Korean, every sentence you output — questions, feedback, explanations, hints, model answers, table cells, graph labels — MUST be in natural English. Translate ideas from Korean source material into English; never reply in Korean prose. The ONLY exception: if a strict output format below lists fixed Korean tokens for the fields QTYPE / GAP_TYPE / DEPTH / VERDICT, keep those exact tokens (recall/understand/apply; 개념누락/이해얕음/핵심비껴감/표현부족/갭없음; 암기 수준/이해 수준/설명가능 수준/응용가능 수준; correct/partial/incorrect). Everything else = English.\n\n"
+    +system
+    +"\n\n[REMINDER: Respond in ENGLISH only. Do not drift back to Korean even if the source is Korean.]";
   const m=opts.model||CFG.model;
   if(m.startsWith("gemini"))return callGemini(system,userContent,wantJson,opts,signal);
   return callClaude(system,userContent,wantJson,opts,signal);
