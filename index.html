@@ -1169,7 +1169,7 @@ const AnnotPad=React.forwardRef(function AnnotPad({disabled,tool},fwdRef){
   },[]);
   const pt=(e)=>{const r=cvs.current.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};};
   function eraseAt(x,y){
-    const R=22*22,prev=strokes.current.length;
+    const R=16*16,prev=strokes.current.length;
     strokes.current=strokes.current.filter(({pts})=>!pts.some(p=>(p.x-x)**2+(p.y-y)**2<R));
     if(strokes.current.length!==prev)redraw();
   }
@@ -1257,7 +1257,7 @@ const QuestionPad=React.forwardRef(function QuestionPad({disabled,tool="pen"},fw
   },[]);
   const pt=(e)=>{const r=cvs.current.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};};
   function eraseAt(x,y){
-    const R=16*16,prev=strokes.current.length;
+    const R=12*12,prev=strokes.current.length;
     strokes.current=strokes.current.filter(({pts})=>!pts.some(p=>(p.x-x)**2+(p.y-y)**2<R));
     if(strokes.current.length!==prev)redraw();
   }
@@ -1368,7 +1368,7 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
 
   const pt=(e)=>{const r=canvasRef.current.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top,p:e.pressure||.5};};
   function eraseAt(x,y){
-    const R=18*18;
+    const R=13*13;
     const prev=strokes.current.length;
     strokes.current=strokes.current.filter(({pts})=>
       !pts.some(p=>(p.x-x)*(p.x-x)+(p.y-y)*(p.y-y)<R)
