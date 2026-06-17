@@ -154,6 +154,8 @@ canvas.pad.eraser{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org
 .ans-layout .pad{height:calc(100vh - 160px);min-height:560px}
 /* 오른쪽 노트 컬럼: 화면에 고정(sticky)돼 해설(왼쪽)을 스크롤해도 내 답이 계속 보임 + 자체 스크롤 */
 .ans-layout .notecol{position:sticky;top:16px;align-self:start;max-height:calc(100vh - 90px);overflow-y:auto}
+/* 노트 안 버튼 줄(제출 등)은 스크롤과 독립적으로 항상 맨 아래 고정 */
+.ans-layout .notecol .row{position:sticky;bottom:0;margin-top:auto;background:var(--card);padding:9px 0 1px;border-top:1px solid var(--line);z-index:2}
 .crow{display:flex;align-items:center;gap:7px;padding:5px 9px;border-radius:10px;transition:background .15s;cursor:pointer;user-select:none}
 .crow.active{background:var(--pri-s)}
 .crow .cn{font-size:12px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px}
