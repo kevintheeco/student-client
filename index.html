@@ -1239,6 +1239,7 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
   const canvasRef=useRef(null);
   const strokes=useRef([]);
   const drawing=useRef(false);
+  const eraseGesture=useRef(false);
   const [tool,setTool]=useState("pen");
   const [color,setColor]=useState(PEN_COLORS[0]);
   const [size,setSize]=useState(1);
@@ -1300,18 +1301,21 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
     );
     if(strokes.current.length!==prev){redraw();setHasInk(strokes.current.length>0);}
   }
+  // S펜 옆 버튼(배럴) 지우개 신호 — 기기별로 버튼값이 2/32/5로 제각각이라 모두 인식
+  const penEraseSignal=(e)=>e.pointerType==="pen"&&(!!(e.buttons&34)||e.button===2||e.button===5);
   function down(e){
     if(disabled)return;
     if(penOnly&&e.pointerType!=="pen")return;
     e.preventDefault();
     try{e.target.setPointerCapture(e.pointerId);}catch(_){}
     const p=pt(e);
-    const isSpEraser=e.pointerType==="pen"&&(!!(e.buttons&34)||e.button===2);
-    if(isSpEraser||tool==="eraser"){
+    if(penEraseSignal(e)||tool==="eraser"){
+      eraseGesture.current=true;   // 한 번 지우개로 시작하면 펜 뗄 때까지 유지
       drawing.current=false;
       eraseAt(p.x,p.y);
       return;
     }
+    eraseGesture.current=false;
     drawing.current=true;
     if(strokes.current.length>=500)strokes.current.shift();
     strokes.current.push({pts:[p],col:color,sz:size});
@@ -1320,8 +1324,8 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
     if(disabled)return;
     if(penOnly&&e.pointerType!=="pen"){drawing.current=false;return;}
     const p=pt(e);
-    const isSpEraser=e.pointerType==="pen"&&(!!(e.buttons&34)||e.button===2);
-    if(isSpEraser||tool==="eraser"){
+    if(penEraseSignal(e))eraseGesture.current=true;   // 그리던 중 버튼 누르면 즉시 지우개로 전환
+    if(eraseGesture.current||tool==="eraser"){
       e.preventDefault();
       if(drawing.current){
         strokes.current.pop();
@@ -1344,8 +1348,8 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
     }
     if(!hasInk)setHasInk(true);
   }
-  const up=()=>{drawing.current=false;};
-  const cancel=()=>{drawing.current=false;};
+  const up=()=>{drawing.current=false;eraseGesture.current=false;};
+  const cancel=()=>{drawing.current=false;eraseGesture.current=false;};
   function undo(){if(disabled)return;strokes.current.pop();redraw();setHasInk(strokes.current.length>0);}
   function clearPad(){strokes.current=[];redraw();setHasInk(false);setPadErr("");}
   async function recognize(){
