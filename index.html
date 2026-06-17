@@ -2753,7 +2753,7 @@ function Study({deck:initial,subjects}){
                   <>
                     {concept?.deriveMode==="derive"&&(
                       <button className="btn gho sm" style={{borderColor:"var(--pri)",color:"var(--pri-d)"}}
-                        onClick={startDerive}>{T("✏️ 직접 유도해볼게","✏️ Derive it myself")}
+                        onClick={startDerive}>{T("✏️ 직접 유도해볼게","✏️ Derive it myself")}</button>
                     )}
                     {submitErr&&<div className="err">{submitErr}</div>}
                     <div className="row">
