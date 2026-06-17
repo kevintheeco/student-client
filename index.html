@@ -1309,7 +1309,7 @@ const QuestionPad=React.forwardRef(function QuestionPad({disabled,tool="pen"},fw
 const PEN_COLORS=["#221C39","#2563EB","#DC2626"];
 const PEN_LABELS=["검정","파랑","빨강"];
 
-const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penOnlyDefault=false,highlights,highlightSize},fwdRef){
+const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penOnlyDefault=false,highlights,highlightSize,onTypeMode},fwdRef){
   const canvasRef=useRef(null);
   const strokes=useRef([]);
   const drawing=useRef(false);
@@ -1471,6 +1471,8 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
           title={penOnly?tr("펜 전용 ON — 손가락 터치 무시 중 (S펜·Apple Pencil)","Pen only — ignoring finger touch (S Pen·Apple Pencil)"):tr("터치·마우스도 허용 중","Touch & mouse allowed")}>
           ✒️ {penOnly?tr("펜 전용","Pen only"):tr("터치","Touch")}
         </button>
+        {onTypeMode&&<button className="btn gho xs" onClick={onTypeMode} disabled={disabled}
+          title={tr("타이핑으로 답하기 — 큰 답안지","Type your answer — big sheet")}>⌨️ {tr("타이핑","Type")}</button>}
       </div>
       <div style={{position:"relative",width:"100%"}}>
         <canvas ref={canvasRef} className={"pad"+(tool==="eraser"?" eraser":"")}
@@ -1847,6 +1849,7 @@ function Study({deck:initial,subjects}){
   const [q,setQ]=useState(null);
   const [phase,setPhase]=useState("loading");
   const [answer,setAnswer]=useState("");
+  const [inputMode,setInputMode]=useState("note");   // 'note'(손글씨) | 'type'(타이핑)
   const [ev,setEv]=useState(null);
   const [errMsg,setErrMsg]=useState("");
   const [submitErr,setSubmitErr]=useState("");
@@ -2782,7 +2785,9 @@ function Study({deck:initial,subjects}){
                     </div>
                   </div>
                 )}
+                {inputMode==="note"?(<>
                 <PenPad ref={padRef} kind="answer" hideOcr penOnlyDefault={true} disabled={phase==="grading"||followupBusy}
+                  onTypeMode={()=>setInputMode("type")}
                   highlights={phase==="answering"?ocrHighlights:null} highlightSize={ocrImgSize}/>
                 {phase==="answering"&&ocrHighlights.length>0&&(
                   <div style={{background:"#FFF5F5",border:"1.5px solid #FECACA",borderRadius:11,padding:"10px 12px",display:"flex",flexDirection:"column",gap:8}}>
@@ -2800,12 +2805,28 @@ function Study({deck:initial,subjects}){
                     value={answer}
                     onChange={e=>setAnswer(e.target.value)}
                     disabled={phase==="grading"||followupBusy}
-                    placeholder="텍스트로도 답할 수 있어 (선택사항)"
+                    placeholder={tr("텍스트로도 답할 수 있어 (선택사항)","You can also answer in text (optional)")}
                     style={{width:"100%",minHeight:72,padding:"8px 10px",borderRadius:10,
                       border:"1.5px solid var(--line)",fontFamily:"'Noto Sans KR',sans-serif",
                       fontSize:13,resize:"vertical",outline:"none",background:"var(--bg)",color:"var(--ink)"}}
                   />
                 )}
+                </>):(<>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                  <span style={{fontSize:12.5,fontWeight:600,color:"var(--pri-d)"}}>⌨️ {tr("타이핑 답안지","Typing sheet")}</span>
+                  <button className="btn gho xs" onClick={()=>setInputMode("note")} disabled={phase==="grading"||followupBusy}
+                    title={tr("손글씨 노트로 돌아가기","Back to handwriting note")}>✍️ {tr("노트로","Note")}</button>
+                </div>
+                <textarea
+                  value={answer}
+                  onChange={e=>setAnswer(e.target.value)}
+                  disabled={phase==="grading"}
+                  placeholder={tr("여기에 답을 타이핑해","Type your answer here")}
+                  style={{width:"100%",flex:1,minHeight:"calc(100vh - 240px)",padding:"14px 16px",borderRadius:14,
+                    border:"1.5px solid var(--line)",fontFamily:"'Noto Sans KR',sans-serif",
+                    fontSize:15,lineHeight:1.8,resize:"vertical",outline:"none",background:"#FFFDF8",color:"var(--ink)"}}
+                />
+                </>)}
                 {phase==="answering"&&(
                   <>
                     {concept?.deriveMode==="derive"&&(
