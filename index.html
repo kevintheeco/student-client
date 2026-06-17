@@ -153,7 +153,12 @@ canvas.pad.eraser{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org
 .ans-layout{display:grid;grid-template-columns:2fr 3fr;gap:16px;align-items:start}
 .ans-layout .pad{height:calc(100vh - 160px);min-height:560px}
 /* 오른쪽 노트 컬럼: 화면에 고정(sticky)돼 해설(왼쪽)을 스크롤해도 내 답이 계속 보임 + 자체 스크롤 */
-.ans-layout .notecol{position:sticky;top:16px;align-self:start;max-height:calc(100vh - 90px);overflow-y:auto;overscroll-behavior:contain}
+.ans-layout .notecol{position:sticky;top:16px;align-self:start;max-height:calc(100vh - 90px);overflow-y:scroll;overscroll-behavior:contain;scrollbar-width:auto;scrollbar-color:var(--pri) var(--bg)}
+/* 펜으로도 끌 수 있게 두꺼운 스크롤바 (펜 전용 모드에선 캔버스에 펜이 그려져서 이 바로 스크롤) */
+.ans-layout .notecol::-webkit-scrollbar{width:18px}
+.ans-layout .notecol::-webkit-scrollbar-track{background:var(--bg);border-radius:9px}
+.ans-layout .notecol::-webkit-scrollbar-thumb{background:var(--pri);border-radius:9px;border:3px solid var(--bg);min-height:48px}
+.ans-layout .notecol::-webkit-scrollbar-thumb:active,.ans-layout .notecol::-webkit-scrollbar-thumb:hover{background:var(--pri-d)}
 /* 긴 캔버스가 가리는 제출 줄만 하단 고정(.note-foot). margin-top:auto 금지 — 내부 스크롤을 막음 */
 .ans-layout .notecol .note-foot{position:sticky;bottom:0;background:var(--card);padding:9px 0 1px;border-top:1px solid var(--line);z-index:2}
 .crow{display:flex;align-items:center;gap:7px;padding:5px 9px;border-radius:10px;transition:background .15s;cursor:pointer;user-select:none}
@@ -891,7 +896,7 @@ function App(){
             </div>
             <div className="selectrow">
               <label>{tr("닉네임","Nickname")}</label>
-              <input className="field" value={nick} maxLength={20} onChange={e=>setNick(e.target.value)} onBlur={e=>saveNick(e.target.value)}/>
+              <input className="field" value={nick} maxLength={20} onChange={e=>{const v=e.target.value;setNick(v);if(v.trim()&&user)LS.set(nickKey(user.uid),v.trim());}} onBlur={e=>saveNick(e.target.value)}/>
             </div>
             <div className="row">
               <button className="btn pri" onClick={()=>{saveNick(nick);setShowProfile(false);}}>{tr("저장","Save")}</button>
