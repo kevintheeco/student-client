@@ -21,6 +21,7 @@
 - **신규: 공부 언어 선택(한/영)** → **완료(설정 전역).** **설정(KeyForm)에 🌐 공부 언어 select** 추가 → `CFG.lang`('ko'|'en', `ng:lang` 저장). studyLang=CFG.lang. (덱별 토글/ AddMaterial 선택은 설정 하나로 통합·제거.) callAI에 opts.lang 중앙 처리(en이면 영어 출력, 단 QTYPE/GAP_TYPE/DEPTH/VERDICT 구조 토큰은 한국어 유지해 파서·followup 로직 보존). 사용자용 AI 호출 12곳 + 개념추출에 lang 전달.
 - **개선: 영어 모드 UI 라벨 번역** → **완료(핵심 루프).** AI 생성물(해설·보충질문·힌트·채점·모범답안)은 이미 영어. 추가로 공부 화면 고정 라벨을 T(ko,en) 헬퍼로 영어화: 상단바(익힘/대기/약함/개념목록), verdict, 결과 섹션(본질/빠진것/갭없음/다음보강/모범답안), 보충질문 패널, 진행 텍스트, OCR 배너, 제출/몰라요/패스/넘어가요/다시풀래/보충제출/모범답안볼게, gap_type·depth 매핑. **남음(아직 한국어):** 해설 주석도구, 유도(derive) 패널, 난이도 칩(기초/중급), 홈/설정/오답노트 화면.
 - **신규: 덱 폴더 이동** → **완료.** 홈 덱 카드의 과목 뱃지를 폴더 드롭다운으로 교체. 선택 시 `move()`가 `ng:decks` 목록 + 덱 본체 `subjId` 둘 다 갱신 → 영속. 잘못된 폴더에 저장된 덱을 즉시 옮길 수 있음.
+- **신규: 전체 앱 영어화 + 영어자료 감지 프롬프트** → **완료.** (1)전역 `tr(ko,en)` 헬퍼(CFG.lang 기준) 추가 → App헤더/푸터/프로필/Home/Settings/KeyForm/Onboard/SubjectTabs/AddMaterial/오답노트/공부화면(에러·버튼·진행)·PenPad·FileDropZone·PhotoButton 라벨 영어화. 언어 두 축 분리: **UI=CFG.lang**, **AI 내용=deck.lang||CFG.lang**. (2)`detectLang()`로 자료가 영어인데 앱이 한국어면 confirm으로 "영어/한국어 공부" 물어봄 → 영어 선택 시 deck.lang='en' override 저장. 남은 한국어: diffLong(AI 컨텍스트 전용), 일부 AI프롬프트 폴백 문구.
 - 남은 항목(낮은 우선순위): #8(개념 편집), #9(세션 종료 화면)
 
 ---

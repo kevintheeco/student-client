@@ -353,6 +353,14 @@ function loadCFG(){
   CFG.geminiKey=LS.get("ng:geminiKey")||"";
   CFG.lang=LS.get("ng:lang")||"ko";
 }
+// 앱 UI 언어(전역, 설정값 CFG.lang 기준) — 모든 컴포넌트 공용 라벨 번역
+const tr=(ko,en)=>CFG.lang==="en"?en:ko;
+// 자료 언어 자동 감지: 한글 거의 없고 라틴 문자 많으면 'en'
+function detectLang(text){
+  const ko=(text.match(/[가-힣]/g)||[]).length;
+  const en=(text.match(/[A-Za-z]/g)||[]).length;
+  return (en>30&&en>ko*4)?"en":"ko";
+}
 // 이미지·PDF 인식용 모델: 가진 키 기준 (Claude 우선, 없으면 Gemini) — Gemini-only 유저도 동작
 function ocrModel(){
   if(CFG.key)return"claude-sonnet-4-6";
@@ -628,7 +636,7 @@ function pickConcept(d,avoidId){
   if(pool.length>1&&pool[0].id===avoidId){const alt=pool.find(c=>c.id!==avoidId);if(alt)return alt}
   return pool[0];
 }
-const diffWord=(box)=>(box||1)<=1?"기초":box<=2?"초중급":box<=3?"중급":box<=4?"고급":"심화";
+const diffWord=(box)=>(box||1)<=1?tr("기초","Basic"):box<=2?tr("초중급","Beginner"):box<=3?tr("중급","Intermediate"):box<=4?tr("고급","Advanced"):tr("심화","Expert");
 const diffLong=(box)=>{
   const b=box||1;
   if(b<=1)return"기초: 개념 정의·직관 이해. '~란 무엇인가', '~의 의미는' 수준";
@@ -686,7 +694,7 @@ function App(){
       setUser(u);
       if(u){
         const stored=LS.get(nickKey(u.uid));
-        const n=stored||u.displayName||(u.email?u.email.split("@")[0]:"학습자");
+        const n=stored||u.displayName||(u.email?u.email.split("@")[0]:tr("학습자","Learner"));
         if(!stored)LS.set(nickKey(u.uid),n);
         setNick(n);
       }else setNick("");
@@ -694,12 +702,12 @@ function App(){
   },[]);
 
   async function login(){
-    if(!_auth){alert("로그인 기능을 쓸 수 없어. 인터넷 연결이나 설정을 확인해줘.");return;}
+    if(!_auth){alert(tr("로그인 기능을 쓸 수 없어. 인터넷 연결이나 설정을 확인해줘.","Sign-in isn't available. Check your connection or settings."));return;}
     try{
       await _auth.signInWithPopup(new window.firebase.auth.GoogleAuthProvider());
     }catch(e){
       if(e.code==="auth/popup-closed-by-user"||e.code==="auth/cancelled-popup-request")return;
-      alert("로그인 실패: "+(e.message||e.code));
+      alert(tr("로그인 실패: ","Sign-in failed: ")+(e.message||e.code));
     }
   }
   async function logout(){try{await _auth.signOut();}catch(e){}setShowProfile(false);}
@@ -710,7 +718,7 @@ function App(){
   function studyWeak(deck){
     const fresh=LS.get(dk(deck.id))||deck;
     const weakConcepts=(fresh.concepts||[]).filter(c=>(c.box||1)<=3||c.lapses>0);
-    if(!weakConcepts.length){alert("아직 약점 개념이 없어! 전체 공부부터 해봐 💪");return;}
+    if(!weakConcepts.length){alert(tr("아직 약점 개념이 없어! 전체 공부부터 해봐 💪","No weak concepts yet! Study the full set first 💪"));return;}
     setActiveDeck({...fresh,concepts:weakConcepts});
     setView("study");
   }
@@ -723,18 +731,18 @@ function App(){
     <>
       <div className="hd">
         <div className="brand" onClick={()=>setView(CFG.key?"home":"onboard")}>
-          <Prof size={44}/><div><h1>니가 교수</h1><div className="tag">니가 설명해봐, 내가 채점할게</div></div>
+          <Prof size={44}/><div><h1>{tr("니가 교수","You're the Prof")}</h1><div className="tag">{tr("니가 설명해봐, 내가 채점할게","You explain, I'll grade")}</div></div>
         </div>
         <div className="hd-r">
-          {view!=="home"&&CFG.key&&<button className="btn gho sm" onClick={()=>{refresh();setView("home");}}>← 목록</button>}
+          {view!=="home"&&CFG.key&&<button className="btn gho sm" onClick={()=>{refresh();setView("home");}}>{tr("← 목록","← Back")}</button>}
           {_auth&&(user
-            ?<button className="btn gho sm" onClick={()=>setShowProfile(true)} title="내 프로필">
+            ?<button className="btn gho sm" onClick={()=>setShowProfile(true)} title={tr("내 프로필","My profile")}>
                 {user.photoURL&&<img src={user.photoURL} alt="" style={{width:18,height:18,borderRadius:"50%",verticalAlign:"middle",marginRight:6}}/>}
-                {nick||"내 프로필"}
+                {nick||tr("내 프로필","My profile")}
               </button>
-            :<button className="btn gho sm" onClick={login}>🔑 로그인</button>
+            :<button className="btn gho sm" onClick={login}>{tr("🔑 로그인","🔑 Sign in")}</button>
           )}
-          <button className="btn gho sm" onClick={()=>setView("settings")}>⚙️ 설정</button>
+          <button className="btn gho sm" onClick={()=>setView("settings")}>{tr("⚙️ 설정","⚙️ Settings")}</button>
         </div>
       </div>
 
@@ -749,12 +757,12 @@ function App(){
               </div>
             </div>
             <div className="selectrow">
-              <label>닉네임</label>
+              <label>{tr("닉네임","Nickname")}</label>
               <input className="field" value={nick} maxLength={20} onChange={e=>setNick(e.target.value)} onBlur={e=>saveNick(e.target.value)}/>
             </div>
             <div className="row">
-              <button className="btn pri" onClick={()=>{saveNick(nick);setShowProfile(false);}}>저장</button>
-              <button className="btn gho" onClick={logout}>로그아웃</button>
+              <button className="btn pri" onClick={()=>{saveNick(nick);setShowProfile(false);}}>{tr("저장","Save")}</button>
+              <button className="btn gho" onClick={logout}>{tr("로그아웃","Sign out")}</button>
             </div>
           </div>
         </div>
@@ -772,7 +780,7 @@ function App(){
       {view==="study"&&activeDeck&&<Study deck={activeDeck} subjects={subjects}/>}
       {view==="notes"&&noteDeck&&<WeakNotes deck={noteDeck} onBack={()=>{refresh();setView("home");}} onStudy={studyWeak}/>}
 
-      <div className="footer">키와 자료는 이 기기에만 저장 · {MODELS.find(m=>m.id===CFG.model)?.label.split(" ·")[0]||"Claude"}</div>
+      <div className="footer">{tr("키와 자료는 이 기기에만 저장","Keys & data stay on this device only")} · {MODELS.find(m=>m.id===CFG.model)?.label.split(" ·")[0]||"Claude"}</div>
     </>
   );
 }
@@ -799,7 +807,7 @@ function SubjectTabs({subjects,active,onChange,onSave}){
   }
   function delSubject(s,e){
     e.stopPropagation();
-    if(!confirm('"'+s.name+'" 과목 삭제할까? 덱 자료는 남아있어.'))return;
+    if(!confirm(tr('"'+s.name+'" 과목 삭제할까? 덱 자료는 남아있어.','Delete folder "'+s.name+'"? Your decks stay.')))return;
     onSave(subjects.filter(x=>x.id!==s.id));
     if(active===s.id)onChange("all");
   }
@@ -808,15 +816,15 @@ function SubjectTabs({subjects,active,onChange,onSave}){
   return(
     <div style={{marginBottom:20}}>
       <div className="sub-tabs">
-        <button className={"sub-tab"+(active==="all"?" on":"")} onClick={()=>onChange("all")}>전체</button>
+        <button className={"sub-tab"+(active==="all"?" on":"")} onClick={()=>onChange("all")}>{tr("전체","All")}</button>
         {subjects.map(s=>
           editId===s.id?(
             <div key={s.id} className="subj-new" style={{display:"inline-flex",margin:0}}>
               <input value={editName} onChange={e=>setEditName(e.target.value)}
                 onKeyDown={e=>{if(e.key==="Enter")saveEdit();if(e.key==="Escape")setEditId(null);}}
                 autoFocus style={{width:100}}/>
-              <button className="btn pri xs" onClick={saveEdit}>저장</button>
-              <button className="btn gho xs" onClick={()=>setEditId(null)}>취소</button>
+              <button className="btn pri xs" onClick={saveEdit}>{tr("저장","Save")}</button>
+              <button className="btn gho xs" onClick={()=>setEditId(null)}>{tr("취소","Cancel")}</button>
             </div>
           ):(
             <div key={s.id} className={"sub-tab"+(active===s.id?" on":"")}
@@ -824,21 +832,21 @@ function SubjectTabs({subjects,active,onChange,onSave}){
               onClick={()=>onChange(s.id)}>
               <span className="sub-dot" style={{background:s.color}}/>
               <span>{s.name}</span>
-              <button style={btnStyle} onClick={e=>startEdit(s,e)} title="수정">✎</button>
-              <button style={{...btnStyle,fontSize:14}} onClick={e=>delSubject(s,e)} title="삭제">×</button>
+              <button style={btnStyle} onClick={e=>startEdit(s,e)} title={tr("수정","Edit")}>✎</button>
+              <button style={{...btnStyle,fontSize:14}} onClick={e=>delSubject(s,e)} title={tr("삭제","Delete")}>×</button>
             </div>
           )
         )}
-        <button className="btn gho xs" onClick={()=>setAdding(v=>!v)}>+ 과목</button>
+        <button className="btn gho xs" onClick={()=>setAdding(v=>!v)}>{tr("+ 과목","+ Folder")}</button>
       </div>
       {adding&&(
         <div className="subj-new">
-          <input placeholder="과목 이름 (예: 통계학)" value={newName}
+          <input placeholder={tr("과목 이름 (예: 통계학)","Folder name (e.g. Statistics)")} value={newName}
             onChange={e=>setNewName(e.target.value)}
             onKeyDown={e=>{if(e.key==="Enter")addSubject();if(e.key==="Escape")setAdding(false);}}
             autoFocus/>
-          <button className="btn pri xs" onClick={addSubject}>추가</button>
-          <button className="btn gho xs" onClick={()=>setAdding(false)}>취소</button>
+          <button className="btn pri xs" onClick={addSubject}>{tr("추가","Add")}</button>
+          <button className="btn gho xs" onClick={()=>setAdding(false)}>{tr("취소","Cancel")}</button>
         </div>
       )}
     </div>
@@ -850,11 +858,11 @@ function Onboard({onDone}){
   return(
     <div className="card panel">
       <div style={{textAlign:"center"}}><Prof size={84}/></div>
-      <h2 className="jua" style={{textAlign:"center",margin:"4px 0 0",fontSize:24}}>안녕! 나 니가 교수야 👋</h2>
+      <h2 className="jua" style={{textAlign:"center",margin:"4px 0 0",fontSize:24}}>{tr("안녕! 나 니가 교수야 👋","Hi! I'm your Prof 👋")}</h2>
       <p className="muted" style={{textAlign:"center",margin:0,fontSize:13.5,lineHeight:1.7}}>
-        시작하려면 네 Anthropic API 키가 필요해. 공부한 걸 넣어주면 문제 내고 채점해줄게.
+        {tr("시작하려면 네 Anthropic API 키가 필요해. 공부한 걸 넣어주면 문제 내고 채점해줄게.","To start you'll need your Anthropic API key. Add what you studied and I'll quiz and grade you.")}
       </p>
-      <KeyForm onSaved={onDone} cta="시작하기"/>
+      <KeyForm onSaved={onDone} cta={tr("시작하기","Get started")}/>
     </div>
   );
 }
@@ -865,35 +873,35 @@ function Settings({onDone}){
   const barColor=pct>=90?"var(--rose)":pct>=70?"var(--gold)":"var(--mint)";
   const fileRef=useRef(null);
   const [backupMsg,setBackupMsg]=useState("");
-  function doExport(){try{exportBackup();setBackupMsg("✓ 백업 파일을 내려받았어. 안전한 곳에 보관해줘!");}catch(e){setBackupMsg("내보내기 실패: "+e.message);}}
+  function doExport(){try{exportBackup();setBackupMsg(tr("✓ 백업 파일을 내려받았어. 안전한 곳에 보관해줘!","✓ Backup file downloaded. Keep it somewhere safe!"));}catch(e){setBackupMsg(tr("내보내기 실패: ","Export failed: ")+e.message);}}
   async function doImport(e){
     const f=e.target.files&&e.target.files[0];if(!f)return;
-    if(!confirm("백업을 불러오면 같은 이름의 현재 자료에 덮어써져.\n계속할까?")){e.target.value="";return;}
-    try{const n=await importBackup(f);setBackupMsg("✓ 복원 완료 ("+n+"개 항목). 새로고침할게…");setTimeout(()=>location.reload(),900);}
-    catch(err){setBackupMsg("복원 실패: "+err.message);}
+    if(!confirm(tr("백업을 불러오면 같은 이름의 현재 자료에 덮어써져.\n계속할까?","Importing will overwrite current data with the same names.\nContinue?"))){e.target.value="";return;}
+    try{const n=await importBackup(f);setBackupMsg(tr("✓ 복원 완료 ("+n+"개 항목). 새로고침할게…","✓ Restored ("+n+" items). Reloading…"));setTimeout(()=>location.reload(),900);}
+    catch(err){setBackupMsg(tr("복원 실패: ","Restore failed: ")+err.message);}
     e.target.value="";
   }
   return(
     <div className="card panel">
-      <div className="eyebrow">설정</div>
+      <div className="eyebrow">{tr("설정","Settings")}</div>
       <div>
         <div style={{display:"flex",justifyContent:"space-between",fontSize:12.5,color:"var(--sub)",marginBottom:6}}>
-          <span>저장 공간 {_idb?"(대용량 모드)":"(기본 모드)"}</span>
+          <span>{tr("저장 공간 ","Storage ")}{_idb?tr("(대용량 모드)","(large mode)"):tr("(기본 모드)","(basic mode)")}</span>
           <span style={{fontWeight:700,color:pct>=70?barColor:"var(--sub)"}}>{formatSize(storSize)} / {formatSize(MAX)} ({pct}%)</span>
         </div>
         <div className="bar"><i style={{width:pct+"%",background:barColor}}/></div>
-        {pct>=80&&<p className="err" style={{fontSize:12.5,marginTop:8}}>⚠️ 저장 공간이 부족해. 오래된 자료를 삭제해줘.</p>}
+        {pct>=80&&<p className="err" style={{fontSize:12.5,marginTop:8}}>{tr("⚠️ 저장 공간이 부족해. 오래된 자료를 삭제해줘.","⚠️ Storage is almost full. Delete old materials.")}</p>}
       </div>
       <div style={{borderTop:"1px solid var(--line)",paddingTop:14}}>
-        <div style={{fontSize:12.5,color:"var(--sub)",marginBottom:8}}>💾 데이터 백업 <span style={{fontSize:11}}>(자료·학습기록을 파일로 저장 / 복원. API 키는 제외)</span></div>
+        <div style={{fontSize:12.5,color:"var(--sub)",marginBottom:8}}>{tr("💾 데이터 백업 ","💾 Data backup ")}<span style={{fontSize:11}}>{tr("(자료·학습기록을 파일로 저장 / 복원. API 키는 제외)","(save/restore data & progress to a file. API keys excluded)")}</span></div>
         <div className="row">
-          <button className="btn gho sm" onClick={doExport}>⬇️ 내보내기</button>
-          <button className="btn gho sm" onClick={()=>fileRef.current&&fileRef.current.click()}>⬆️ 불러오기</button>
+          <button className="btn gho sm" onClick={doExport}>{tr("⬇️ 내보내기","⬇️ Export")}</button>
+          <button className="btn gho sm" onClick={()=>fileRef.current&&fileRef.current.click()}>{tr("⬆️ 불러오기","⬆️ Import")}</button>
           <input ref={fileRef} type="file" accept="application/json,.json" style={{display:"none"}} onChange={doImport}/>
         </div>
         {backupMsg&&<p style={{fontSize:12.5,marginTop:8,color:backupMsg.startsWith("✓")?"var(--mint)":"var(--rose)"}}>{backupMsg}</p>}
       </div>
-      <KeyForm onSaved={onDone} cta="저장" showCancel onCancel={onDone}/>
+      <KeyForm onSaved={onDone} cta={tr("저장","Save")} showCancel onCancel={onDone}/>
     </div>
   );
 }
@@ -907,7 +915,7 @@ function KeyForm({onSaved,cta,showCancel,onCancel}){
   const [err,setErr]=useState("");
   async function save(){
     const hasA=key.trim().length>0,hasG=geminiKey.trim().length>0;
-    if(!hasA&&!hasG){setErr("최소 하나의 API 키를 입력해줘.");return;}
+    if(!hasA&&!hasG){setErr(tr("최소 하나의 API 키를 입력해줘.","Enter at least one API key."));return;}
     setTesting(true);setErr("");
     CFG.key=key.trim();CFG.model=model;CFG.qmodel=qmodel;CFG.geminiKey=geminiKey.trim();CFG.lang=lang;
     try{
@@ -915,37 +923,37 @@ function KeyForm({onSaved,cta,showCancel,onCancel}){
       else await callGemini("ping","'ok'라고만 답해.",false,{model:"gemini-2.0-flash"});
       LS.set("ng:key",CFG.key);LS.set("ng:model",CFG.model);LS.set("ng:qmodel",CFG.qmodel);LS.set("ng:geminiKey",CFG.geminiKey);LS.set("ng:lang",CFG.lang);
       setTesting(false);onSaved();
-    }catch(e){setTesting(false);setErr("연결 실패: "+e.message);}
+    }catch(e){setTesting(false);setErr(tr("연결 실패: ","Connection failed: ")+e.message);}
   }
   return(
     <>
-      <div className="selectrow"><label>Anthropic API 키</label>
+      <div className="selectrow"><label>{tr("Anthropic API 키","Anthropic API key")}</label>
         <input className="field" type="password" placeholder="sk-ant-..." value={key}
           onChange={e=>setKey(e.target.value)} autoComplete="off"/></div>
-      <div className="selectrow"><label>Google Gemini API 키 <span className="muted" style={{fontWeight:400}}>(선택 · 무료 티어 있음)</span></label>
+      <div className="selectrow"><label>{tr("Google Gemini API 키","Google Gemini API key")} <span className="muted" style={{fontWeight:400}}>{tr("(선택 · 무료 티어 있음)","(optional · free tier)")}</span></label>
         <input className="field" type="password" placeholder="AIzaSy..." value={geminiKey}
           onChange={e=>setGeminiKey(e.target.value)} autoComplete="off"/></div>
-      <p className="hint" style={{marginTop:-6}}>Gemini 무료: 분당 15회·일 1500회.
-        <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener"> 키 발급 →</a></p>
-      <div className="selectrow"><label>채점·해설 모델</label>
+      <p className="hint" style={{marginTop:-6}}>{tr("Gemini 무료: 분당 15회·일 1500회.","Gemini free: 15/min · 1500/day.")}
+        <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">{tr(" 키 발급 →"," Get a key →")}</a></p>
+      <div className="selectrow"><label>{tr("채점·해설 모델","Grading & explanation model")}</label>
         <select className="field" value={model} onChange={e=>setModel(e.target.value)}>
           {MODELS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}
         </select></div>
-      <div className="selectrow"><label>문제 생성 모델</label>
+      <div className="selectrow"><label>{tr("문제 생성 모델","Question generation model")}</label>
         <select className="field" value={qmodel} onChange={e=>setQmodel(e.target.value)}>
           {QMODELS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}
         </select></div>
-      <div className="selectrow"><label>🌐 공부 언어 <span className="muted" style={{fontWeight:400}}>(문제·피드백·설명 언어)</span></label>
+      <div className="selectrow"><label>{tr("🌐 공부 언어","🌐 Study language")} <span className="muted" style={{fontWeight:400}}>{tr("(문제·피드백·설명 언어 + 앱 화면)","(questions, feedback & the whole app)")}</span></label>
         <select className="field" value={lang} onChange={e=>setLang(e.target.value)}>
           <option value="ko">🇰🇷 한국어</option>
           <option value="en">🇬🇧 English</option>
         </select></div>
-      <div className="warn">키는 <b>이 기기 브라우저에만</b> 저장돼.
+      <div className="warn">{tr("키는 ","Keys are stored ")}<b>{tr("이 기기 브라우저에만","only in this browser")}</b>{tr(" 저장돼.",".")}
         Anthropic: <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a></div>
       {err&&<div className="err">{err}</div>}
       <div className="row">
-        <button className="btn pri" onClick={save} disabled={testing}>{testing?"연결 확인 중…":cta}</button>
-        {showCancel&&<button className="btn gho" onClick={onCancel} disabled={testing}>취소</button>}
+        <button className="btn pri" onClick={save} disabled={testing}>{testing?tr("연결 확인 중…","Checking…"):cta}</button>
+        {showCancel&&<button className="btn gho" onClick={onCancel} disabled={testing}>{tr("취소","Cancel")}</button>}
       </div>
     </>
   );
@@ -959,7 +967,7 @@ function Home({decks,subjects,onAdd,onOpen,onNotes,onChanged,nick}){
   },[decks]);
 
   function del(id,name){
-    if(!confirm('"'+name+'" 자료와 학습 기록을 완전히 삭제할까?\n되돌릴 수 없어.'))return;
+    if(!confirm(tr('"'+name+'" 자료와 학습 기록을 완전히 삭제할까?\n되돌릴 수 없어.','Delete "'+name+'" and all its progress?\nThis cannot be undone.')))return;
     LS.del(dk(id));
     LS.set(DECKS_KEY,(LS.get(DECKS_KEY)||[]).filter(x=>x.id!==id));
     onChanged();
@@ -977,16 +985,16 @@ function Home({decks,subjects,onAdd,onOpen,onNotes,onChanged,nick}){
       <div className="hero">
         <Prof size={66}/>
         <div>
-          {nick&&<div style={{fontFamily:"'Jua',sans-serif",fontSize:15,color:"var(--pri)",marginBottom:4}}>안녕, {nick}! 👋</div>}
-          <h2>공부한 거,<br/>다시 안 까먹게 해줄게</h2>
-          <p>자료를 넣어주면 핵심을 뽑아 무작위로 물어봐.<br/>맞히면 뜸하게, 틀리면 자주 — 그게 장기기억의 비결이야.</p>
+          {nick&&<div style={{fontFamily:"'Jua',sans-serif",fontSize:15,color:"var(--pri)",marginBottom:4}}>{tr("안녕, ","Hi, ")}{nick}! 👋</div>}
+          <h2>{tr(<>공부한 거,<br/>다시 안 까먹게 해줄게</>,<>What you studied,<br/>I'll keep it from fading</>)}</h2>
+          <p>{tr(<>자료를 넣어주면 핵심을 뽑아 무작위로 물어봐.<br/>맞히면 뜸하게, 틀리면 자주 — 그게 장기기억의 비결이야.</>,<>Add your material and I'll pull out the key ideas and quiz you.<br/>Right → less often, wrong → more often — that's how long-term memory works.</>)}</p>
         </div>
       </div>
       <div className="row" style={{marginBottom:18}}>
-        <button className="btn pri" onClick={onAdd}>+ 공부한 거 추가</button>
+        <button className="btn pri" onClick={onAdd}>{tr("+ 공부한 거 추가","+ Add material")}</button>
       </div>
       {decks.length===0?(
-        <div className="empty">아직 자료가 없네! 공부한 거 던져주면 문제 낼게 📚</div>
+        <div className="empty">{tr("아직 자료가 없네! 공부한 거 던져주면 문제 낼게 📚","No materials yet! Drop in what you studied and I'll quiz you 📚")}</div>
       ):(
         <div className="grid">
           {decks.map(d=>{
@@ -1001,30 +1009,30 @@ function Home({decks,subjects,onAdd,onOpen,onNotes,onChanged,nick}){
                       className="subj-badge"
                       style={{background:(subj?subj.color:"#888")+"22",color:subj?subj.color:"var(--sub)",
                         border:"none",cursor:"pointer",fontFamily:"inherit"}}
-                      title="폴더 이동">
-                      {!subjects.some(x=>x.id===d.subjId)&&<option value="" disabled>폴더 선택</option>}
+                      title={tr("폴더 이동","Move folder")}>
+                      {!subjects.some(x=>x.id===d.subjId)&&<option value="" disabled>{tr("폴더 선택","Pick folder")}</option>}
                       {subjects.map(x=><option key={x.id} value={x.id}>📁 {x.name}</option>)}
                     </select>
-                    {s?.isExam&&<div className="subj-badge" style={{background:"#FFF7E0",color:"#946200"}}>📜 기출</div>}
+                    {s?.isExam&&<div className="subj-badge" style={{background:"#FFF7E0",color:"#946200"}}>{tr("📜 기출","📜 Past exam")}</div>}
                   </div>
-                  {s?.createdAt&&<span style={{fontSize:11,color:"var(--sub)",flexShrink:0,marginTop:2}}>{new Date(s.createdAt).toLocaleDateString("ko-KR",{year:"numeric",month:"short",day:"numeric"})}</span>}
+                  {s?.createdAt&&<span style={{fontSize:11,color:"var(--sub)",flexShrink:0,marginTop:2}}>{new Date(s.createdAt).toLocaleDateString(CFG.lang==="en"?"en-US":"ko-KR",{year:"numeric",month:"short",day:"numeric"})}</span>}
                 </div>
                 <div className="nm">{d.name}</div>
                 {s?(<>
                   <div className="stats">
-                    <Stat n={s.total} l="개념"/>
-                    <Stat n={s.mastered} l="익힘" t="mint"/>
-                    <Stat n={s.due} l="대기" t="pri"/>
-                    <Stat n={s.weak} l="약함" t="rose"/>
+                    <Stat n={s.total} l={tr("개념","Concepts")}/>
+                    <Stat n={s.mastered} l={tr("익힘","Mastered")} t="mint"/>
+                    <Stat n={s.due} l={tr("대기","Due")} t="pri"/>
+                    <Stat n={s.weak} l={tr("약함","Weak")} t="rose"/>
                   </div>
                   <Bar mastered={s.mastered} total={s.total}/>
-                </>):<div className="muted">준비 중…</div>}
+                </>):<div className="muted">{tr("준비 중…","Preparing…")}</div>}
                 <div className="acts">
                   <button className="btn pri sm" onClick={()=>onOpen(d.id)}>
-                    공부 시작{s&&s.due>0?" · "+s.due+"개":""}
+                    {tr("공부 시작","Study")}{s&&s.due>0?" · "+s.due+tr("개",""):""}
                   </button>
                   <button className="btn gho sm" onClick={()=>onNotes(d.id)}>📓</button>
-                  <button className="btn gho sm" onClick={()=>del(d.id,d.name)}>삭제</button>
+                  <button className="btn gho sm" onClick={()=>del(d.id,d.name)}>{tr("삭제","Delete")}</button>
                 </div>
               </article>
             );
@@ -1045,7 +1053,7 @@ function FileDropZone({files,onChange}){
   function handleFiles(newFiles){
     const arr=Array.from(newFiles).filter(f=>{
       const ok=f.type.startsWith("image/")||f.type==="application/pdf";
-      if(!ok)alert(f.name+": 이미지(jpg/png) 또는 PDF만 가능해.");
+      if(!ok)alert(f.name+tr(": 이미지(jpg/png) 또는 PDF만 가능해.",": only images (jpg/png) or PDF."));
       return ok;
     });
     onChange([...files,...arr]);
@@ -1063,7 +1071,7 @@ function FileDropZone({files,onChange}){
         <input ref={ref} type="file" accept="image/*,.pdf" multiple
           onChange={e=>handleFiles(e.target.files)} style={{display:"none"}}/>
         <div className="dz-icon">📎</div>
-        <div className="dz-text"><b>파일 선택 또는 여기에 끌어다 놓기</b><br/>이미지(JPG·PNG) · PDF 지원</div>
+        <div className="dz-text"><b>{tr("파일 선택 또는 여기에 끌어다 놓기","Choose files or drag them here")}</b><br/>{tr("이미지(JPG·PNG) · PDF 지원","Images (JPG·PNG) · PDF")}</div>
       </div>
       {files.length>0&&(
         <div className="file-list">
@@ -1376,7 +1384,7 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
   function undo(){if(disabled)return;strokes.current.pop();redraw();setHasInk(strokes.current.length>0);}
   function clearPad(){strokes.current=[];redraw();setHasInk(false);setPadErr("");}
   async function recognize(){
-    if(!hasInk){setPadErr("먼저 써봐.");return;}
+    if(!hasInk){setPadErr(tr("먼저 써봐.","Write something first."));return;}
     setBusy(true);setPadErr("");
     try{
       const data=canvasRef.current.toDataURL("image/png").split(",")[1];
@@ -1408,8 +1416,8 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
         <button className="btn gho xs" onClick={clearPad} disabled={busy||disabled}>🗑️ 전체</button>
         <div className="sep"/>
         <button className={"btn gho xs"+(penOnly?" on":"")} onClick={()=>setPenOnly(v=>!v)}
-          title={penOnly?"펜 전용 ON — 손가락 터치 무시 중 (S펜·Apple Pencil)":"터치·마우스도 허용 중"}>
-          ✒️ {penOnly?"펜 전용":"터치"}
+          title={penOnly?tr("펜 전용 ON — 손가락 터치 무시 중 (S펜·Apple Pencil)","Pen only — ignoring finger touch (S Pen·Apple Pencil)"):tr("터치·마우스도 허용 중","Touch & mouse allowed")}>
+          ✒️ {penOnly?tr("펜 전용","Pen only"):tr("터치","Touch")}
         </button>
       </div>
       <div style={{position:"relative",width:"100%"}}>
@@ -1432,10 +1440,10 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
       </div>
       {!hideOcr&&(
         <div className="pen-bottom">
-          <span className="ph">S펜이나 손가락으로 써봐</span>
+          <span className="ph">{tr("S펜이나 손가락으로 써봐","Write with S Pen or finger")}</span>
           <div className="row">
             <button className="btn pri sm" onClick={recognize} disabled={busy||!hasInk}>
-              {busy?"인식 중…":"✅ 인식해서 넣기"}
+              {busy?tr("인식 중…","Reading…"):tr("✅ 인식해서 넣기","✅ Recognize & add")}
             </button>
           </div>
         </div>
@@ -1452,13 +1460,13 @@ function PhotoButton({kind,onText,label}){
     const f=e.target.files&&e.target.files[0];e.target.value="";if(!f)return;
     setBusy(true);
     try{const data=await toB64(f);const t=await transcribeFile(data,f.type||"image/jpeg",kind);onText((t||"").trim());}
-    catch(e){alert("인식 실패: "+e.message);}
+    catch(e){alert(tr("인식 실패: ","Recognition failed: ")+e.message);}
     setBusy(false);
   }
   return(
     <>
       <button className="btn gho sm" onClick={()=>ref.current&&ref.current.click()} disabled={busy}>
-        {busy?"읽는 중…":(label||"📷 사진")}
+        {busy?tr("읽는 중…","Reading…"):(label||tr("📷 사진","📷 Photo"))}
       </button>
       <input ref={ref} type="file" accept="image/*" capture="environment" onChange={handle} style={{display:"none"}}/>
     </>
@@ -1490,13 +1498,13 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
 
   async function save(){
     if(!CFG.key&&!CFG.geminiKey){
-      setErr("API 키가 없어. 설정에서 Claude 또는 Gemini 키를 먼저 입력해줘.");return;
+      setErr(tr("API 키가 없어. 설정에서 Claude 또는 Gemini 키를 먼저 입력해줘.","No API key. Add a Claude or Gemini key in Settings first."));return;
     }
     if(!material.trim()&&files.length===0){
-      setErr("자료를 입력하거나 파일을 첨부해줘.");return;
+      setErr(tr("자료를 입력하거나 파일을 첨부해줘.","Enter some material or attach a file."));return;
     }
 
-    setBusy(true);setErr("");setProgress(0);setBusyMsg("준비 중…");
+    setBusy(true);setErr("");setProgress(0);setBusyMsg(tr("준비 중…","Preparing…"));
 
     // 글로벌 가짜 진행률 타이머: 0→70 빠르게, 70→90 느리게, 90에서 멈춤
     let _prog=0;
@@ -1514,7 +1522,7 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
     const done=()=>{
       clearInterval(fakeTimer);
       setProgress(100);
-      setBusyMsg("완료! 🎉 이제 공부 시작하자");
+      setBusyMsg(tr("완료! 🎉 이제 공부 시작하자","Done! 🎉 Let's study"));
       setTimeout(()=>{setBusy(false);setBusyMsg("");onDone();},800);
     };
 
@@ -1525,17 +1533,17 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
     for(let i=0;i<files.length;i++){
       const f=files[i];
       const isPdf=f.type==="application/pdf";
-      if(isPdf&&f.size>30*1024*1024){fail("PDF가 너무 커. 30MB 이하 파일만 지원해.");return;}
+      if(isPdf&&f.size>30*1024*1024){fail(tr("PDF가 너무 커. 30MB 이하 파일만 지원해.","PDF is too big. Max 30MB."));return;}
       try{
-        setBusyMsg("파일 읽는 중… ("+f.name+")");
+        setBusyMsg(tr("파일 읽는 중… (","Reading file… (")+f.name+")");
         const b64=await toB64(f);
         if(isPdf){
-          setBusyMsg("PDF 분석 중… "+f.name+" (AI가 읽는 중, 1~2분 걸릴 수 있어)");
+          setBusyMsg(tr("PDF 분석 중… ","Analyzing PDF… ")+f.name+tr(" (AI가 읽는 중, 1~2분 걸릴 수 있어)"," (AI reading, may take 1–2 min)"));
           const r=await processPdf(b64);
           if(r){pdfResults.push(r);}
-          else{fileErrMsg+=f.name+": PDF 분석 실패 (Claude 키 확인 필요). ";}
+          else{fileErrMsg+=f.name+tr(": PDF 분석 실패 (Claude 키 확인 필요). ",": PDF analysis failed (check Claude key). ");}
         }else{
-          setBusyMsg("이미지 읽는 중… ("+f.name+")");
+          setBusyMsg(tr("이미지 읽는 중… (","Reading image… (")+f.name+")");
           const t=await transcribeFile(b64,f.type||"image/jpeg","note");
           imageText+=(t||"")+"\n";
         }
@@ -1548,40 +1556,46 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
     // ── 자료 합치기 ──
     const pdfSummaryText=pdfResults.map(r=>r.summary||"").filter(Boolean).join("\n\n");
     const fullMaterial=[material,imageText,pdfSummaryText].map(s=>s.trim()).filter(Boolean).join("\n").trim();
-    const finalName=name.trim()||"새 자료";
+    const finalName=name.trim()||tr("새 자료","New material");
 
     if(!fullMaterial){
-      fail("자료 내용을 읽지 못했어."+(fileErrMsg?" 오류: "+fileErrMsg:"")+" 텍스트로 직접 입력하거나 Claude API 키를 확인해줘.");return;
+      fail(tr("자료 내용을 읽지 못했어.","Couldn't read the material.")+(fileErrMsg?tr(" 오류: "," Error: ")+fileErrMsg:"")+tr(" 텍스트로 직접 입력하거나 Claude API 키를 확인해줘."," Type it in directly or check your Claude API key."));return;
     }
-    if(fileErrMsg)setErr("⚠️ 일부 파일 오류: "+fileErrMsg+"나머지 자료로 계속 진행할게.");
+    if(fileErrMsg)setErr(tr("⚠️ 일부 파일 오류: ","⚠️ Some files failed: ")+fileErrMsg+tr("나머지 자료로 계속 진행할게.","Continuing with the rest."));
+
+    // ── 앱이 한국어인데 영어 자료면: 이 덱을 어느 언어로 공부할지 물어봄 ──
+    let deckLang=CFG.lang;
+    if(CFG.lang==="ko"&&detectLang(fullMaterial)==="en"){
+      deckLang=confirm("이 자료는 영어로 되어 있네! 이 자료를 영어로 공부할래?\n\n[확인] = 영어로 (문제·해설·채점 영어)\n[취소] = 한국어로")?"en":"ko";
+    }
 
     // ── 개념 추출 ──
-    setBusyMsg("핵심 개념 정리 중…");
+    setBusyMsg(tr("핵심 개념 정리 중…","Pulling out key concepts…"));
     let concepts=pdfResults.flatMap(r=>Array.isArray(r.concepts)?r.concepts:[]);
     if(concepts.length<5){
       try{
         const r=await callAI(
           "너는 학습 자료 분석 전문가야. 자료가 무엇을 가르치려는지 핵심 주제와 목적을 먼저 파악해. 그 목적에 맞는 핵심 개념 8~15개를 짧은 명사구로 뽑아. 단순히 등장하는 단어가 아니라 이 자료의 학습 목표를 대표하는 개념이어야 해. JSON만: {\"concepts\":[\"...\"]}",
-          "자료:\n\n"+fullMaterial.slice(0,12000),true,{maxTok:512,lang:CFG.lang});
+          "자료:\n\n"+fullMaterial.slice(0,12000),true,{maxTok:512,lang:deckLang});
         const extra=Array.isArray(r.concepts)?r.concepts:[];
         concepts=[...concepts,...extra.filter(c=>!concepts.includes(c))];
       }catch(e){
-        fail("개념 추출 실패: "+e.message+" — API 키와 인터넷 연결을 확인해줘.");return;
+        fail(tr("개념 추출 실패: ","Concept extraction failed: ")+e.message+tr(" — API 키와 인터넷 연결을 확인해줘."," — check your API key and connection."));return;
       }
     }
-    if(!concepts.length)concepts=["전체 자료"];
+    if(!concepts.length)concepts=[tr("전체 자료","Whole material")];
 
     // ── 기출/족보 문제 추출 ──
     let examQuestions=[];
     if(isExam){
-      setBusyMsg("기출문제 뽑아내는 중…");
+      setBusyMsg(tr("기출문제 뽑아내는 중…","Extracting exam questions…"));
       examQuestions=(await extractExamQuestions(fullMaterial,concepts)).slice(0,25);
     }
 
     // ── 요약 ──
     let summary=pdfSummaryText;
     if(!summary&&fullMaterial.length>2000){
-      setBusyMsg("거의 다 됐어… 마무리 중");
+      setBusyMsg(tr("거의 다 됐어… 마무리 중","Almost done… wrapping up"));
       try{
         summary=await callAI(
           "너는 학습 자료 요약 전문가야. 핵심 개념·공식·예시를 빠짐없이 압축해. 수식·기호 원문 그대로. 텍스트만 출력.",
@@ -1593,16 +1607,17 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
     const id=uid();
     const materialToStore=summary?fullMaterial.slice(0,5000):fullMaterial.slice(0,12000);
     const deck={id,name:finalName,subjId,material:materialToStore,summary,createdAt:Date.now(),
+      ...(deckLang!==CFG.lang?{lang:deckLang}:{}),
       isExam:isExam&&examQuestions.length>0,examQuestions,
       concepts:concepts.map(nm=>({id:uid(),name:String(nm).slice(0,80),box:1,dueAt:0,reps:0,lapses:0}))};
 
     const usedBytes=getStorageSize();
     if(usedBytes>STORAGE_CAP()){
-      fail("저장 공간이 부족해 ("+formatSize(usedBytes)+"). 오래된 자료를 먼저 삭제해줘.");return;
+      fail(tr("저장 공간이 부족해 (","Out of storage (")+formatSize(usedBytes)+tr("). 오래된 자료를 먼저 삭제해줘.","). Delete old materials first."));return;
     }
-    if(!LS.set(dk(id),deck)){fail("저장 실패: 저장 공간이 꽉 찼어.");return;}
+    if(!LS.set(dk(id),deck)){fail(tr("저장 실패: 저장 공간이 꽉 찼어.","Save failed: storage is full."));return;}
     if(!LS.set(DECKS_KEY,[{id,name:deck.name,subjId},...(LS.get(DECKS_KEY)||[])])){
-      LS.del(dk(id));fail("저장 실패: 저장 공간이 꽉 찼어.");return;
+      LS.del(dk(id));fail(tr("저장 실패: 저장 공간이 꽉 찼어.","Save failed: storage is full."));return;
     }
     done();
   }
@@ -1611,11 +1626,11 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
 
   return(
     <section className="card panel">
-      <div className="eyebrow">새 자료 추가</div>
+      <div className="eyebrow">{tr("새 자료 추가","Add material")}</div>
 
       {/* 과목 선택 */}
       <div>
-        <div style={{fontSize:12.5,color:"var(--sub)",marginBottom:8}}>과목</div>
+        <div style={{fontSize:12.5,color:"var(--sub)",marginBottom:8}}>{tr("과목","Folder")}</div>
         <div className="subj-picker">
           {subjects.map(s=>(
             <button key={s.id} className={"subj-pill"+(subjId===s.id?" on":"")}
@@ -1624,14 +1639,14 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
           ))}
         </div>
         <div className="subj-new" style={{marginTop:8}}>
-          <input placeholder="새 과목 이름" value={newSubj} onChange={e=>setNewSubj(e.target.value)}
+          <input placeholder={tr("새 과목 이름","New folder name")} value={newSubj} onChange={e=>setNewSubj(e.target.value)}
             onKeyDown={e=>e.key==="Enter"&&quickAddSubj()}/>
-          <button className="btn gho xs" onClick={quickAddSubj}>+ 추가</button>
+          <button className="btn gho xs" onClick={quickAddSubj}>{tr("+ 추가","+ Add")}</button>
         </div>
       </div>
 
       {/* 제목 */}
-      <input className="field" placeholder="제목 — 예: 선형대수 5장 (고유값)" value={name}
+      <input className="field" placeholder={tr("제목 — 예: 선형대수 5장 (고유값)","Title — e.g. Linear Algebra Ch.5 (Eigenvalues)")} value={name}
         onChange={e=>setName(e.target.value)} disabled={busy}/>
 
       {/* 기출/족보 토글 */}
@@ -1641,27 +1656,27 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
         <input type="checkbox" checked={isExam} disabled={busy} onChange={e=>setIsExam(e.target.checked)}
           style={{width:18,height:18,accentColor:"var(--pri)",flexShrink:0}}/>
         <div style={{minWidth:0}}>
-          <div style={{fontSize:13.5,fontWeight:700,color:isExam?"var(--pri-d)":"var(--ink)"}}>📑 기출문제·족보예요</div>
-          <div style={{fontSize:11.5,color:"var(--sub)",marginTop:2,lineHeight:1.5}}>실제 문제를 뽑아서 그대로 풀고, 변형·심화문제까지 자동으로 만들어줘</div>
+          <div style={{fontSize:13.5,fontWeight:700,color:isExam?"var(--pri-d)":"var(--ink)"}}>{tr("📑 기출문제·족보예요","📑 These are past exam questions")}</div>
+          <div style={{fontSize:11.5,color:"var(--sub)",marginTop:2,lineHeight:1.5}}>{tr("실제 문제를 뽑아서 그대로 풀고, 변형·심화문제까지 자동으로 만들어줘","I'll pull the real questions, drill them, and auto-make variants & harder ones")}</div>
         </div>
       </label>
 
       {/* 내용 */}
       <textarea className="field" rows={7} disabled={busy} value={material}
-        placeholder="공부한 내용을 붙여넣거나, 아래 도구로 추가해줘."
+        placeholder={tr("공부한 내용을 붙여넣거나, 아래 도구로 추가해줘.","Paste what you studied, or add it with the tools below.")}
         onChange={e=>setMaterial(e.target.value)}/>
 
       {/* 파일 첨부 */}
       <div>
-        <div style={{fontSize:12.5,color:"var(--sub)",marginBottom:8}}>📎 파일 첨부 (이미지·PDF)</div>
+        <div style={{fontSize:12.5,color:"var(--sub)",marginBottom:8}}>{tr("📎 파일 첨부 (이미지·PDF)","📎 Attach files (image · PDF)")}</div>
         <FileDropZone files={files} onChange={setFiles}/>
       </div>
 
       {/* 펜·사진 */}
       <div className="tools">
-        <button className={"btn gho sm"+(pen?" on":"")} onClick={()=>setPen(v=>!v)} disabled={busy}>✍️ 펜으로 쓰기</button>
-        <PhotoButton kind="note" onText={append} label="📷 노트 사진"/>
-        <span className="note">인식 결과는 위 칸에 추가돼</span>
+        <button className={"btn gho sm"+(pen?" on":"")} onClick={()=>setPen(v=>!v)} disabled={busy}>{tr("✍️ 펜으로 쓰기","✍️ Write with pen")}</button>
+        <PhotoButton kind="note" onText={append} label={tr("📷 노트 사진","📷 Photo of notes")}/>
+        <span className="note">{tr("인식 결과는 위 칸에 추가돼","Recognized text is added above")}</span>
       </div>
       {pen&&<PenPad kind="note" onText={append}/>}
 
@@ -1671,7 +1686,7 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
           border:"2px solid var(--pri)",borderRadius:14,padding:"14px 16px",
           boxShadow:"0 4px 24px rgba(108,92,231,.18)",display:"flex",flexDirection:"column",gap:8}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span style={{fontSize:13,fontWeight:600,color:progress===100?"var(--mint)":"var(--pri-d)"}}>{busyMsg||"처리 중…"}</span>
+            <span style={{fontSize:13,fontWeight:600,color:progress===100?"var(--mint)":"var(--pri-d)"}}>{busyMsg||tr("처리 중…","Working…")}</span>
             <span style={{fontSize:15,fontWeight:700,color:progress===100?"var(--mint)":"var(--pri-d)"}}>{progress}%</span>
           </div>
           <div style={{height:12,borderRadius:8,background:"#F0EDFA",overflow:"hidden"}}>
@@ -1680,16 +1695,16 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
               width:progress+"%",transition:"width .5s ease"}}/>
           </div>
           {progress===100
-            ?<span style={{fontSize:12,color:"var(--mint)",fontWeight:600,textAlign:"center"}}>저장 완료! 이제 공부 시작하자 🎉</span>
-            :<span style={{fontSize:11.5,color:"var(--sub)"}}>페이지를 닫지 마. 분석이 끝나면 자동으로 저장돼.</span>
+            ?<span style={{fontSize:12,color:"var(--mint)",fontWeight:600,textAlign:"center"}}>{tr("저장 완료! 이제 공부 시작하자 🎉","Saved! Let's start studying 🎉")}</span>
+            :<span style={{fontSize:11.5,color:"var(--sub)"}}>{tr("페이지를 닫지 마. 분석이 끝나면 자동으로 저장돼.","Don't close the page. It saves automatically when analysis finishes.")}</span>
           }
         </div>
       )}
       <div className="row">
-        <button className="btn pri" onClick={save} disabled={busy}>{busy?"분석 중…":"이제 공부하자! 📖"}</button>
-        <button className="btn gho" onClick={onCancel} disabled={busy}>취소</button>
+        <button className="btn pri" onClick={save} disabled={busy}>{busy?tr("분석 중…","Analyzing…"):tr("이제 공부하자! 📖","Let's study! 📖")}</button>
+        <button className="btn gho" onClick={onCancel} disabled={busy}>{tr("취소","Cancel")}</button>
       </div>
-      <p className="hint">PDF는 최대 50페이지·30MB까지 지원. 이미지·손글씨 노트도 첨부 가능.</p>
+      <p className="hint">{tr("PDF는 최대 50페이지·30MB까지 지원. 이미지·손글씨 노트도 첨부 가능.","PDF up to 50 pages · 30MB. Images & handwritten notes welcome too.")}</p>
     </section>
   );
 }
@@ -1727,20 +1742,20 @@ function WeakNotes({deck,onBack,onStudy}){
   return(
     <section className="card panel">
       <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-        <button className="btn gho sm" onClick={onBack}>← 뒤로</button>
+        <button className="btn gho sm" onClick={onBack}>{tr("← 뒤로","← Back")}</button>
         <div style={{flex:1}}>
-          <div className="eyebrow">오답 노트</div>
+          <div className="eyebrow">{tr("오답 노트","Review notes")}</div>
           <div style={{fontSize:14,fontWeight:700,color:"var(--ink)"}}>{deck.name}</div>
         </div>
         {onStudy&&<button className="btn pri sm" onClick={()=>onStudy(deck)} style={{flexShrink:0}}>
-          💪 약점만 공부하기 {studyableCount>0&&<span style={{background:"rgba(255,255,255,.35)",borderRadius:10,padding:"1px 6px",marginLeft:4,fontSize:11}}>{studyableCount}</span>}
+          {tr("💪 약점만 공부하기","💪 Study weak only")} {studyableCount>0&&<span style={{background:"rgba(255,255,255,.35)",borderRadius:10,padding:"1px 6px",marginLeft:4,fontSize:11}}>{studyableCount}</span>}
         </button>}
       </div>
       {weak.length===0?(
-        <div className="empty">아직 틀린 개념이 없어! 공부를 시작해봐 📚</div>
+        <div className="empty">{tr("아직 틀린 개념이 없어! 공부를 시작해봐 📚","No missed concepts yet! Start studying 📚")}</div>
       ):noData?(
         <div className="empty" style={{textAlign:"left",padding:"20px"}}>
-          <p style={{margin:0,fontSize:13.5,color:"var(--sub)",lineHeight:1.7}}>공부를 더 하면 여기에 빠진 개념과 내 답이 쌓여. 지금 공부하고 돌아와봐!</p>
+          <p style={{margin:0,fontSize:13.5,color:"var(--sub)",lineHeight:1.7}}>{tr("공부를 더 하면 여기에 빠진 개념과 내 답이 쌓여. 지금 공부하고 돌아와봐!","As you study, missed concepts and your answers pile up here. Study and come back!")}</p>
         </div>
       ):(
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -1749,18 +1764,18 @@ function WeakNotes({deck,onBack,onStudy}){
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:(c.lastGap&&c.lastGap!=="없음")||c.lastAnswer?10:0}}>
                 <Meter box={c.box||1}/>
                 <span style={{fontFamily:"'Jua',sans-serif",fontSize:15,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</span>
-                {c.lapses>0&&<span style={{fontSize:11,background:"#FEE2E2",color:"#B91C1C",borderRadius:6,padding:"2px 7px",fontWeight:600,flexShrink:0}}>틀림 {c.lapses}회</span>}
+                {c.lapses>0&&<span style={{fontSize:11,background:"#FEE2E2",color:"#B91C1C",borderRadius:6,padding:"2px 7px",fontWeight:600,flexShrink:0}}>{tr("틀림 "+c.lapses+"회","Missed ×"+c.lapses)}</span>}
                 <span style={{fontSize:11,color:"var(--sub)",flexShrink:0}}>Lv.{c.box||1}</span>
               </div>
               {c.lastGap&&c.lastGap!=="없음"&&(
                 <div style={{background:"#FFF5F5",borderRadius:10,padding:"8px 12px",marginBottom:6}}>
-                  <div style={{fontSize:10,fontWeight:700,color:"#DC2626",letterSpacing:".4px",marginBottom:4}}>빠진 개념</div>
+                  <div style={{fontSize:10,fontWeight:700,color:"#DC2626",letterSpacing:".4px",marginBottom:4}}>{tr("빠진 개념","What was missing")}</div>
                   <MathText text={c.lastGap} tag="div" style={{fontSize:13,color:"#7F1D1D",lineHeight:1.6}}/>
                 </div>
               )}
               {c.lastAnswer&&c.lastAnswer!=="[손글씨]"&&(
                 <div style={{background:"var(--bg)",borderRadius:10,padding:"8px 12px"}}>
-                  <div style={{fontSize:10,fontWeight:700,color:"var(--sub)",letterSpacing:".4px",marginBottom:4}}>내 마지막 답</div>
+                  <div style={{fontSize:10,fontWeight:700,color:"var(--sub)",letterSpacing:".4px",marginBottom:4}}>{tr("내 마지막 답","My last answer")}</div>
                   <div style={{fontSize:13,color:"var(--ink)",lineHeight:1.7,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{c.lastAnswer}</div>
                 </div>
               )}
@@ -1768,7 +1783,7 @@ function WeakNotes({deck,onBack,onStudy}){
           ))}
         </div>
       )}
-      <p className="hint">Lv.3 이하이거나 틀린 적 있는 개념 표시. 공부할수록 줄어들어!</p>
+      <p className="hint">{tr("Lv.3 이하이거나 틀린 적 있는 개념 표시. 공부할수록 줄어들어!","Shows concepts at Lv.3 or below, or ever missed. They shrink as you study!")}</p>
     </section>
   );
 }
@@ -1832,17 +1847,17 @@ function Study({deck:initial,subjects}){
     deckRef.current=d;
     setDeck(d);
     if(!LS.set(dk(d.id),d)){
-      setSubmitErr("⚠️ 학습 기록 저장 실패: 저장 공간 부족. 설정에서 오래된 자료를 삭제해줘.");
+      setSubmitErr(T("⚠️ 학습 기록 저장 실패: 저장 공간 부족. 설정에서 오래된 자료를 삭제해줘.","⚠️ Couldn't save progress: storage full. Delete old materials in Settings."));
     }
   }
 
   // 세션 전체에서 캐시 공유: summary 있으면 우선 사용 (8000자 이하)
   const studyMat=deck.summary||deck.material.slice(0,8000);
-  // 공부 언어: 설정(CFG.lang) 전역값 — 'ko'(기본) | 'en'
-  const studyLang=CFG.lang==="en"?"en":"ko";
-  const T=(ko,en)=>studyLang==="en"?en:ko;   // 고정 UI 라벨용 간단 번역
+  // 두 축: UI 라벨 언어 = 설정(CFG.lang) / AI 출제·채점 내용 언어 = 덱별 override(deck.lang) 우선
+  const studyLang=(deck.lang||CFG.lang)==="en"?"en":"ko";   // callAI lang: (내용)
+  const T=tr;                                                // UI 라벨 (앱 언어)
   const GAP_TYPE_EN={"개념누락":"Missing concept","이해얕음":"Shallow grasp","핵심비껴감":"Off the point","표현부족":"Unclear wording","갭없음":"No gap"};
-  const gapTypeLabel=(t)=>studyLang==="en"?(GAP_TYPE_EN[t]||t):t;
+  const gapTypeLabel=(t)=>CFG.lang==="en"?(GAP_TYPE_EN[t]||t):t;
 
   async function retryVariant(){
     // 배운 걸로 굳히기: 같은 개념의 '변형 문제'(숫자·상황·표현만 바꿈)를 새로 만들어 다시 풀게 함
@@ -1871,7 +1886,7 @@ function Study({deck:initial,subjects}){
     }catch(e){
       if(genId.current!==myId||e.name==="AbortError")return;
       // 변형 생성 실패 시 원래 문제로 폴백
-      setQ(baseQ);setPhase("answering");setSubmitErr("변형 문제 생성 실패: "+e.message+" — 원래 문제로 다시 풀어볼게");
+      setQ(baseQ);setPhase("answering");setSubmitErr(T("변형 문제 생성 실패: ","Variant generation failed: ")+e.message+T(" — 원래 문제로 다시 풀어볼게"," — retrying the original question"));
     }
   }
 
@@ -1899,7 +1914,7 @@ function Study({deck:initial,subjects}){
     setFollowupQ("");setFollowupCount(0);setFollowupHistory([]);setFollowupBusy(false);setFollowupEv(null);setFollowupSuccess(false);
     padRef.current?.clear();
     const c=forceId?(d.concepts||[]).find(x=>x.id===forceId)||pickConcept(d,last.current):pickConcept(d,last.current);
-    if(!c){setPhase("error");setErrMsg("질문할 개념이 없어.");return;}
+    if(!c){setPhase("error");setErrMsg(T("질문할 개념이 없어.","No concepts to quiz."));return;}
     setConcept(c);last.current=c.id;
     const box=c.box||1;
 
@@ -1926,7 +1941,7 @@ function Study({deck:initial,subjects}){
           if(genId.current!==myId)return;
           const pq=parseQuestion(raw);pq.source=deep?"심화":"변형";
           setQ(pq);setPhase("answering");
-        }catch(e){if(genId.current===myId&&e.name!=="AbortError"){setPhase("error");setErrMsg("문제 생성 실패: "+e.message);}}
+        }catch(e){if(genId.current===myId&&e.name!=="AbortError"){setPhase("error");setErrMsg(T("문제 생성 실패: ","Question generation failed: ")+e.message);}}
         return;
       }
       // box 1 → 아래 일반 개념 암기(recall) 생성으로 진행
@@ -1965,7 +1980,7 @@ function Study({deck:initial,subjects}){
         false,{cache:true,maxTok:800,model:CFG.qmodel,lang:studyLang},ctrl.signal);
       if(genId.current!==myId)return;
       setQ(parseQuestion(raw));setPhase("answering");
-    }catch(e){if(genId.current===myId&&e.name!=="AbortError"){setPhase("error");setErrMsg("질문 생성 실패: "+e.message);}}
+    }catch(e){if(genId.current===myId&&e.name!=="AbortError"){setPhase("error");setErrMsg(T("질문 생성 실패: ","Question generation failed: ")+e.message);}}
   }
   useEffect(()=>{next(initial);return()=>{abortRef.current?.abort();};},[]);
 
@@ -1987,7 +2002,7 @@ function Study({deck:initial,subjects}){
     submitting.current=true;
     const hasInk=padRef.current?.hasStrokes();
     const hasTxt=answer.trim().length>0;
-    if(!hasInk&&!hasTxt){submitting.current=false;setSubmitErr("노트에 써보거나 텍스트로 답을 입력해봐!");return;}
+    if(!hasInk&&!hasTxt){submitting.current=false;setSubmitErr(T("노트에 써보거나 텍스트로 답을 입력해봐!","Write on the note or type an answer!"));return;}
     const img=hasInk?padRef.current.getImageBase64():null;
     setPhase("grading");setSubmitErr("");setOcrHighlights([]);
 
@@ -2053,7 +2068,7 @@ function Study({deck:initial,subjects}){
           setConcept(uc);setCount(n=>n+1);setPhase("result");
         }
       }
-    }catch(e){if(e.name==="AbortError")return;setPhase("answering");setSubmitErr("채점 실패: "+e.message);}
+    }catch(e){if(e.name==="AbortError")return;setPhase("answering");setSubmitErr(T("채점 실패: ","Grading failed: ")+e.message);}
     finally{submitting.current=false;}
   }
 
@@ -2087,7 +2102,7 @@ function Study({deck:initial,subjects}){
       setPhase("followup");
     }catch(e){
       if(e.name==="AbortError")return;
-      setSubmitErr("후속 질문 생성 실패: "+e.message);
+      setSubmitErr(T("후속 질문 생성 실패: ","Follow-up generation failed: ")+e.message);
       setPhase("answering");
     }
     setFollowupBusy(false);
@@ -2098,7 +2113,7 @@ function Study({deck:initial,subjects}){
     followupSubmitting.current=true;
     const hasInk=padRef.current?.hasStrokes();
     const hasTxt=answer.trim().length>0;
-    if(!hasInk&&!hasTxt){followupSubmitting.current=false;setSubmitErr("답을 써봐!");return;}
+    if(!hasInk&&!hasTxt){followupSubmitting.current=false;setSubmitErr(T("답을 써봐!","Write an answer!"));return;}
     const img=hasInk?padRef.current.getImageBase64():null;
     setFollowupBusy(true);setSubmitErr("");
     try{
@@ -2127,7 +2142,7 @@ function Study({deck:initial,subjects}){
       setPhase("result");
       setLeftPage(r.verdict==="correct"?0:1);
       setTimeout(()=>padRef.current?.forceColor(PEN_COLORS[2]),50);
-    }catch(e){if(e.name==="AbortError")return;setSubmitErr("채점 실패: "+e.message);}
+    }catch(e){if(e.name==="AbortError")return;setSubmitErr(T("채점 실패: ","Grading failed: ")+e.message);}
     finally{followupSubmitting.current=false;}
     setFollowupBusy(false);
   }
@@ -2147,13 +2162,13 @@ function Study({deck:initial,subjects}){
         false,{maxTok:700,model:CFG.qmodel,lang:studyLang},abortRef.current?.signal);
       setDerivePlan(parseDerivePlan(raw));
       setPhase("derive_step");
-    }catch(e){if(e.name==="AbortError")return;setPhase("answering");setSubmitErr("유도 시작 실패: "+e.message);}
+    }catch(e){if(e.name==="AbortError")return;setPhase("answering");setSubmitErr(T("유도 시작 실패: ","Couldn't start derivation: ")+e.message);}
   }
 
   async function submitDeriveStep(){
     const hasInk=padRef.current?.hasStrokes();
     const hasTxt=answer.trim().length>0;
-    if(!hasInk&&!hasTxt){setSubmitErr("이 단계를 먼저 써봐!");return;}
+    if(!hasInk&&!hasTxt){setSubmitErr(T("이 단계를 먼저 써봐!","Write this step first!"));return;}
     const img=hasInk?padRef.current.getImageBase64():null;
     setDeriveChecking(true);setDeriveHintShow(false);setSubmitErr("");
     const userBlocks=[];
@@ -2184,7 +2199,7 @@ function Study({deck:initial,subjects}){
           setDeriveIdx(deriveIdx+1);setDeriveFeedback("");
         }
       }
-    }catch(e){if(e.name==="AbortError")return;setSubmitErr("평가 실패: "+e.message);}
+    }catch(e){if(e.name==="AbortError")return;setSubmitErr(T("평가 실패: ","Evaluation failed: ")+e.message);}
     setDeriveChecking(false);
   }
 
@@ -2291,7 +2306,7 @@ function Study({deck:initial,subjects}){
               onClick={()=>{if(phase!=="loading"&&phase!=="grading"){setShowInfo(false);next(deck,c.id);}}}>
               <Meter box={c.box||1}/><span className="cn">{c.name}</span>
               <span className={"derive-badge"+(c.deriveMode==="derive"?" on":"")}
-                title={c.deriveMode==="derive"?"유도 모드 ON — 클릭해서 끄기":"클릭하면 유도 모드로"}
+                title={c.deriveMode==="derive"?T("유도 모드 ON — 클릭해서 끄기","Derive mode ON — click to turn off"):T("클릭하면 유도 모드로","Click for derive mode")}
                 onClick={e=>{e.stopPropagation();toggleDeriveMode(c.id);}}>∫</span>
             </div>
           ))}
@@ -2319,7 +2334,7 @@ function Study({deck:initial,subjects}){
                     background:q.source==="기출"?"#FFF7E0":q.source==="심화"?"#FFE4EC":"#EFE7FF",
                     color:q.source==="기출"?"#946200":q.source==="심화"?"#C2185B":"#5B21B6",
                     border:"none",fontSize:11,fontWeight:700
-                  }}>{q.source==="기출"?"📜 기출":q.source==="심화"?"🔥 심화":"🔄 변형"}</span>}
+                  }}>{q.source==="기출"?T("📜 기출","📜 Past exam"):q.source==="심화"?T("🔥 심화","🔥 Deep"):T("🔄 변형","🔄 Variant")}</span>}
                   {q?.qtype&&<span className="chip" style={{
                     background:q.qtype==='recall'?"#FFF0E6":q.qtype==='apply'?"#E6F7FF":"#F0EDFF",
                     color:q.qtype==='recall'?"#C05A00":q.qtype==='apply'?"#0066A3":"#5B21B6",
@@ -2370,8 +2385,8 @@ function Study({deck:initial,subjects}){
               )}
               {isDeriving&&(
                 <div style={{marginBottom:8}}>
-                  <div className="eyebrow" style={{marginBottom:6}}>증명 쉐도잉 — {concept?.name}</div>
-                  {phase==="derive_load"&&<div className="derive-prompt">유도 계획 세우는 중…</div>}
+                  <div className="eyebrow" style={{marginBottom:6}}>{T("증명 쉐도잉 — ","Proof shadowing — ")}{concept?.name}</div>
+                  {phase==="derive_load"&&<div className="derive-prompt">{T("유도 계획 세우는 중…","Planning the derivation…")}</div>}
                   {(phase==="derive_step"||phase==="derive_done")&&derivePlan&&(
                     <div className="derive-track">
                       {/* 완료된 단계들 */}
@@ -2385,7 +2400,7 @@ function Study({deck:initial,subjects}){
                       {phase==="derive_step"&&(
                         <div className="derive-prompt">
                           <span style={{fontSize:11,fontWeight:700,display:"block",marginBottom:4,opacity:.7}}>
-                            {deriveIdx+1} / {derivePlan.totalSteps} 단계
+                            {deriveIdx+1} / {derivePlan.totalSteps} {T("단계","steps")}
                           </span>
                           <MathText text={derivePlan.hints&&derivePlan.hints[deriveIdx]?derivePlan.hints[deriveIdx]:derivePlan.startHint||"다음 단계를 유도해봐."} tag="span"/>
                         </div>
@@ -2394,8 +2409,8 @@ function Study({deck:initial,subjects}){
                       {phase==="derive_done"&&(
                         <div style={{textAlign:"center",padding:"14px 0"}}>
                           <div style={{fontSize:28}}>🎉</div>
-                          <div className="jua" style={{fontSize:16,color:"var(--pri-d)",marginTop:4}}>유도 완성!</div>
-                          <div className="muted" style={{fontSize:12,marginTop:2}}>box +1 올라갔어 👍</div>
+                          <div className="jua" style={{fontSize:16,color:"var(--pri-d)",marginTop:4}}>{T("유도 완성!","Derivation complete!")}</div>
+                          <div className="muted" style={{fontSize:12,marginTop:2}}>{T("box +1 올라갔어 👍","Level +1 👍")}</div>
                         </div>
                       )}
                     </div>
@@ -2471,7 +2486,7 @@ function Study({deck:initial,subjects}){
                             </div>
                           )}
                           {/* DEPTH 게이지 */}
-                          <DepthGauge depth={ev.depth} lang={studyLang}/>
+                          <DepthGauge depth={ev.depth} lang={CFG.lang}/>
                           {/* NEXT */}
                           {ev.next&&ev.gap_type!=="갭없음"&&(
                             <div style={{background:"#FFFDF8",border:"1.5px solid var(--line)",borderRadius:10,padding:"8px 12px"}}>
@@ -2510,7 +2525,7 @@ function Study({deck:initial,subjects}){
                         <div className="annot-hl-bar">
                           <button className={"btn gho sm"+(highlightActive?" on":"")}
                             onClick={()=>{setHighlightActive(v=>!v);if(!annotOpen)setAnnotOpen(true);}}>
-                            🖊 {highlightActive?"하이라이트 중":"해설에 하이라이트"}
+                            🖊 {highlightActive?T("하이라이트 중","Highlighting"):T("해설에 하이라이트","Highlight the explanation")}
                           </button>
                           {highlightActive&&<>
                             <button className={"btn gho xs"+(annotTool==="hl"?" on":"")} onClick={()=>setAnnotTool("hl")}>🟡</button>
@@ -2525,7 +2540,7 @@ function Study({deck:initial,subjects}){
                         <div className="annot-q-bar">
                           <span className="muted" style={{fontSize:12,fontWeight:600}}>질문</span>
                           <button className="btn gho xs" onClick={()=>setAnnotQMode(m=>m==="pen"?"type":"pen")}>
-                            {annotQMode==="pen"?"⌨ 타이핑으로":"✍ 손글씨로"}
+                            {annotQMode==="pen"?T("⌨ 타이핑으로","⌨ Type instead"):T("✍ 손글씨로","✍ Handwrite")}
                           </button>
                         </div>
                         {annotQMode==="pen"
@@ -2543,14 +2558,14 @@ function Study({deck:initial,subjects}){
                               <QuestionPad ref={annotQPadRef} disabled={annotBusy} tool={annotQTool}/>
                             </div>)
                           :<textarea value={annotQ} onChange={e=>setAnnotQ(e.target.value)} disabled={annotBusy}
-                              placeholder="모르는 게 뭔지 타이핑해봐"
+                              placeholder={T("모르는 게 뭔지 타이핑해봐","Type what you don't get")}
                               style={{width:"100%",minHeight:64,padding:"8px 10px",borderRadius:10,
                                 border:"1.5px solid var(--line)",fontFamily:"'Noto Sans KR',sans-serif",
                                 fontSize:13,resize:"none",outline:"none",background:"var(--bg)",color:"var(--ink)"}}/>
                         }
                         <button className="btn pri sm" onClick={()=>askAnnotation()}
                           disabled={annotBusy||(!highlightActive&&!(annotQPadRef.current?.hasStrokes())&&!annotQ.trim())}>
-                          {annotBusy?"답변 불러오는 중…":"질문하기 →"}
+                          {annotBusy?T("답변 불러오는 중…","Getting answer…"):T("질문하기 →","Ask →")}
                         </button>
                         {annotAnswer&&<div className="annot-answer"><MathText text={annotAnswer} tag="div"/></div>}
                       </div>
@@ -2574,14 +2589,14 @@ function Study({deck:initial,subjects}){
                 {phase==="derive_load"&&(
                   <div style={{display:"flex",alignItems:"center",gap:10,padding:"20px 0"}}>
                     <div className="spinner" style={{width:20,height:20,borderWidth:2}}/>
-                    <span className="muted" style={{fontSize:13}}>유도 계획 세우는 중…</span>
+                    <span className="muted" style={{fontSize:13}}>{T("유도 계획 세우는 중…","Planning the derivation…")}</span>
                   </div>
                 )}
                 {phase==="derive_step"&&(
                   <>
                     <PenPad ref={padRef} kind="answer" hideOcr penOnlyDefault={true} disabled={deriveChecking}/>
                     <textarea value={answer} onChange={e=>setAnswer(e.target.value)} disabled={deriveChecking}
-                      placeholder="이 단계의 식을 텍스트로 써도 돼 (선택)"
+                      placeholder={T("이 단계의 식을 텍스트로 써도 돼 (선택)","Type this step as text too (optional)")}
                       style={{width:"100%",minHeight:60,padding:"8px 10px",borderRadius:10,
                         border:"1.5px solid var(--line)",fontFamily:"'Noto Sans KR',sans-serif",
                         fontSize:13,resize:"vertical",outline:"none",background:"var(--bg)",color:"var(--ink)"}}/>
@@ -2600,10 +2615,10 @@ function Study({deck:initial,subjects}){
                     )}
                     <div className="row">
                       <button className="btn pri" onClick={submitDeriveStep} disabled={deriveChecking}>
-                        {deriveChecking?"확인 중…":"이 단계 맞아? ✓"}
+                        {deriveChecking?T("확인 중…","Checking…"):T("이 단계 맞아? ✓","Is this step right? ✓")}
                       </button>
                       <button className="btn gho" onClick={()=>setDeriveHintShow(v=>!v)} disabled={deriveChecking}>
-                        {deriveHintShow?"힌트 숨기기":"막혔어요 💡"}
+                        {deriveHintShow?T("힌트 숨기기","Hide hint"):T("막혔어요 💡","I'm stuck 💡")}
                       </button>
                     </div>
                   </>
@@ -2642,7 +2657,7 @@ function Study({deck:initial,subjects}){
                       <div className="annot-hl-bar">
                         <button className={"btn gho sm"+(highlightActive?" on":"")}
                           onClick={()=>setHighlightActive(v=>!v)}>
-                          🖊 {highlightActive?"하이라이트 중":"해설에 하이라이트"}
+                          🖊 {highlightActive?T("하이라이트 중","Highlighting"):T("해설에 하이라이트","Highlight the explanation")}
                         </button>
                         {highlightActive&&<>
                           <button className={"btn gho xs"+(annotTool==="hl"?" on":"")} onClick={()=>setAnnotTool("hl")}>🟡</button>
@@ -2673,7 +2688,7 @@ function Study({deck:initial,subjects}){
                             <QuestionPad ref={annotQPadRef} disabled={annotBusy} tool={annotQTool}/>
                           </div>)
                         :<textarea value={annotQ} onChange={e=>setAnnotQ(e.target.value)} disabled={annotBusy}
-                            placeholder="모르는 게 뭔지 타이핑해봐"
+                            placeholder={T("모르는 게 뭔지 타이핑해봐","Type what you don't get")}
                             style={{width:"100%",minHeight:64,padding:"8px 10px",borderRadius:10,
                               border:"1.5px solid var(--line)",fontFamily:"'Noto Sans KR',sans-serif",
                               fontSize:13,resize:"none",outline:"none",background:"var(--bg)",color:"var(--ink)"}}/>
@@ -2738,7 +2753,7 @@ function Study({deck:initial,subjects}){
                   <>
                     {concept?.deriveMode==="derive"&&(
                       <button className="btn gho sm" style={{borderColor:"var(--pri)",color:"var(--pri-d)"}}
-                        onClick={startDerive}>✏️ 직접 유도해볼게</button>
+                        onClick={startDerive}>{T("✏️ 직접 유도해볼게","✏️ Derive it myself")}
                     )}
                     {submitErr&&<div className="err">{submitErr}</div>}
                     <div className="row">
