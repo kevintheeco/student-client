@@ -2066,6 +2066,8 @@ function Study({deck:initial,subjects}){
   const [followupHintBusy,setFollowupHintBusy]=useState(false);
   const [followupSuccess,setFollowupSuccess]=useState(false);
   const [gradeProg,setGradeProg]=useState(0);
+  const [limitHelp,setLimitHelp]=useState("");      // '여기가 내 한계야' → 교수 캐릭터 도움 말풍선
+  const [limitBusy,setLimitBusy]=useState(false);
   const [ocrHighlights,setOcrHighlights]=useState([]);
   const [ocrImg,setOcrImg]=useState(null);
   const [ocrImgSize,setOcrImgSize]=useState({w:800,h:680});
@@ -2150,6 +2152,7 @@ function Study({deck:initial,subjects}){
     setOcrHighlights([]);setOcrImg(null);ocrImgRef.current=null;
     setDerivePlan(null);setDeriveIdx(0);setDeriveHistory([]);setDeriveFeedback("");setDeriveDone(false);setDeriveHintShow(false);setDeriveChecking(false);
     setFollowupQ("");setFollowupCount(0);setFollowupHistory([]);setFollowupBusy(false);setFollowupEv(null);setFollowupSuccess(false);
+    setLimitHelp("");setLimitBusy(false);
     padRef.current?.clear();
     const c=forceId?(d.concepts||[]).find(x=>x.id===forceId)||pickConcept(d,last.current):pickConcept(d,last.current);
     if(!c){setPhase("error");setErrMsg(T("질문할 개념이 없어.","No concepts to quiz."));return;}
@@ -2445,6 +2448,36 @@ function Study({deck:initial,subjects}){
       }
     }catch(e){if(e.name==="AbortError")return;setSubmitErr(T("평가 실패: ","Evaluation failed: ")+e.message);}
     setDeriveChecking(false);
+  }
+
+  // '여기가 내 한계야' — 막힌 채로 누르면, 답안화면 그대로 두고 교수 캐릭터가 도움 말풍선을 띄움.
+  // AI가 막힌 정도를 보고 살짝이면 유도질문, 많이면 힌트를 줌(정답은 안 알려줌). 레벨 영향 없음.
+  async function handleLimit(){
+    if(limitBusy||phase!=="answering")return;
+    const hasInk=padRef.current?.hasStrokes();
+    const hasTxt=answer.trim().length>0;
+    const img=hasInk?padRef.current.getImageBase64():null;
+    setLimitBusy(true);setSubmitErr("");
+    const examSol=q?.examAnswer||q?.examRef||"";
+    try{
+      const userBlocks=[];
+      if(img)userBlocks.push({type:"image",source:{type:"base64",media_type:"image/png",data:img}});
+      const parts=["개념: "+concept.name,"질문: "+q.question];
+      if(hasTxt)parts.push("학습자가 지금까지 쓴 답(텍스트):\n"+answer.trim());
+      if(img)parts.push("학습자가 노트에 손으로 쓴 답도 이미지로 첨부됨 — 읽어서 어디까지 갔는지 파악해.");
+      if(!hasTxt&&!img)parts.push("학습자가 아직 거의 못 썼어 (백지에 가까움).");
+      if(examSol)parts.push("\n[참고용 공식 해답 — 절대 그대로 알려주지 말고 방향만 잡는 데 써]\n"+examSol);
+      userBlocks.push({type:"text",text:parts.join("\n")});
+      const r=await callAI(
+        "너는 '니가교수'라는 따뜻한 교수 캐릭터야. 학습자가 문제를 풀다 막혀서 '여기가 내 한계야' 버튼을 눌렀어. 학습자가 지금까지 쓴 답을 보고, 막힌 정도를 스스로 판단해서 딱 맞는 도움을 한 번 줘:\n"+
+        "· 거의 다 왔거나 조금만 막혔으면 → '네가 ~까지 했는데, 그럼 …?' 식의 소크라테스식 유도 질문 하나로 스스로 떠올리게 해.\n"+
+        "· 많이 막혔거나 백지에 가까우면 → 시작할 발판이 되는 구체적 힌트(어떤 개념·공식·접근을 떠올리면 되는지)를 줘.\n"+
+        "규칙: ① 절대 최종 정답·완성된 풀이를 통째로 주지 마 — 학습자가 마지막 한 걸음은 직접 딛게. ② 반말, 따뜻하고 짧게(2~4문장). ③ 수식은 LaTeX($...$). ④ ##·목록·>> 같은 기호 없이 말풍선처럼 자연스러운 말투로. 격려 한마디로 끝맺어.\n\n자료:\n"+studyMat.slice(0,5000),
+        userBlocks,false,{maxTok:500,model:CFG.qmodel,lang:studyLang},abortRef.current?.signal);
+      setLimitHelp((r||"").trim());
+      setTimeout(()=>padRef.current?.forceColor(PEN_COLORS[0]),50);
+    }catch(e){if(e.name!=="AbortError")setSubmitErr(T("도움 불러오기 실패: ","Help failed: ")+e.message);}
+    setLimitBusy(false);
   }
 
   async function handleDontKnow(){
@@ -3026,10 +3059,29 @@ function Study({deck:initial,subjects}){
                         {T("🔄 변형문제로 바로 풀래","🔄 Jump to a variant")}</button>
                     )}
                     {submitErr&&<div className="err">{submitErr}</div>}
+                    {/* 교수 캐릭터 도움 말풍선 ('여기가 내 한계야') */}
+                    {(limitBusy||limitHelp)&&(
+                      <div style={{display:"flex",gap:9,alignItems:"flex-start",background:"#FFF9EC",
+                        border:"1.5px solid #FFE3A3",borderRadius:14,padding:"11px 13px",margin:"2px 0"}}>
+                        <div style={{flexShrink:0,marginTop:-2}}><Prof size={40}/></div>
+                        <div style={{minWidth:0,flex:1}}>
+                          <div style={{fontSize:10.5,fontWeight:700,color:"#946200",letterSpacing:".3px",marginBottom:3}}>{T("니가교수의 도움","Prof's nudge")}</div>
+                          {limitBusy
+                            ?<div style={{display:"flex",alignItems:"center",gap:8,color:"#946200",fontSize:12.5}}>
+                                <span className="spinner" style={{width:13,height:13,borderWidth:2}}/>{T("네 답을 보는 중…","Reading your answer…")}</div>
+                            :<MathText text={limitHelp} tag="div" style={{fontSize:13.5,color:"#5B4600",lineHeight:1.7}}/>}
+                          {limitHelp&&!limitBusy&&<div style={{fontSize:11,color:"#946200",marginTop:6}}>{T("힌트 보고 이어서 써봐 — 다 쓰면 제출 ✓","Use the nudge, keep writing — then Submit ✓")}</div>}
+                        </div>
+                      </div>
+                    )}
                     <div className="row note-foot">
-                      <button className="btn pri" onClick={()=>submit()} disabled={phase==="grading"}>{T("제출 ✓","Submit ✓")}</button>
-                      <button className="btn gho" onClick={handleDontKnow} disabled={phase==="grading"}>{T("몰라요 😅","Don't know 😅")}</button>
-                      <button className="btn gho" onClick={skipConcept} disabled={phase==="grading"} title={T("이 개념은 오늘 패스 (레벨 안 깎임)","Skip this concept today (level kept)")}>{T("패스 ⏭️","Skip ⏭️")}</button>
+                      <button className="btn pri" onClick={()=>submit()} disabled={phase==="grading"||limitBusy}>{T("제출 ✓","Submit ✓")}</button>
+                      <button className="btn gho" onClick={handleLimit} disabled={phase==="grading"||limitBusy}
+                        style={{borderColor:"#FFC24B",color:"#946200"}}
+                        title={T("쓰다 막혔을 때 — 교수님이 정답 대신 살짝 도와줘 (레벨 안 깎임)","Stuck mid-answer — Prof nudges you without giving the answer (level kept)")}>
+                        {limitBusy?T("도와주는 중…","Helping…"):T("🙋 여기가 내 한계야","🙋 I'm stuck here")}</button>
+                      <button className="btn gho" onClick={handleDontKnow} disabled={phase==="grading"||limitBusy}>{T("몰라요 😅","Don't know 😅")}</button>
+                      <button className="btn gho" onClick={skipConcept} disabled={phase==="grading"||limitBusy} title={T("이 개념은 오늘 패스 (레벨 안 깎임)","Skip this concept today (level kept)")}>{T("패스 ⏭️","Skip ⏭️")}</button>
                     </div>
                   </>
                 )}
