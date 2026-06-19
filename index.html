@@ -1686,6 +1686,20 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
       setErr(tr("자료를 입력하거나 파일을 첨부해줘.","Enter some material or attach a file."));return;
     }
 
+    // 새 과목 칸에 이름만 적고 '+추가'를 안 눌렀어도 자동으로 만들어 배정 (입력한 이름 우선)
+    let useSubjId=subjId;
+    const pendingName=newSubj.trim();
+    if(pendingName){
+      const existing=subjects.find(s=>s.name===pendingName);
+      if(existing){useSubjId=existing.id;}
+      else{
+        const ns={id:uid(),name:pendingName,color:SUBJ_COLORS[subjects.length%SUBJ_COLORS.length]};
+        onSave([...subjects,ns]);useSubjId=ns.id;
+      }
+      setSubjId(useSubjId);setNewSubj("");
+    }
+    if(!useSubjId)useSubjId=subjects[0]?.id||"";
+
     setBusy(true);setErr("");setProgress(0);setBusyMsg(tr("준비 중…","Preparing…"));
 
     // 글로벌 가짜 진행률 타이머: 0→70 빠르게, 70→90 느리게, 90에서 멈춤
@@ -1788,7 +1802,7 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
     // ── 저장 ──
     const id=uid();
     const materialToStore=summary?fullMaterial.slice(0,5000):fullMaterial.slice(0,12000);
-    const deck={id,name:finalName,subjId,material:materialToStore,summary,createdAt:Date.now(),
+    const deck={id,name:finalName,subjId:useSubjId,material:materialToStore,summary,createdAt:Date.now(),
       ...(deckLang!==CFG.lang?{lang:deckLang}:{}),
       isExam:isExam&&examQuestions.length>0,examQuestions,
       concepts:concepts.map(nm=>({id:uid(),name:String(nm).slice(0,80),box:1,dueAt:0,reps:0,lapses:0}))};
@@ -1798,7 +1812,7 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
       fail(tr("저장 공간이 부족해 (","Out of storage (")+formatSize(usedBytes)+tr("). 오래된 자료를 먼저 삭제해줘.","). Delete old materials first."));return;
     }
     if(!LS.set(dk(id),deck)){fail(tr("저장 실패: 저장 공간이 꽉 찼어.","Save failed: storage is full."));return;}
-    if(!LS.set(DECKS_KEY,[{id,name:deck.name,subjId},...(LS.get(DECKS_KEY)||[])])){
+    if(!LS.set(DECKS_KEY,[{id,name:deck.name,subjId:useSubjId},...(LS.get(DECKS_KEY)||[])])){
       LS.del(dk(id));fail(tr("저장 실패: 저장 공간이 꽉 찼어.","Save failed: storage is full."));return;
     }
     done();
