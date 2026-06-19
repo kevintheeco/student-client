@@ -1347,14 +1347,15 @@ const AnnotPad=React.forwardRef(function AnnotPad({disabled,tool},fwdRef){
 });
 
 /* ── 질문 손글씨 패드 (단독, 배경 있음) ── */
-const QuestionPad=React.forwardRef(function QuestionPad({disabled,tool="pen"},fwdRef){
+const QuestionPad=React.forwardRef(function QuestionPad({disabled,tool="pen",onInk},fwdRef){
   const cvs=useRef(null);const strokes=useRef([]);const drawing=useRef(false);
   const eraseGesture=useRef(false);const lastBtn=useRef(0);
+  const notifyInk=()=>onInk&&onInk(strokes.current.length>0);
   React.useImperativeHandle(fwdRef,()=>({
     getImageBase64:()=>cvs.current?.toDataURL("image/png").split(",")[1]||null,
     hasStrokes:()=>strokes.current.length>0,
-    clear:()=>{strokes.current=[];redraw();},
-    undo:()=>{if(strokes.current.length>0){strokes.current.pop();redraw();}},
+    clear:()=>{strokes.current=[];redraw();notifyInk();},
+    undo:()=>{if(strokes.current.length>0){strokes.current.pop();redraw();notifyInk();}},
   }));
   const getDpr=()=>window.devicePixelRatio||1;
   function setup(){
@@ -1388,7 +1389,7 @@ const QuestionPad=React.forwardRef(function QuestionPad({disabled,tool="pen"},fw
   function eraseAt(x,y){
     const R=12*12,prev=strokes.current.length;
     strokes.current=strokes.current.filter(({pts})=>!pts.some(p=>(p.x-x)**2+(p.y-y)**2<R));
-    if(strokes.current.length!==prev)redraw();
+    if(strokes.current.length!==prev){redraw();notifyInk();}
   }
   function startStroke(p){
     drawing.current=true;
@@ -1423,7 +1424,7 @@ const QuestionPad=React.forwardRef(function QuestionPad({disabled,tool="pen"},fw
     ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle="#221C39";ctx.lineWidth=2;
     if(st.pts.length>1){ctx.beginPath();ctx.moveTo(st.pts[st.pts.length-2].x,st.pts[st.pts.length-2].y);ctx.lineTo(st.pts[st.pts.length-1].x,st.pts[st.pts.length-1].y);ctx.stroke();}
   }
-  const up=()=>{drawing.current=false;eraseGesture.current=false;lastBtn.current=0;};
+  const up=()=>{drawing.current=false;eraseGesture.current=false;lastBtn.current=0;notifyInk();};
   return(
     <canvas ref={cvs} className="pad"
       style={{height:110,cursor:disabled?"not-allowed":tool==="eraser"?"cell":"crosshair",borderRadius:12}}
@@ -2043,6 +2044,7 @@ function Study({deck:initial,subjects}){
   const [annotQMode,setAnnotQMode]=useState("pen");
   const [annotQTool,setAnnotQTool]=useState("pen");
   const [annotQ,setAnnotQ]=useState("");
+  const [annotQInk,setAnnotQInk]=useState(false); // 펜 질문에 획이 있는지(반응형) — '질문하기' 버튼 활성화용
   const [annotBusy,setAnnotBusy]=useState(false);
   const [annotAnswer,setAnnotAnswer]=useState("");
   const annotPadRef=useRef(null);
@@ -2101,7 +2103,7 @@ function Study({deck:initial,subjects}){
     const baseQ=q,c=concept;
     // 결과·노트 정리 후 로딩
     setEv(null);setAnswer("");setDeeper("");setDontknow("");setSubmitErr("");
-    setHighlightActive(false);setAnnotQ("");setAnnotAnswer("");setLeftPage(0);
+    setHighlightActive(false);setAnnotQ("");setAnnotQInk(false);setAnnotAnswer("");setLeftPage(0);
     setOcrHighlights([]);setOcrImg(null);ocrImgRef.current=null;
     setFollowupQ("");setFollowupCount(0);setFollowupHistory([]);setFollowupEv(null);setFollowupSuccess(false);
     padRef.current?.clear();
@@ -2144,7 +2146,7 @@ function Study({deck:initial,subjects}){
     abortRef.current=ctrl;
     const myId=++genId.current;
     setPhase("loading");setQ(null);setEv(null);setAnswer("");setDeeper("");setDontknow("");setErrMsg("");setSubmitErr("");
-    setAnnotOpen(false);setHighlightActive(false);setAnnotTool("hl");setAnnotQMode("pen");setAnnotQ("");setAnnotBusy(false);setAnnotAnswer("");setLeftPage(0);
+    setAnnotOpen(false);setHighlightActive(false);setAnnotTool("hl");setAnnotQMode("pen");setAnnotQ("");setAnnotQInk(false);setAnnotBusy(false);setAnnotAnswer("");setLeftPage(0);
     setOcrHighlights([]);setOcrImg(null);ocrImgRef.current=null;
     setDerivePlan(null);setDeriveIdx(0);setDeriveHistory([]);setDeriveFeedback("");setDeriveDone(false);setDeriveHintShow(false);setDeriveChecking(false);
     setFollowupQ("");setFollowupCount(0);setFollowupHistory([]);setFollowupBusy(false);setFollowupEv(null);setFollowupSuccess(false);
@@ -2783,7 +2785,7 @@ function Study({deck:initial,subjects}){
                         {/* 질문 영역 */}
                         <div className="annot-q-bar">
                           <span className="muted" style={{fontSize:12,fontWeight:600}}>질문</span>
-                          <button className="btn gho xs" onClick={()=>setAnnotQMode(m=>m==="pen"?"type":"pen")}>
+                          <button className="btn gho xs" onClick={()=>{setAnnotQMode(m=>m==="pen"?"type":"pen");setAnnotQInk(false);}}>
                             {annotQMode==="pen"?T("⌨ 타이핑으로","⌨ Type instead"):T("✍ 손글씨로","✍ Handwrite")}
                           </button>
                         </div>
@@ -2799,7 +2801,7 @@ function Study({deck:initial,subjects}){
                                   <button className="btn gho xs" onClick={()=>annotQPadRef.current?.clear()} disabled={annotBusy}>🗑️ 전체</button>
                                 </div>
                               </div>
-                              <QuestionPad ref={annotQPadRef} disabled={annotBusy} tool={annotQTool}/>
+                              <QuestionPad ref={annotQPadRef} disabled={annotBusy} tool={annotQTool} onInk={setAnnotQInk}/>
                             </div>)
                           :<textarea value={annotQ} onChange={e=>setAnnotQ(e.target.value)} disabled={annotBusy}
                               placeholder={T("모르는 게 뭔지 타이핑해봐","Type what you don't get")}
@@ -2808,7 +2810,7 @@ function Study({deck:initial,subjects}){
                                 fontSize:13,resize:"none",outline:"none",background:"var(--bg)",color:"var(--ink)"}}/>
                         }
                         <button className="btn pri sm" onClick={()=>askAnnotation()}
-                          disabled={annotBusy||(!highlightActive&&!(annotQPadRef.current?.hasStrokes())&&!annotQ.trim())}>
+                          disabled={annotBusy||(!highlightActive&&!annotQInk&&!annotQ.trim())}>
                           {annotBusy?T("답변 불러오는 중…","Getting answer…"):T("질문하기 →","Ask →")}
                         </button>
                         {annotAnswer&&<div className="annot-answer"><MathText text={annotAnswer} tag="div"/></div>}
@@ -2913,7 +2915,7 @@ function Study({deck:initial,subjects}){
                       </div>
                       <div className="annot-q-bar">
                         <span className="muted" style={{fontSize:12,fontWeight:600}}>질문</span>
-                        <button className="btn gho xs" onClick={()=>setAnnotQMode(m=>m==="pen"?"type":"pen")}>
+                        <button className="btn gho xs" onClick={()=>{setAnnotQMode(m=>m==="pen"?"type":"pen");setAnnotQInk(false);}}>
                           {annotQMode==="pen"?"⌨ 타이핑으로":"✍ 손글씨로"}
                         </button>
                       </div>
@@ -2929,7 +2931,7 @@ function Study({deck:initial,subjects}){
                                 <button className="btn gho xs" onClick={()=>annotQPadRef.current?.clear()} disabled={annotBusy}>🗑️ 전체</button>
                               </div>
                             </div>
-                            <QuestionPad ref={annotQPadRef} disabled={annotBusy} tool={annotQTool}/>
+                            <QuestionPad ref={annotQPadRef} disabled={annotBusy} tool={annotQTool} onInk={setAnnotQInk}/>
                           </div>)
                         :<textarea value={annotQ} onChange={e=>setAnnotQ(e.target.value)} disabled={annotBusy}
                             placeholder={T("모르는 게 뭔지 타이핑해봐","Type what you don't get")}
@@ -2938,7 +2940,7 @@ function Study({deck:initial,subjects}){
                               fontSize:13,resize:"none",outline:"none",background:"var(--bg)",color:"var(--ink)"}}/>
                       }
                       <button className="btn pri sm" onClick={()=>askAnnotation(dontknow)}
-                        disabled={annotBusy||(!highlightActive&&!(annotQPadRef.current?.hasStrokes())&&!annotQ.trim())}>
+                        disabled={annotBusy||(!highlightActive&&!annotQInk&&!annotQ.trim())}>
                         {annotBusy?"답변 불러오는 중…":"질문하기 →"}
                       </button>
                       {annotAnswer&&<div className="annot-answer"><MathText text={annotAnswer} tag="div"/></div>}
