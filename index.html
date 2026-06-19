@@ -2065,6 +2065,8 @@ function Study({deck:initial,subjects}){
       const pq=parseQuestion(raw);
       if(baseQ?.qtype)pq.qtype=baseQ.qtype;
       pq.source="변형";
+      const examSol=baseQ?.examAnswer||baseQ?.examRef; // 기출 변형이면 원본 공식 해답을 해설 참고용으로 계승
+      if(examSol)pq.examRef=examSol;
       setQ(pq);setPhase("answering");
     }catch(e){
       if(genId.current!==myId||e.name==="AbortError")return;
@@ -2963,6 +2965,12 @@ function Study({deck:initial,subjects}){
                     {concept?.deriveMode==="derive"&&(
                       <button className="btn gho sm" style={{borderColor:"var(--pri)",color:"var(--pri-d)"}}
                         onClick={startDerive}>{T("✏️ 직접 유도해볼게","✏️ Derive it myself")}</button>
+                    )}
+                    {q?.source==="기출"&&(
+                      <button className="btn gho sm" style={{alignSelf:"flex-start",borderColor:"var(--pri)",color:"var(--pri-d)"}}
+                        onClick={retryVariant} disabled={phase==="grading"}
+                        title={T("기출은 이미 아니까 숫자·상황만 바꾼 변형문제로 바로 풀기","Already know this past exam — jump straight to a variant (numbers/situation changed)")}>
+                        {T("🔄 변형문제로 바로 풀래","🔄 Jump to a variant")}</button>
                     )}
                     {submitErr&&<div className="err">{submitErr}</div>}
                     <div className="row note-foot">
