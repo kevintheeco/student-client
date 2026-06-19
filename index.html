@@ -3070,12 +3070,13 @@ function Study({deck:initial,subjects}){
                             ?<div style={{display:"flex",alignItems:"center",gap:8,color:"#946200",fontSize:12.5}}>
                                 <span className="spinner" style={{width:13,height:13,borderWidth:2}}/>{T("네 답을 보는 중…","Reading your answer…")}</div>
                             :<MathText text={limitHelp} tag="div" style={{fontSize:13.5,color:"#5B4600",lineHeight:1.7}}/>}
-                          {limitHelp&&!limitBusy&&<div style={{fontSize:11,color:"#946200",marginTop:6}}>{T("힌트 보고 이어서 써봐 — 다 쓰면 제출 ✓","Use the nudge, keep writing — then Submit ✓")}</div>}
+                          {limitHelp&&!limitBusy&&<div style={{fontSize:11,color:"#946200",marginTop:6}}>{T("힌트 보고 이어서 써봐 — 다 쓰면 '📖 제출·해설 보기'","Use the nudge, keep writing — then '📖 Submit & see explanation'")}</div>}
                         </div>
                       </div>
                     )}
                     <div className="row note-foot">
-                      <button className="btn pri" onClick={()=>submit()} disabled={phase==="grading"||limitBusy}>{T("제출 ✓","Submit ✓")}</button>
+                      <button className="btn pri" onClick={()=>submit()} disabled={phase==="grading"||limitBusy}
+                        title={T("내 답을 채점하고 해설을 봐 (끝내는 길)","Grade my answer and see the explanation (the finishing path)")}>{T("📖 제출·해설 보기","📖 Submit & see explanation")}</button>
                       <button className="btn gho" onClick={handleLimit} disabled={phase==="grading"||limitBusy}
                         style={{borderColor:"#FFC24B",color:"#946200"}}
                         title={T("쓰다 막혔을 때 — 교수님이 정답 대신 살짝 도와줘 (레벨 안 깎임)","Stuck mid-answer — Prof nudges you without giving the answer (level kept)")}>
