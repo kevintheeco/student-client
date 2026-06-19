@@ -737,7 +737,10 @@ function quizFormat(box){ if((box||1)>=4)return 'short'; if(box===3)return 'ox';
 function deckSummary(d){
   const cs=d.concepts||[],now=Date.now();
   return{total:cs.length,mastered:cs.filter(c=>(c.box||1)>=4).length,
-    due:cs.filter(c=>(c.dueAt||0)<=now).length,weak:cs.filter(c=>(c.box||1)<=2).length};
+    due:cs.filter(c=>(c.dueAt||0)<=now).length,weak:cs.filter(c=>(c.box||1)<=2).length,
+    started:cs.filter(c=>(c.box||1)>=2).length,   // 개념 진행률 (익히기 시작)
+    reviewed:cs.filter(c=>(c.box||1)>=3).length,  // 복습 진도율 (자리잡음)
+    deep:cs.filter(c=>(c.box||1)>=4).length};     // 심화 진도율 (숙달)
 }
 function pickConcept(d,avoidId){
   const cs=(d.concepts||[]).slice();if(!cs.length)return null;
@@ -1175,13 +1178,16 @@ function Home({decks,subjects,onAdd,onOpen,onNotes,onChanged,nick}){
                 </div>
                 <div className="nm">{d.name}</div>
                 {s?(<>
-                  <div className="stats">
-                    <Stat n={s.total} l={tr("개념","Concepts")}/>
-                    <Stat n={s.mastered} l={tr("익힘","Mastered")} t="mint"/>
-                    <Stat n={s.due} l={tr("대기","Due")} t="pri"/>
-                    <Stat n={s.weak} l={tr("약함","Weak")} t="rose"/>
+                  <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:11}}>
+                    <span style={{fontFamily:"'Jua',sans-serif",fontSize:18,color:"var(--ink)"}}>{s.total}</span>
+                    <span style={{fontSize:11,color:"var(--sub)"}}>{tr("개념","concepts")}</span>
+                    {s.due>0&&<span style={{marginLeft:"auto",fontSize:11,fontWeight:700,color:"var(--pri)"}}>{tr("오늘 복습 ","Due today ")}{s.due}</span>}
                   </div>
-                  <Bar mastered={s.mastered} total={s.total}/>
+                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                    <RateBar label={tr("개념 진행률","Started")} pct={ratePct(s.started,s.total)} tone="pri"/>
+                    <RateBar label={tr("복습 진도율","Reviewed")} pct={ratePct(s.reviewed,s.total)} tone="gold"/>
+                    <RateBar label={tr("심화 진도율","Mastered")} pct={ratePct(s.deep,s.total)} tone="mint"/>
+                  </div>
                 </>):<div className="muted">{tr("준비 중…","Preparing…")}</div>}
                 <div className="acts">
                   <button className="btn pri sm" onClick={()=>setPickFor({id:d.id,def:(s?.studyType==="quiz"?"quiz":"explain")})}>
@@ -1218,6 +1224,27 @@ function Home({decks,subjects,onAdd,onOpen,onNotes,onChanged,nick}){
 }
 function Stat({n,l,t}){return<div className="stat"><div className={"n "+(t||"")}>{n}</div><div className="l">{l}</div></div>}
 function Bar({mastered,total}){const p=total?Math.round((mastered/total)*100):0;return<div className="bar"><i style={{width:p+"%"}}/></div>}
+const ratePct=(n,t)=>t?Math.round(n/t*100):0;
+// 진도율 막대 (라벨 + % + 채워지는 바). tone: pri(개념)·gold(복습)·mint(심화)
+function RateBar({label,pct,tone,compact}){
+  const col=tone==="mint"?"var(--mint)":tone==="gold"?"var(--gold)":"var(--pri)";
+  if(compact)return(
+    <div style={{minWidth:62}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:4}}>
+        <span style={{fontSize:9.5,color:"var(--sub)"}}>{label}</span>
+        <span style={{fontSize:13,fontWeight:800,color:col,fontFamily:"'Jua',sans-serif"}}>{pct}%</span>
+      </div>
+      <div className="bar" style={{height:5,marginTop:3}}><i style={{width:pct+"%",background:col}}/></div>
+    </div>);
+  return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:4}}>
+        <span style={{fontSize:11.5,color:"var(--sub)",fontWeight:600}}>{label}</span>
+        <span style={{fontSize:15,fontWeight:800,color:col,fontFamily:"'Jua',sans-serif"}}>{pct}%</span>
+      </div>
+      <div className="bar"><i style={{width:pct+"%",background:col}}/></div>
+    </div>);
+}
 
 /* ── 파일 드롭존 ── */
 function FileDropZone({files,onChange}){
@@ -2717,10 +2744,10 @@ function Study({deck:initial,subjects}){
       <div className="card study-bar">
         {subj&&<span style={{fontSize:11,fontWeight:700,color:subj.color,flexShrink:0}}>{subj.name}</span>}
         <span className="snm">{deck.name}</span>
-        <div className="prog" style={{gap:8}}>
-          <Stat n={s.mastered} l={T("익힘","Mastered")} t="mint"/>
-          <Stat n={s.due} l={T("대기","Due")} t="pri"/>
-          <Stat n={s.weak} l={T("약함","Weak")} t="rose"/>
+        <div className="prog" style={{gap:12}}>
+          <RateBar compact label={T("개념","Concept")} pct={ratePct(s.started,s.total)} tone="pri"/>
+          <RateBar compact label={T("복습","Review")} pct={ratePct(s.reviewed,s.total)} tone="gold"/>
+          <RateBar compact label={T("심화","Deep")} pct={ratePct(s.deep,s.total)} tone="mint"/>
         </div>
         <span className="muted" style={{fontSize:11,flexShrink:0}}>{count}{T("문제"," done")}</span>
         <button className="btn gho xs" style={{flexShrink:0}} onClick={()=>setShowInfo(v=>!v)}>
