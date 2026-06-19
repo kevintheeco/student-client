@@ -3081,7 +3081,7 @@ function Study({deck:initial,subjects}){
                         style={{borderColor:"#FFC24B",color:"#946200"}}
                         title={T("쓰다 막혔을 때 — 교수님이 정답 대신 살짝 도와줘 (레벨 안 깎임)","Stuck mid-answer — Prof nudges you without giving the answer (level kept)")}>
                         {limitBusy?T("도와주는 중…","Helping…"):T("🙋 여기가 내 한계야","🙋 I'm stuck here")}</button>
-                      <button className="btn gho" onClick={handleDontKnow} disabled={phase==="grading"||limitBusy}>{T("몰라요 😅","Don't know 😅")}</button>
+                      <button className="btn gho" onClick={handleDontKnow} disabled={phase==="grading"||limitBusy}>{T("모르겠어 😅","Don't know 😅")}</button>
                       <button className="btn gho" onClick={skipConcept} disabled={phase==="grading"||limitBusy} title={T("이 개념은 오늘 패스 (레벨 안 깎임)","Skip this concept today (level kept)")}>{T("패스 ⏭️","Skip ⏭️")}</button>
                     </div>
                   </>
