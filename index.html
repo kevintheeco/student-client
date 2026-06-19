@@ -733,6 +733,7 @@ function schedule(c,verdict){
   return{...c,box,dueAt:Date.now()+days*DAY,reps:(c.reps||0)+1,
     lapses:(c.lapses||0)+(verdict==="incorrect"?1:0),lastResult:verdict,lastSeen:Date.now()};
 }
+function quizFormat(box){ if((box||1)>=4)return 'short'; if(box===3)return 'ox'; return 'mc'; }
 function deckSummary(d){
   const cs=d.concepts||[],now=Date.now();
   return{total:cs.length,mastered:cs.filter(c=>(c.box||1)>=4).length,
@@ -1101,7 +1102,7 @@ function KeyForm({onSaved,cta,showCancel,onCancel}){
 function Home({decks,subjects,onAdd,onOpen,onNotes,onChanged,nick}){
   const [det,setDet]=useState({});
   useEffect(()=>{
-    const o={};decks.forEach(d=>{const f=LS.get(dk(d.id));if(f)o[d.id]={...deckSummary(f),createdAt:f.createdAt,isExam:f.isExam,examCount:(f.examQuestions||[]).length};});setDet(o);
+    const o={};decks.forEach(d=>{const f=LS.get(dk(d.id));if(f)o[d.id]={...deckSummary(f),createdAt:f.createdAt,isExam:f.isExam,examCount:(f.examQuestions||[]).length,studyType:f.studyType};});setDet(o);
   },[decks]);
 
   function del(id,name){
@@ -1114,6 +1115,12 @@ function Home({decks,subjects,onAdd,onOpen,onNotes,onChanged,nick}){
     const f=LS.get(dk(id));
     if(f)LS.set(dk(id),{...f,subjId:newSubjId});
     LS.set(DECKS_KEY,(LS.get(DECKS_KEY)||[]).map(x=>x.id===id?{...x,subjId:newSubjId}:x));
+    onChanged();
+  }
+  function setMode(id,type){
+    const f=LS.get(dk(id));
+    if(f)LS.set(dk(id),{...f,studyType:type});
+    LS.set(DECKS_KEY,(LS.get(DECKS_KEY)||[]).map(x=>x.id===id?{...x,studyType:type}:x));
     onChanged();
   }
   const getSubj=(id)=>subjects.find(s=>s.id===id);
@@ -1152,6 +1159,16 @@ function Home({decks,subjects,onAdd,onOpen,onNotes,onChanged,nick}){
                       {subjects.map(x=><option key={x.id} value={x.id}>📁 {x.name}</option>)}
                     </select>
                     {s?.isExam&&<div className="subj-badge" style={{background:"#FFF7E0",color:"#946200"}}>{tr("📜 기출","📜 Past exam")}</div>}
+                    <select
+                      value={s?.studyType==="quiz"?"quiz":"explain"}
+                      onChange={e=>setMode(d.id,e.target.value)}
+                      className="subj-badge"
+                      style={{background:(s?.studyType==="quiz"?"#EAF3FF":"#F0EAFF"),color:(s?.studyType==="quiz"?"#1B5FB0":"#6A3FB0"),
+                        border:"none",cursor:"pointer",fontFamily:"inherit"}}
+                      title={tr("학습 방식 바꾸기","Change study mode")}>
+                      <option value="explain">{tr("🧠 이해","🧠 Explain")}</option>
+                      <option value="quiz">{tr("📇 암기","📇 Quiz")}</option>
+                    </select>
                   </div>
                   {s?.createdAt&&<span style={{fontSize:11,color:"var(--sub)",flexShrink:0,marginTop:2}}>{new Date(s.createdAt).toLocaleDateString(CFG.lang==="en"?"en-US":"ko-KR",{year:"numeric",month:"short",day:"numeric"})}</span>}
                 </div>
@@ -1706,6 +1723,7 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
   const [pen,setPen]=useState(false);
   const [newSubj,setNewSubj]=useState("");
   const [isExam,setIsExam]=useState(false);
+  const [studyType,setStudyType]=useState("auto");
   const append=(t)=>{if(t)setMaterial(p=>(p.trim()?p.trim()+"\n":"")+t);};
 
   // 새 과목 빠른 추가
@@ -1819,6 +1837,19 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
     }
     if(!concepts.length)concepts=[tr("전체 자료","Whole material")];
 
+    // ── 학습 방식 결정 (auto면 AI 분류) ──
+    let resolvedType=studyType;
+    if(studyType==="auto"){
+      resolvedType="explain";
+      try{
+        const r=await callAI(
+          "너는 학습 자료를 분류하는 전문가야. 이 자료가 어떤 학습 방식에 더 적합한지 판단해.\n· quiz = 용어·정의·연도·분류·법조문·단어 등 '암기'가 핵심인 자료 (역사·생물·법학·어휘 등)\n· explain = 이해·증명·풀이·계산이 핵심인 자료 (수학·물리·경제모형 등)\nJSON만: {\"type\":\"quiz\" 또는 \"explain\"}",
+          "개념: "+concepts.slice(0,15).join(", ")+"\n\n자료:\n"+fullMaterial.slice(0,3000),
+          true,{maxTok:16,model:CFG.qmodel,lang:deckLang});
+        if(r&&r.type==="quiz")resolvedType="quiz";
+      }catch(e){console.warn("학습 방식 분류 실패 (explain으로):",e.message);}
+    }
+
     // ── 기출/족보 문제 추출 ──
     let examQuestions=[];
     if(isExam){
@@ -1842,7 +1873,7 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
     const materialToStore=summary?fullMaterial.slice(0,5000):fullMaterial.slice(0,12000);
     const deck={id,name:finalName,subjId:useSubjId,material:materialToStore,summary,createdAt:Date.now(),
       ...(deckLang!==CFG.lang?{lang:deckLang}:{}),
-      isExam:isExam&&examQuestions.length>0,examQuestions,
+      isExam:isExam&&examQuestions.length>0,examQuestions,studyType:resolvedType,
       concepts:concepts.map(nm=>({id:uid(),name:String(nm).slice(0,80),box:1,dueAt:0,reps:0,lapses:0}))};
 
     const usedBytes=getStorageSize();
@@ -1850,7 +1881,7 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
       fail(tr("저장 공간이 부족해 (","Out of storage (")+formatSize(usedBytes)+tr("). 오래된 자료를 먼저 삭제해줘.","). Delete old materials first."));return;
     }
     if(!LS.set(dk(id),deck)){fail(tr("저장 실패: 저장 공간이 꽉 찼어.","Save failed: storage is full."));return;}
-    if(!LS.set(DECKS_KEY,[{id,name:deck.name,subjId:useSubjId},...(LS.get(DECKS_KEY)||[])])){
+    if(!LS.set(DECKS_KEY,[{id,name:deck.name,subjId:useSubjId,studyType:resolvedType},...(LS.get(DECKS_KEY)||[])])){
       LS.del(dk(id));fail(tr("저장 실패: 저장 공간이 꽉 찼어.","Save failed: storage is full."));return;
     }
     done();
@@ -1894,6 +1925,25 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
           <div style={{fontSize:11.5,color:"var(--sub)",marginTop:2,lineHeight:1.5}}>{tr("실제 문제를 뽑아서 그대로 풀고, 변형·심화문제까지 자동으로 만들어줘","I'll pull the real questions, drill them, and auto-make variants & harder ones")}</div>
         </div>
       </label>
+
+      {/* 학습 방식 선택 */}
+      <div>
+        <div style={{fontSize:12.5,color:"var(--sub)",marginBottom:8}}>{tr("어떻게 공부할까?","How do you want to study this?")}</div>
+        <div style={{display:"flex",gap:8}}>
+          {[["auto","🤖",tr("자동추천","Auto"),tr("내가 알아서 골라줄게","I'll decide for you")],
+            ["explain","🧠",tr("이해·설명형","Explain"),tr("손글씨로 설명·풀이","Write & explain")],
+            ["quiz","📇",tr("암기·퀴즈형","Quiz"),tr("OX·객관식·단답 카드","OX · MC · short cards")]].map(([val,emo,lbl,desc])=>(
+            <button key={val} type="button" disabled={busy} onClick={()=>setStudyType(val)}
+              style={{flex:1,padding:"10px 8px",cursor:busy?"default":"pointer",textAlign:"center",
+                border:"1.5px solid "+(studyType===val?"var(--pri)":"var(--line)"),borderRadius:14,
+                background:studyType===val?"var(--pri-s)":"#FBFAFF",transition:"all .2s"}}>
+              <div style={{fontSize:18}}>{emo}</div>
+              <div style={{fontSize:12.5,fontWeight:700,color:studyType===val?"var(--pri-d)":"var(--ink)",marginTop:2}}>{lbl}</div>
+              <div style={{fontSize:10.5,color:"var(--sub)",marginTop:2,lineHeight:1.4}}>{desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* 내용 */}
       <textarea className="field" rows={7} disabled={busy} value={material}
@@ -2071,6 +2121,11 @@ function Study({deck:initial,subjects}){
   const [ocrHighlights,setOcrHighlights]=useState([]);
   const [ocrImg,setOcrImg]=useState(null);
   const [ocrImgSize,setOcrImgSize]=useState({w:800,h:680});
+  const [quizItem,setQuizItem]=useState(null);       // 퀴즈 모드: 생성된 문제 {format,...}
+  const [quizSel,setQuizSel]=useState(null);         // 고른 보기 idx / OX bool / 단답 입력값
+  const [quizGraded,setQuizGraded]=useState(false);
+  const [quizCorrect,setQuizCorrect]=useState(false);
+  const [quizShortChecking,setQuizShortChecking]=useState(false);
   const last=useRef(null);
   const padRef=useRef(null);
   const ocrImgRef=useRef(null);
@@ -2089,6 +2144,7 @@ function Study({deck:initial,subjects}){
     }
   }
 
+  const quizMode=deck.studyType==="quiz";
   // 세션 전체에서 캐시 공유: summary 있으면 우선 사용 (8000자 이하)
   const studyMat=deck.summary||deck.material.slice(0,8000);
   // 두 축: UI 라벨 언어 = 설정(CFG.lang) / AI 출제·채점 내용 언어 = 덱별 override(deck.lang) 우선
@@ -2153,11 +2209,15 @@ function Study({deck:initial,subjects}){
     setDerivePlan(null);setDeriveIdx(0);setDeriveHistory([]);setDeriveFeedback("");setDeriveDone(false);setDeriveHintShow(false);setDeriveChecking(false);
     setFollowupQ("");setFollowupCount(0);setFollowupHistory([]);setFollowupBusy(false);setFollowupEv(null);setFollowupSuccess(false);
     setLimitHelp("");setLimitBusy(false);
+    setQuizItem(null);setQuizSel(null);setQuizGraded(false);setQuizCorrect(false);setQuizShortChecking(false);
     padRef.current?.clear();
     const c=forceId?(d.concepts||[]).find(x=>x.id===forceId)||pickConcept(d,last.current):pickConcept(d,last.current);
     if(!c){setPhase("error");setErrMsg(T("질문할 개념이 없어.","No concepts to quiz."));return;}
     setConcept(c);last.current=c.id;
     const box=c.box||1;
+
+    // ── 암기·퀴즈형 덱: 카드 퀴즈 생성 (기출·explain 경로 건너뜀) ──
+    if(quizMode){ await generateQuiz(c,ctrl,myId); return; }
 
     // ── 기출/족보 덱: box 레벨로 출제 모드 자동 결정 ──
     const examPool=(!practical&&d.isExam&&Array.isArray(d.examQuestions))
@@ -2229,6 +2289,56 @@ function Study({deck:initial,subjects}){
       setQ(parseQuestion(raw));setPhase("answering");
     }catch(e){if(genId.current===myId&&e.name!=="AbortError"){setPhase("error");setErrMsg(T("질문 생성 실패: ","Question generation failed: ")+e.message);}}
   }
+
+  // ── 암기·퀴즈형: box 레벨로 형식 결정 후 카드 문제 생성 ──
+  async function generateQuiz(c,ctrl,myId){
+    const fmt=quizFormat(c.box);
+    const common="너는 대학 학습용 퀴즈 출제 전문가야. 아래 자료 범위 안에서 목표 개념을 묻는 문제 하나를 만들어. 수식은 LaTeX($...$)로. 자료에 근거 없는 내용은 묻지 마.";
+    let sys;
+    if(fmt==="mc"){
+      sys=common+" 객관식 4지선다로 만들어.\n규칙: ① 정답은 정확히 1개, 오답 3개는 모두 그럴듯해야 함(흔한 오개념 활용) ② 정답이 질문 문장에 그대로 드러나면 안 됨 ③ 보기 4개의 길이·문체를 비슷하게 ④ '위 모두 정답'/'정답 없음' 류 금지.\nJSON만 출력: {\"question\":\"질문\",\"choices\":[\"보기A\",\"보기B\",\"보기C\",\"보기D\"],\"answer\":0,\"explain\":\"왜 그 보기가 정답이고 나머지는 왜 틀렸는지 짧은 해설\"} (answer는 정답 보기의 0-based 인덱스)";
+    }else if(fmt==="ox"){
+      sys=common+" 참/거짓(OX) 진술문으로 만들어.\n규칙: ① 한 문장의 명확한 진술 ② 거짓일 경우 흔한 오개념을 그럴듯하게 담을 것 ③ 너무 뻔하지 않게.\nJSON만 출력: {\"statement\":\"진술문\",\"answer\":true,\"explain\":\"참/거짓인 이유 짧은 해설\"} (answer는 진술이 참이면 true, 거짓이면 false)";
+    }else{
+      sys=common+" 단답형으로 만들어.\n규칙: ① 정답은 용어·정의·연도·짧은 구절 등 짧고 명확한 것 ② 표현·표기·동의어 차이를 허용 목록으로 함께 제공.\nJSON만 출력: {\"question\":\"질문\",\"answer\":\"대표 정답\",\"accept\":[\"허용되는 다른 표기·동의어들\"],\"explain\":\"짧은 해설\"}";
+    }
+    try{
+      const r=await callAI(sys+"\n\n자료:\n"+studyMat.slice(0,5000),
+        "목표 개념: "+c.name,
+        true,{cache:true,maxTok:700,model:CFG.qmodel,lang:studyLang},ctrl.signal);
+      if(genId.current!==myId)return;
+      if(!r||(fmt==="mc"&&!Array.isArray(r.choices))){setPhase("error");setErrMsg(T("문제 생성 실패: 형식 오류","Question generation failed: bad format"));return;}
+      setQuizItem({format:fmt,...r});setPhase("quiz");
+    }catch(e){if(genId.current===myId&&e.name!=="AbortError"){setPhase("error");setErrMsg(T("문제 생성 실패: ","Question generation failed: ")+e.message);}}
+  }
+
+  const normAns=(s)=>String(s||"").toLowerCase().replace(/\s+/g,"").replace(/[.,;:!?'"()[\]{}·・]/g,"");
+  async function gradeQuiz(sel){
+    if(!quizItem||quizGraded)return;
+    const fmt=quizItem.format;let correct=false;
+    if(fmt==="mc"){correct=sel===quizItem.answer;}
+    else if(fmt==="ox"){correct=sel===quizItem.answer;}
+    else{
+      const pool=[quizItem.answer,...(Array.isArray(quizItem.accept)?quizItem.accept:[])].map(normAns).filter(Boolean);
+      const got=normAns(sel);
+      correct=pool.includes(got);
+      if(!correct&&got){
+        // 정규화로 안 맞으면 AI로 동의어·오타 관대 판정
+        setQuizShortChecking(true);
+        try{
+          const r=await callAI(
+            "학습자의 단답 답안이 정답과 사실상 같은 뜻인지 판단해. 오타·띄어쓰기·표현 차이·동의어는 관대하게 정답 처리하되, 핵심 의미가 다르면 오답. JSON만: {\"correct\":true 또는 false}",
+            "정답: "+quizItem.answer+"\n허용: "+(quizItem.accept||[]).join(", ")+"\n학습자 답: "+sel,
+            true,{maxTok:16,model:CFG.qmodel,lang:studyLang});
+          correct=!!(r&&r.correct);
+        }catch(e){/* 판정 실패 시 오답 처리 */}
+        setQuizShortChecking(false);
+      }
+    }
+    persist({...deckRef.current,concepts:deckRef.current.concepts.map(x=>x.id===concept.id?schedule(x,correct?"correct":"incorrect"):x)});
+    setQuizSel(sel);setQuizCorrect(correct);setQuizGraded(true);setCount(n=>n+1);
+  }
+
   useEffect(()=>{next(initial);return()=>{abortRef.current?.abort();};},[]);
 
   // 채점 가짜 진행률 (0→93 천천히, 끝나면 100% 후 리셋)
@@ -2599,6 +2709,85 @@ function Study({deck:initial,subjects}){
         )}
         {phase==="loading"&&(
           <div className="card qcard msgcard"><div className="spinner"/><p className="muted">{T("문제 만드는 중…","Making a question…")}</p></div>
+        )}
+        {phase==="quiz"&&quizItem&&(
+          <div className="card qcard" key={concept?.id||""} style={{maxWidth:680,margin:"0 auto"}}>
+            <div className="chips" style={{marginBottom:14}}>
+              <MathText text={concept?.name} tag="span" className="chip"/>
+              <span className="chip gho"><Meter box={concept?.box||1}/></span>
+              <span className="chip" style={{background:"var(--pri-s)",color:"var(--pri-d)"}}>
+                {quizItem.format==="mc"?T("객관식","Multiple choice"):quizItem.format==="ox"?T("OX 퀴즈","True / False"):T("단답형","Short answer")}
+              </span>
+            </div>
+
+            {quizItem.format==="mc"&&(<>
+              <MathText text={quizItem.question} tag="div" style={{fontSize:17,fontWeight:600,lineHeight:1.6,marginBottom:16}}/>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {(quizItem.choices||[]).map((ch,i)=>{
+                  const isAns=i===quizItem.answer, isPick=quizSel===i;
+                  const bg=!quizGraded?"#FBFAFF":isAns?"#E9FBF0":isPick?"#FFEEEE":"#FBFAFF";
+                  const bd=!quizGraded?"var(--line)":isAns?"#3BB371":isPick?"#E06666":"var(--line)";
+                  return(
+                    <button key={i} type="button" disabled={quizGraded} onClick={()=>gradeQuiz(i)}
+                      style={{textAlign:"left",padding:"13px 16px",borderRadius:13,border:"1.5px solid "+bd,
+                        background:bg,cursor:quizGraded?"default":"pointer",display:"flex",gap:10,alignItems:"center"}}>
+                      <span style={{fontWeight:800,color:"var(--sub)",flexShrink:0}}>{"ABCD"[i]}</span>
+                      <MathText text={ch} tag="span" style={{fontSize:15,lineHeight:1.5}}/>
+                      {quizGraded&&isAns&&<span style={{marginLeft:"auto"}}>✅</span>}
+                      {quizGraded&&isPick&&!isAns&&<span style={{marginLeft:"auto"}}>❌</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </>)}
+
+            {quizItem.format==="ox"&&(<>
+              <MathText text={quizItem.statement} tag="div" style={{fontSize:17,fontWeight:600,lineHeight:1.6,marginBottom:18}}/>
+              <div style={{display:"flex",gap:12}}>
+                {[[true,"⭕",T("참 (O)","True")],[false,"❌",T("거짓 (X)","False")]].map(([val,emo,lbl])=>{
+                  const isAns=val===quizItem.answer, isPick=quizSel===val;
+                  const bg=!quizGraded?"#FBFAFF":isAns?"#E9FBF0":isPick?"#FFEEEE":"#FBFAFF";
+                  const bd=!quizGraded?"var(--line)":isAns?"#3BB371":isPick?"#E06666":"var(--line)";
+                  return(
+                    <button key={String(val)} type="button" disabled={quizGraded} onClick={()=>gradeQuiz(val)}
+                      style={{flex:1,padding:"22px 8px",borderRadius:14,border:"1.5px solid "+bd,background:bg,
+                        cursor:quizGraded?"default":"pointer",textAlign:"center"}}>
+                      <div style={{fontSize:30}}>{emo}</div>
+                      <div style={{fontSize:14,fontWeight:700,marginTop:4}}>{lbl}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </>)}
+
+            {quizItem.format==="short"&&(<>
+              <MathText text={quizItem.question} tag="div" style={{fontSize:17,fontWeight:600,lineHeight:1.6,marginBottom:16}}/>
+              <form onSubmit={e=>{e.preventDefault();if(!quizGraded&&!quizShortChecking&&String(quizSel||"").trim())gradeQuiz(quizSel);}}>
+                <input className="field" autoFocus disabled={quizGraded||quizShortChecking}
+                  placeholder={T("정답을 입력해줘","Type your answer")}
+                  value={quizGraded?quizSel:(quizSel||"")} onChange={e=>setQuizSel(e.target.value)}
+                  style={{marginBottom:12,borderColor:quizGraded?(quizCorrect?"#3BB371":"#E06666"):undefined}}/>
+                {!quizGraded&&(
+                  <button className="btn pri" type="submit" disabled={quizShortChecking||!String(quizSel||"").trim()}>
+                    {quizShortChecking?T("채점 중…","Checking…"):T("제출","Submit")}
+                  </button>
+                )}
+              </form>
+            </>)}
+
+            {quizGraded&&(
+              <div style={{marginTop:18,borderTop:"1px solid var(--line)",paddingTop:14}}>
+                <div style={{fontSize:15,fontWeight:800,color:quizCorrect?"#1E9E5A":"#D9534F",marginBottom:8}}>
+                  {quizCorrect?T("정답이야! 🎉","Correct! 🎉"):T("아쉬워, 다시 보자 🔁","Not quite — let's review 🔁")}
+                </div>
+                {quizItem.format==="short"&&!quizCorrect&&(
+                  <div style={{fontSize:13.5,marginBottom:8}}>{T("정답: ","Answer: ")}<b>{quizItem.answer}</b></div>
+                )}
+                {quizItem.explain&&<MathText text={quizItem.explain} tag="div" style={{fontSize:14,lineHeight:1.7,color:"var(--ink)"}}/>}
+                <button className="btn pri" style={{marginTop:14}} onClick={()=>next()}>{T("다음 문제 →","Next →")}</button>
+              </div>
+            )}
+          </div>
         )}
         {isActive&&(
           <div className="ans-layout" key={concept?.id||""}>
