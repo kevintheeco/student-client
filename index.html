@@ -2123,6 +2123,7 @@ function Study({deck:initial,subjects}){
             false,{maxTok:800,model:CFG.qmodel,lang:studyLang},ctrl.signal);
           if(genId.current!==myId)return;
           const pq=parseQuestion(raw);pq.source=deep?"심화":"변형";
+          if(picked.answer)pq.examRef=picked.answer; // 원본 기출 공식 해답 → 해설이 그 기조 참고 (채점 기준엔 미사용)
           setQ(pq);setPhase("answering");
         }catch(e){if(genId.current===myId&&e.name!=="AbortError"){setPhase("error");setErrMsg(T("문제 생성 실패: ","Question generation failed: ")+e.message);}}
         return;
@@ -2400,10 +2401,11 @@ function Study({deck:initial,subjects}){
     persist({...deckRef.current,concepts:deckRef.current.concepts.map(c=>c.id===concept.id?uc:c)});
     setConcept(uc);
     setPhase("dontknow");setDontknow("");setDontknowBusy(true);
+    const examSol=q?.examAnswer||q?.examRef||""; // 기출 공식 해답 있으면 그 기조로 설명
     try{
       const r=await callAI(
-        "너는 친절한 튜터야. 학습자가 이 개념을 전혀 모르니 처음 배우는 사람에게 직관적으로(비유·예시·왜 중요한지) 반말로 설명해줘.\n\n출력 형식 규칙:\n① 제목은 ## 소제목은 ### ② 핵심 용어나 강조는 **굵게** ③ 목록은 - 기호 ④ 수식은 LaTeX($...$, $$...$$) ⑤ >> === 같은 ASCII 기호 금지 ⑥ 이해에 도움되면 표·그래프(<svg>) 적극 사용"+RICH_FMT+"\n\n자료:\n"+studyMat,
-        "개념: "+concept.name+(q?"\n원래 질문: "+q.question:""),
+        "너는 친절한 튜터야. 학습자가 이 개념을 전혀 모르니 처음 배우는 사람에게 직관적으로(비유·예시·왜 중요한지) 반말로 설명해줘."+(examSol?" 아래 [기출 공식 해답]이 주어졌어 — 설명의 방향·용어·풀이 기조를 그 해답에 맞추되, 처음 배우는 사람도 따라오도록 더 쉽고 자세히 풀어줘. 공식 해답과 어긋나게 설명하지 마.":"")+"\n\n출력 형식 규칙:\n① 제목은 ## 소제목은 ### ② 핵심 용어나 강조는 **굵게** ③ 목록은 - 기호 ④ 수식은 LaTeX($...$, $$...$$) ⑤ >> === 같은 ASCII 기호 금지 ⑥ 이해에 도움되면 표·그래프(<svg>) 적극 사용"+RICH_FMT+"\n\n자료:\n"+studyMat,
+        "개념: "+concept.name+(q?"\n원래 질문: "+q.question:"")+(examSol?"\n\n[기출 공식 해답 — 이 기조를 따라 설명]\n"+examSol:""),
         false,{cache:true,maxTok:1900,lang:studyLang},abortRef.current?.signal);
       setDontknow(r);
     }catch(e){if(e.name==="AbortError")return;setDontknow("설명 불러오기 실패: "+e.message);}
@@ -2426,9 +2428,10 @@ function Study({deck:initial,subjects}){
 
   async function explainMore(){
     setDeepBusy(true);
+    const examSol=q?.examAnswer||q?.examRef||""; // 기출 공식 해답 있으면 그 기조로 설명
     try{const r=await callAI(
-      "너는 친절한 튜터야. 자료에 근거해 더 깊이 직관적으로(비유·예시·왜) 반말로 설명해. 수식·행렬·그리스 문자·수학 기호(⊥ ∥ ∈ ∉ ⊆ ℝ ∇ × · 등)는 반드시 모두 LaTeX로: 인라인은 $...$, 블록은 $$..$$. 유니코드 기호 직접 사용 금지. 그래프·곡선·다이어그램이 이해에 도움이 되면 SVG로 그려줘(코드블록 없이 <svg> 태그 직접 사용, width≤380 height≤260 viewBox 사용, 축·레이블 포함, font-size 11~13, 색상: 축선=#221C39, 곡선은 #6C5CE7·#27C2A0·#FF6B8A·#FFC24B, 균형점=원형 #FFC24B, 배경=#FFFDF8)."+RICH_FMT+"\n\n자료:\n"+studyMat,
-      "개념: "+concept.name+"\n질문: "+q.question+"\n모범답안: "+(ev?.model_answer||""),
+      "너는 친절한 튜터야. 자료에 근거해 더 깊이 직관적으로(비유·예시·왜) 반말로 설명해. 수식·행렬·그리스 문자·수학 기호(⊥ ∥ ∈ ∉ ⊆ ℝ ∇ × · 등)는 반드시 모두 LaTeX로: 인라인은 $...$, 블록은 $$..$$. 유니코드 기호 직접 사용 금지. 그래프·곡선·다이어그램이 이해에 도움이 되면 SVG로 그려줘(코드블록 없이 <svg> 태그 직접 사용, width≤380 height≤260 viewBox 사용, 축·레이블 포함, font-size 11~13, 색상: 축선=#221C39, 곡선은 #6C5CE7·#27C2A0·#FF6B8A·#FFC24B, 균형점=원형 #FFC24B, 배경=#FFFDF8)."+(examSol?" 아래 [기출 공식 해답]이 주어졌어 — 그 해답의 풀이 기조·논리 전개 순서·용어·표기를 그대로 따라가되, 학습자가 스스로 이해하도록 각 단계를 더 자세히 풀어서 설명해. 공식 해답과 어긋나는 설명은 하지 마.":"")+RICH_FMT+"\n\n자료:\n"+studyMat,
+      "개념: "+concept.name+"\n질문: "+q.question+"\n모범답안: "+(ev?.model_answer||"")+(examSol?"\n\n[기출 공식 해답 — 이 기조를 따라 설명]\n"+examSol:""),
       false,{cache:true,maxTok:1900,lang:studyLang},abortRef.current?.signal);
       setDeeper(r);}
     catch(e){if(e.name==="AbortError")return;setDeeper("실패: "+e.message);}
