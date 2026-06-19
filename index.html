@@ -2145,6 +2145,7 @@ function Study({deck:initial,subjects}){
   const [quizGraded,setQuizGraded]=useState(false);
   const [quizCorrect,setQuizCorrect]=useState(false);
   const [quizShortChecking,setQuizShortChecking]=useState(false);
+  const [scratchOpen,setScratchOpen]=useState(false);   // 퀴즈 연습장(채점 무관)
   const last=useRef(null);
   const padRef=useRef(null);
   const ocrImgRef=useRef(null);
@@ -2230,7 +2231,7 @@ function Study({deck:initial,subjects}){
     setDerivePlan(null);setDeriveIdx(0);setDeriveHistory([]);setDeriveFeedback("");setDeriveDone(false);setDeriveHintShow(false);setDeriveChecking(false);
     setFollowupQ("");setFollowupCount(0);setFollowupHistory([]);setFollowupBusy(false);setFollowupEv(null);setFollowupSuccess(false);
     setLimitHelp("");setLimitBusy(false);
-    setQuizItem(null);setQuizSel(null);setQuizGraded(false);setQuizCorrect(false);setQuizShortChecking(false);
+    setQuizItem(null);setQuizSel(null);setQuizGraded(false);setQuizCorrect(false);setQuizShortChecking(false);setScratchOpen(false);
     padRef.current?.clear();
     const c=forceId?(d.concepts||[]).find(x=>x.id===forceId)||pickConcept(d,last.current):pickConcept(d,last.current);
     if(!c){setPhase("error");setErrMsg(T("질문할 개념이 없어.","No concepts to quiz."));return;}
@@ -2758,6 +2759,10 @@ function Study({deck:initial,subjects}){
               <span className="chip" style={{background:"var(--pri-s)",color:"var(--pri-d)"}}>
                 {quizItem.format==="mc"?T("객관식","Multiple choice"):quizItem.format==="ox"?T("OX 퀴즈","True / False"):T("단답형","Short answer")}
               </span>
+              <button type="button" className={"chip gho"+(scratchOpen?" on":"")} style={{cursor:"pointer",marginLeft:"auto"}}
+                onClick={()=>setScratchOpen(v=>!v)} title={T("계산·메모용 연습장 (채점 안 됨)","Scratchpad for working out (not graded)")}>
+                {scratchOpen?T("✏️ 연습장 접기","✏️ Hide scratchpad"):T("✏️ 연습장","✏️ Scratchpad")}
+              </button>
             </div>
 
             {quizItem.format==="mc"&&(<>
@@ -2825,6 +2830,14 @@ function Study({deck:initial,subjects}){
                 )}
                 {quizItem.explain&&<MathText text={quizItem.explain} tag="div" style={{fontSize:14,lineHeight:1.7,color:"var(--ink)"}}/>}
                 <button className="btn pri" style={{marginTop:14}} onClick={()=>next()}>{T("다음 문제 →","Next →")}</button>
+              </div>
+            )}
+
+            {/* 연습장 — 계산·메모용 손글씨 (채점에 안 들어감) */}
+            {scratchOpen&&(
+              <div style={{marginTop:16,borderTop:"1px dashed var(--line)",paddingTop:12}}>
+                <div style={{fontSize:11,fontWeight:700,color:"var(--sub)",marginBottom:8}}>{T("📝 연습장 — 여기 끄적인 건 채점에 안 들어가","📝 Scratchpad — anything here isn't graded")}</div>
+                <PenPad kind="scratch" onText={()=>{}} hideOcr/>
               </div>
             )}
           </div>
