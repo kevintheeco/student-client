@@ -1439,7 +1439,10 @@ const PEN_LABELS=["검정","파랑","빨강"];
 
 const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penOnlyDefault=false,highlights,highlightSize,onTypeMode},fwdRef){
   const canvasRef=useRef(null);
-  const strokes=useRef([]);
+  const pages=useRef([[]]);                 // 장(page)별 획 배열 — 장을 넘겨도 메모리에 그대로 보존됨
+  const curRef=useRef(0);                   // 지금 보고 있는 장 index
+  const strokes=useRef(pages.current[0]);   // 항상 현재 장을 가리키는 별칭 (기존 그리기 코드 호환)
+  const [pgUI,setPgUI]=useState({i:0,n:1}); // 페이지 표시/버튼 갱신용
   const drawing=useRef(false);
   const eraseGesture=useRef(false);   // 지금 버튼-지우개 중인지
   const lastBtn=useRef(0);            // 버튼 신호 마지막으로 본 시각(디바운스용)
@@ -1452,13 +1455,13 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
   const [penOnly,setPenOnly]=useState(penOnlyDefault);
 
   React.useImperativeHandle(fwdRef,()=>({
-    getImageBase64:()=>canvasRef.current?canvasRef.current.toDataURL("image/png").split(",")[1]:null,
-    hasStrokes:()=>strokes.current.length>0,
-    clear:()=>{strokes.current=[];redraw();setHasInk(false);setPadErr("");},
+    getImageBase64:()=>exportAllPages(),
+    hasStrokes:()=>pages.current.some(p=>p.length>0),
+    clear:()=>{pages.current=[[]];curRef.current=0;strokes.current=pages.current[0];redraw();setHasInk(false);setPadErr("");setPgUI({i:0,n:1});},
     forceColor:(c)=>{setColor(c);setTool("pen");},
     setEraser:()=>setTool("eraser"),
     setPen:()=>setTool("pen"),
-    getSize:()=>canvasRef.current?{w:canvasRef.current.width,h:canvasRef.current.height}:{w:800,h:680},
+    getSize:()=>exportSize(),
   }));
 
   const getDpr=()=>window.devicePixelRatio||1;
@@ -1469,14 +1472,8 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
     const ctx=c.getContext("2d");ctx.setTransform(1,0,0,1,0,0);ctx.scale(dpr,dpr);
     redraw();
   }
-  function redraw(){
-    const c=canvasRef.current;if(!c)return;
-    const ctx=c.getContext("2d");
-    const dpr=getDpr();const w=c.width/dpr,h=c.height/dpr;
-    ctx.fillStyle="#FFFDF8";ctx.fillRect(0,0,w,h);
-    ctx.strokeStyle="#EDE9F0";ctx.lineWidth=1;
-    for(let y=32;y<h;y+=32){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
-    strokes.current.forEach(({pts,col,sz})=>{
+  function paintStrokes(ctx,arr){
+    arr.forEach(({pts,col,sz})=>{
       if(pts.length<2)return;
       ctx.lineCap="round";ctx.lineJoin="round";
       ctx.globalCompositeOperation="source-over";ctx.strokeStyle=col;
@@ -1486,6 +1483,34 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
       }
     });
   }
+  function redraw(){
+    const c=canvasRef.current;if(!c)return;
+    const ctx=c.getContext("2d");
+    const dpr=getDpr();const w=c.width/dpr,h=c.height/dpr;
+    ctx.fillStyle="#FFFDF8";ctx.fillRect(0,0,w,h);
+    ctx.strokeStyle="#EDE9F0";ctx.lineWidth=1;
+    for(let y=32;y<h;y+=32){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
+    paintStrokes(ctx,strokes.current);
+  }
+  // 잉크가 있는 마지막 장까지 카운트 (빈 뒤쪽 장은 내보내지 않음)
+  function exportCount(){let last=0;pages.current.forEach((p,i)=>{if(p.length)last=i;});return last+1;}
+  function exportSize(){const c=canvasRef.current;if(!c)return{w:800,h:680};return{w:c.width,h:c.height*exportCount()};}
+  // 모든 장을 세로로 이어붙여 하나의 PNG로 — 채점·OCR은 전체를 한 장처럼 봄
+  function exportAllPages(){
+    const c=canvasRef.current;if(!c)return null;
+    const dpr=getDpr();const cssW=c.width/dpr,cssH=c.height/dpr;const n=exportCount();
+    const off=document.createElement("canvas");off.width=c.width;off.height=c.height*n;
+    const ctx=off.getContext("2d");ctx.scale(dpr,dpr);
+    for(let i=0;i<n;i++){
+      ctx.save();ctx.translate(0,i*cssH);
+      ctx.fillStyle="#FFFDF8";ctx.fillRect(0,0,cssW,cssH);
+      paintStrokes(ctx,pages.current[i]);
+      ctx.restore();
+    }
+    return off.toDataURL("image/png").split(",")[1];
+  }
+  function showPage(i){if(i<0||i>=pages.current.length)return;curRef.current=i;strokes.current=pages.current[i];redraw();setPgUI({i,n:pages.current.length});}
+  function addPage(){pages.current.push([]);showPage(pages.current.length-1);}
   useEffect(()=>{setup();const f=()=>setup();window.addEventListener("resize",f);return()=>window.removeEventListener("resize",f);},[]);
   useEffect(()=>{
     const c=canvasRef.current;if(!c)return;
@@ -1502,7 +1527,8 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
     strokes.current=strokes.current.filter(({pts})=>
       !pts.some(p=>(p.x-x)*(p.x-x)+(p.y-y)*(p.y-y)<R)
     );
-    if(strokes.current.length!==prev){redraw();setHasInk(strokes.current.length>0);}
+    pages.current[curRef.current]=strokes.current;
+    if(strokes.current.length!==prev){redraw();setHasInk(pages.current.some(p=>p.length>0));}
   }
   function startStroke(p){
     drawing.current=true;
@@ -1561,13 +1587,13 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
   }
   const up=()=>{drawing.current=false;eraseGesture.current=false;lastBtn.current=0;};
   const cancel=()=>{drawing.current=false;eraseGesture.current=false;lastBtn.current=0;};
-  function undo(){if(disabled)return;strokes.current.pop();redraw();setHasInk(strokes.current.length>0);}
-  function clearPad(){strokes.current=[];redraw();setHasInk(false);setPadErr("");}
+  function undo(){if(disabled)return;strokes.current.pop();redraw();setHasInk(pages.current.some(p=>p.length>0));}
+  function clearPad(){pages.current=[[]];curRef.current=0;strokes.current=pages.current[0];redraw();setHasInk(false);setPadErr("");setPgUI({i:0,n:1});}
   async function recognize(){
     if(!hasInk){setPadErr(tr("먼저 써봐.","Write something first."));return;}
     setBusy(true);setPadErr("");
     try{
-      const data=canvasRef.current.toDataURL("image/png").split(",")[1];
+      const data=exportAllPages();
       const t=await transcribeFile(data,"image/png",kind);
       onText((t||"").trim());clearPad();
     }catch(e){setPadErr("인식 실패: "+e.message);}
@@ -1608,17 +1634,28 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
           onPointerDown={down} onPointerMove={move} onPointerUp={up}
           onPointerLeave={up} onPointerCancel={cancel}
           onContextMenu={e=>{e.preventDefault();const p=pt(e);eraseAt(p.x,p.y);}}/>
-        {highlights&&highlights.length>0&&highlightSize&&highlights.map((h,i)=>(
+        {highlights&&highlights.length>0&&canvasRef.current&&highlights.map((h,i)=>{
+          const pw=canvasRef.current.width,ph=canvasRef.current.height; // 한 장의 device px
+          const pageOf=Math.floor(h.y/ph);          // 이 박스가 속한 장
+          if(pageOf!==curRef.current)return null;    // 다른 장의 표시는 그 장을 펼쳤을 때만
+          const ly=h.y-pageOf*ph;
+          return(
           <div key={i} style={{position:"absolute",
-            left:(h.x/highlightSize.w*100)+"%",top:(h.y/highlightSize.h*100)+"%",
-            width:(h.w/highlightSize.w*100)+"%",height:(h.h/highlightSize.h*100)+"%",
+            left:(h.x/pw*100)+"%",top:(ly/ph*100)+"%",
+            width:(h.w/pw*100)+"%",height:(h.h/ph*100)+"%",
             border:"2.5px solid var(--rose)",borderRadius:4,
             background:"rgba(255,107,138,0.16)",boxShadow:"0 0 0 1px rgba(255,255,255,.6)",
             pointerEvents:"none",boxSizing:"border-box"}}>
             <span style={{position:"absolute",top:-9,left:-7,fontSize:11,background:"var(--rose)",color:"#fff",
               borderRadius:"50%",width:16,height:16,lineHeight:"16px",textAlign:"center",fontWeight:700}}>?</span>
           </div>
-        ))}
+        );})}
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8,flexWrap:"wrap"}}>
+        <button className="btn gho" style={{flex:"1 1 84px",minHeight:42,fontSize:14}} onClick={()=>showPage(curRef.current-1)} disabled={disabled||pgUI.i<=0}>◀ {tr("이전 장","Prev")}</button>
+        <span style={{minWidth:62,textAlign:"center",fontSize:13.5,fontWeight:700,color:"var(--pri-d)"}}>{pgUI.i+1} / {pgUI.n} {tr("장","pg")}</span>
+        <button className="btn gho" style={{flex:"1 1 84px",minHeight:42,fontSize:14}} onClick={()=>showPage(curRef.current+1)} disabled={disabled||pgUI.i>=pgUI.n-1}>{tr("다음 장","Next")} ▶</button>
+        <button className="btn pri" style={{flex:"1 1 96px",minHeight:42,fontSize:14}} onClick={addPage} disabled={disabled}>+ {tr("새 장","New page")}</button>
       </div>
       {!hideOcr&&(
         <div className="pen-bottom">
@@ -2939,7 +2976,7 @@ function Study({deck:initial,subjects}){
                 {phase==="answering"&&ocrHighlights.length>0&&(
                   <div style={{background:"#FFF5F5",border:"1.5px solid #FECACA",borderRadius:11,padding:"10px 12px",display:"flex",flexDirection:"column",gap:8}}>
                     <div style={{fontSize:12.5,color:"#7F1D1D",lineHeight:1.6}}>
-                      {T(<><b style={{color:"var(--rose)"}}>빨간 박스 ❓</b> 부분이 잘 안 읽혔어. <b>🧽 지우개</b>로 그 부분만 지우고 <b>✏️ 펜</b>으로 또렷하게 다시 써줄래? (지금 지우개로 바꿔놨어)</>,<>The <b style={{color:"var(--rose)"}}>red box ❓</b> parts were hard to read. Erase just those with the <b>🧽 eraser</b> and rewrite them clearly with the <b>✏️ pen</b>. (Switched to eraser for you)</>)}
+                      {T(<><b style={{color:"var(--rose)"}}>빨간 박스 ❓</b> 부분이 잘 안 읽혔어. <b>🧽 지우개</b>로 그 부분만 지우고 <b>✏️ 펜</b>으로 또렷하게 다시 써줄래? (지금 지우개로 바꿔놨어. 박스가 안 보이면 다른 장에 있을 수 있어 — 장을 넘겨봐)</>,<>The <b style={{color:"var(--rose)"}}>red box ❓</b> parts were hard to read. Erase just those with the <b>🧽 eraser</b> and rewrite them clearly with the <b>✏️ pen</b>. (Switched to eraser for you. If you don't see a box, it may be on another page — flip pages)</>)}
                     </div>
                     <button className="btn gho sm" style={{alignSelf:"flex-start"}} onClick={()=>submit(true)} disabled={phase==="grading"}>
                       {T("이대로 그냥 제출 →","Submit as is →")}
