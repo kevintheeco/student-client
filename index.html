@@ -258,8 +258,9 @@ let _idb=null;   // IndexedDB 핸들 (null이면 localStorage 폴백)
 let _cache={};   // ng:* 전체 메모리 미러 (동기 읽기용)
 let _meta={};    // 키별 마지막 수정 시각(ms) — 클라우드 병합용
 const META_KEY="ng:__meta";
-// 클라우드 동기화 제외: API 키(보안) + 내부 메타
+// 클라우드 동기화 제외: API 키(보안) + 내부 메타 + 시험 기록(손글씨 이미지가 커서 Firestore 1MB 초과)
 const SYNC_EXCLUDE=new Set(["ng:key","ng:geminiKey",META_KEY]);
+const noSync=(k)=>SYNC_EXCLUDE.has(k)||k.startsWith("ng:exam:");
 
 function _idbOpen(){
   return new Promise((res,rej)=>{
@@ -445,13 +446,13 @@ function withTimeout(p,ms,label){
 function encKey(k){return encodeURIComponent(k).replace(/%/g,"_");}  // Firestore 문서 ID 안전화
 function _dataCol(uid){return _db.collection("users").doc(uid).collection("data");}
 async function cloudPushKey(uid,key){
-  if(SYNC_EXCLUDE.has(key)||!_db)return;
+  if(noSync(key)||!_db)return;
   const v=Object.prototype.hasOwnProperty.call(_cache,key)?_cache[key]:null;
   await withTimeout(_dataCol(uid).doc(encKey(key)).set({k:key,v:v===undefined?null:v,t:_meta[key]||Date.now()}),12000,"업로드");
 }
 async function cloudDeleteKey(uid,key){if(!_db)return;await withTimeout(_dataCol(uid).doc(encKey(key)).delete(),12000,"삭제");}
 function cloudMaybePush(k){
-  if(!_db||!_uid||_syncing||SYNC_EXCLUDE.has(k))return;
+  if(!_db||!_uid||_syncing||noSync(k))return;
   _pending.add(k);clearTimeout(_pendTimer);_pendTimer=setTimeout(flushPending,1200);
 }
 async function flushPending(){
@@ -463,7 +464,7 @@ async function flushPending(){
   _emitSync({busy:false,ok,at:Date.now()});
 }
 function cloudMaybeDelete(k){
-  if(!_db||!_uid||_syncing||SYNC_EXCLUDE.has(k))return;
+  if(!_db||!_uid||_syncing||noSync(k))return;
   _emitSync({busy:true});
   cloudDeleteKey(_uid,k).then(()=>_emitSync({busy:false,ok:true,at:Date.now()}))
     .catch(e=>{console.warn("[cloud del]",k,e);_emitSync({busy:false,ok:false});});
@@ -477,11 +478,11 @@ async function cloudSyncOnLogin(uid){
     const snap=await withTimeout(_dataCol(uid).get(),12000,"동기화");
     const cloud={};
     snap.forEach(d=>{const x=d.data();if(x&&typeof x.k==="string")cloud[x.k]={v:x.v,t:x.t||0};});
-    const localKeys=Object.keys(_cache).filter(k=>k.startsWith("ng:")&&!SYNC_EXCLUDE.has(k));
+    const localKeys=Object.keys(_cache).filter(k=>k.startsWith("ng:")&&!noSync(k));
     const keys=new Set([...localKeys,...Object.keys(cloud)]);
     const toPush=[];
     keys.forEach(key=>{
-      if(SYNC_EXCLUDE.has(key))return;
+      if(noSync(key))return;
       const hasLocal=Object.prototype.hasOwnProperty.call(_cache,key);
       const lt=_meta[key]||0;
       const c=cloud[key];
@@ -786,6 +787,305 @@ function Prof({size=56}){
 }
 
 /* ════════════════════════════════════════════
+   단원평가(시험) 모드 — 이해+암기 합친 실전 시험
+   출제(AI) → 응시(손글씨 보존) → 일괄 깊은 채점 → 검토. box(복습)와 독립.
+════════════════════════════════════════════ */
+function Exam({deck,onExit}){
+  const examLang=(deck.lang||CFG.lang)==="en"?"en":"ko";
+  const T=(ko,en)=>examLang==="en"?en:ko;
+  const studyMat=deck.summary||deck.material.slice(0,8000);
+  const qmodel=CFG.qmodel||CFG.model;
+
+  const [phase,setPhase]=useState("gen");     // gen | take | grading | result | error
+  const [items,setItems]=useState([]);
+  const [idx,setIdx]=useState(0);
+  const [answers,setAnswers]=useState([]);    // [{choice,text}] (손글씨는 inkRef)
+  const [grades,setGrades]=useState([]);
+  const [score,setScore]=useState(0);
+  const [maxScore,setMaxScore]=useState(0);
+  const [genMsg,setGenMsg]=useState("");
+  const [gradeProg,setGradeProg]=useState(0);
+  const [errMsg,setErrMsg]=useState("");
+
+  const padRef=useRef(null);
+  const inkRef=useRef({});                     // {qid:{pages,w,h}}
+  const abortRef=useRef(null);
+  const answersRef=useRef([]); answersRef.current=answers;
+
+  const TYPE_LABEL=(t)=>t==="mc"?T("객관식","Multiple choice"):t==="short"?T("단답형","Short answer"):T("서술·논술형","Essay");
+
+  // ── 출제 ──
+  useEffect(()=>{generate();return ()=>{abortRef.current?.abort();};},[]);
+  async function generate(){
+    abortRef.current?.abort();
+    const ctrl=new AbortController();abortRef.current=ctrl;
+    setPhase("gen");setErrMsg("");setGenMsg(T("시험지 만드는 중… 최상 퀄리티로 출제할게 (조금 걸려)","Building your test at top quality (takes a moment)…"));
+    try{
+      const concepts=(deck.concepts||[]).map(c=>c.name).slice(0,40).join(", ");
+      const sys=
+        "너는 대학·학원 단원평가 출제위원이야. 아래 [자료] 전체를 포괄하는 실전 시험지를 만들어. 객관식(mc)·단답형(short)·서술/논술형(essay)을 적절히 섞고, 자료의 분량·깊이에 맞게 문항 수를 스스로 정해(핵심을 빠짐없이, 보통 6~12문항). 난이도는 쉬움→어려움 고루 분포.\n"+
+        "출제 규칙: ① 자료에 근거가 있는 것만 출제 ② 정답이 문제 문장에 드러나면 안 됨 ③ 객관식 오답 3개는 모두 그럴듯해야 함(흔한 오개념 활용) ④ 서술/논술형은 단계적 사고·근거 제시를 요구하는 좋은 문제 ⑤ 수식은 LaTeX($...$). ⑥ 한 개념에 치우치지 말고 자료 전반을 고르게.\n"+
+        "배점: 객관식·단답은 작게, 서술은 크게. 총합이 100점 근처가 되게 맞춰.\n"+
+        "반드시 JSON만 출력(코드블록 없이):\n"+
+        '{"questions":[\n'+
+        ' {"type":"mc","concept":"개념명","points":5,"question":"문제","choices":["A","B","C","D"],"answer":0,"solution":"정답 풀이/이유"},\n'+
+        ' {"type":"short","concept":"개념명","points":5,"question":"문제","answer":"대표 정답","accept":["허용 동의어"],"solution":"부연"},\n'+
+        ' {"type":"essay","concept":"개념명","points":15,"question":"문제","rubric":["채점기준1","채점기준2","채점기준3"],"model_answer":"모범답안(수식 LaTeX)"}\n'+
+        "]} (answer는 정답 보기의 0-based 인덱스)";
+      const r=await callAI(sys+"\n\n[자료]:\n"+studyMat.slice(0,7000),"개념 목록: "+concepts,true,{maxTok:6000,model:qmodel,lang:examLang},ctrl.signal);
+      const arr=Array.isArray(r)?r:(r&&Array.isArray(r.questions)?r.questions:[]);
+      const norm=arr.filter(q=>q&&q.question&&["mc","short","essay"].includes(q.type)).map(q=>({
+        id:uid(),type:q.type,concept:q.concept||"",points:Math.max(1,Math.round(Number(q.points)||(q.type==="essay"?15:5))),
+        question:String(q.question),
+        choices:q.type==="mc"&&Array.isArray(q.choices)?q.choices.slice(0,4):undefined,
+        answer:q.type==="mc"?Number(q.answer)||0:undefined,
+        accept:Array.isArray(q.accept)?q.accept:[],
+        rubric:Array.isArray(q.rubric)?q.rubric:[],
+        solution:q.solution||"",model_answer:q.model_answer||"",
+      })).filter(q=>q.type!=="mc"||(q.choices&&q.choices.length===4));
+      if(!norm.length)throw new Error(T("문항을 만들지 못했어. 자료가 너무 짧거나 형식 오류.","Couldn't build questions."));
+      setItems(norm);setAnswers(norm.map(()=>({})));setMaxScore(norm.reduce((s,q)=>s+q.points,0));
+      inkRef.current={};setIdx(0);setPhase("take");
+    }catch(e){if(e.name==="AbortError")return;setErrMsg((e&&e.message)||String(e));setPhase("error");}
+  }
+
+  // ── 응시: 문항 넘길 때 손글씨 보존/복원 ──
+  useEffect(()=>{
+    if(phase!=="take")return;
+    const id=items[idx]?.id;const pad=padRef.current;
+    if(pad&&id)pad.load(inkRef.current[id]);
+  },[idx,phase]);
+  function saveInk(){const q=items[idx];const pad=padRef.current;if(q&&pad)inkRef.current[q.id]=pad.dump();}
+  function goto(n){if(n<0||n>=items.length)return;saveInk();setIdx(n);}
+  const setChoice=(i)=>setAnswers(a=>a.map((x,k)=>k===idx?{...x,choice:i}:x));
+  const setText=(t)=>setAnswers(a=>a.map((x,k)=>k===idx?{...x,text:t}:x));
+  const answered=(i)=>{const a=answers[i]||{},q=items[i];return (q?.type==="mc"?a.choice!=null:(a.text&&a.text.trim())||inkHas(inkRef.current[q?.id]));};
+
+  // ── 제출 → 일괄 채점 ──
+  async function submit(){
+    saveInk();
+    const left=items.filter((q,i)=>!answered(i)).length;
+    const msg=left>0?T(left+"문항이 비어 있어. 그래도 제출하고 채점할까? (제출 후 수정 불가)",left+" question(s) blank. Submit and grade anyway? (no edits after)")
+                    :T("제출하면 채점이 시작돼 (수정 불가). 최상 퀄리티 채점이라 조금 걸려. 제출할까?","Submit and grade? Quality grading takes a bit. (No edits after)");
+    if(!confirm(msg))return;
+    abortRef.current?.abort();
+    const ctrl=new AbortController();abortRef.current=ctrl;
+    setPhase("grading");setGradeProg(0);
+    const ans=answersRef.current;
+    const tasks=items.map((q,i)=>({q,i,ans:ans[i]||{},ink:inkRef.current[q.id]}));
+    const out=new Array(items.length);let done=0;
+    const lanes=[[],[],[]];tasks.forEach((t,i)=>lanes[i%3].push(t));
+    async function worker(list){
+      for(const t of list){
+        if(ctrl.signal.aborted)return;
+        try{out[t.i]=await gradeOne(t,ctrl.signal);}
+        catch(e){if(e.name==="AbortError")return;out[t.i]={error:true,points:t.q.points,score:0,model:t.q.model_answer||t.q.solution||"",type:t.q.type,mcAnswer:t.q.answer,choice:t.ans.choice,text:t.ans.text,inkImg:inkHas(t.ink)?renderInkPNG(t.ink):null,gap:T("채점 오류 — 다시 시도해줘","Grading error")};}
+        done++;setGradeProg(done);
+      }
+    }
+    await Promise.all(lanes.map(worker));
+    if(ctrl.signal.aborted)return;
+    const total=out.reduce((s,g)=>s+(g&&g.score||0),0);
+    setGrades(out);setScore(total);saveRecord(out,total);setIdx(0);setPhase("result");
+  }
+
+  async function gradeOne({q,ans,ink},signal){
+    const inkImg=inkHas(ink)?renderInkPNG(ink):null;
+    const blocks=[];
+    if(inkImg)blocks.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:inkImg}});
+    const parts=["[문항 유형] "+TYPE_LABEL(q.type),"[배점] "+q.points+"점","[문제]\n"+q.question];
+    if(q.type==="mc"){
+      parts.push("[보기]\n"+q.choices.map((c,i)=>"ABCD"[i]+". "+c).join("\n"));
+      parts.push("[정답] "+"ABCD"[q.answer]);
+      parts.push("[학생이 고른 답] "+(ans.choice!=null?"ABCD"[ans.choice]:T("미선택","none")));
+      parts.push("[정답 풀이] "+(q.solution||""));
+      parts.push("※ 학생이 위 이미지(연습장)에 정답을 고른 '근거'를 손글씨로 적었을 수 있어. 반드시 읽어서 근거의 타당성까지 평가해. 답만 맞고 근거가 빈약하면 부분점수.");
+    }else if(q.type==="short"){
+      parts.push("[정답] "+q.answer+(q.accept&&q.accept.length?" (허용: "+q.accept.join(", ")+")":""));
+      parts.push("[학생 답(텍스트)] "+(ans.text||T("(없음)","(none)")));
+      parts.push("[부연] "+(q.solution||""));
+      parts.push("※ 학생이 위 이미지에 손글씨로 답·풀이를 적었을 수 있어 — 함께 읽어. 오타·표현차는 관대하게.");
+    }else{
+      parts.push("[채점 기준(rubric)] "+JSON.stringify(q.rubric||[]));
+      parts.push("[모범답안] "+(q.model_answer||""));
+      parts.push("[학생 답(텍스트)] "+(ans.text||T("(없음)","(none)")));
+      parts.push("※ 학생의 서술 답안은 주로 위 이미지에 손글씨로 있어 — 반드시 읽어서 rubric 항목별로 부분점수를 매겨.");
+    }
+    blocks.push({type:"text",text:parts.join("\n")});
+    const sys=
+      "너는 학원 시험 채점위원이자 1:1 튜터야. 아래 한 문항을 깊이 채점해. 단순 정오를 넘어, 학생이 무엇을 알고 무엇을 모르는지·무엇을 잘했고 어디가 결핍인지 구체적으로 짚어줘(반말, 따뜻하지만 정확하게). 객관식은 고른 답의 정오뿐 아니라 손글씨 '근거'의 타당성도 채점에 반영. 서술형은 rubric 항목별 부분점수. 점수는 반드시 [배점] 범위(0~배점) 안의 숫자.\n"+
+      "수식·기호는 LaTeX($...$). 반드시 JSON만 출력(코드블록 없이):\n"+
+      '{"score":획득점수숫자,"verdict":"correct|partial|incorrect","essence":"이 문항이 진짜 묻는 핵심 1~2문장","gotIt":"내가 제대로 한 것(구체적, 없으면 \'없음\')","gap":"결핍·약점(구체적, 없으면 \'없음\')","known":"내 답에서 드러난, 내가 확실히 아는 것","unknown":"드러난, 내가 모르거나 헷갈리는 것","next":"이 약점을 메우려면 뭘 보강해야 하는지","model":"모범답안/풀이(수식 LaTeX)"}';
+    const r=await callAI(sys,blocks,true,{maxTok:1600,lang:examLang},signal);
+    const pts=q.points||0;
+    let sc=Number(r&&r.score);
+    if(!isFinite(sc))sc=(q.type==="mc"?(ans.choice===q.answer?pts:0):0);
+    sc=Math.max(0,Math.min(pts,Math.round(sc*10)/10));
+    return {score:sc,points:pts,verdict:r&&r.verdict,essence:r&&r.essence,gotIt:r&&r.gotIt,gap:r&&r.gap,known:r&&r.known,unknown:r&&r.unknown,next:r&&r.next,
+      model:(r&&r.model)||q.model_answer||q.solution||"",type:q.type,mcAnswer:q.answer,choices:q.choices,choice:ans.choice,text:ans.text,question:q.question,concept:q.concept,inkImg};
+  }
+
+  function saveRecord(gr,total){
+    try{
+      const id=uid();
+      const rec={id,deckId:deck.id,deckName:deck.name,takenAt:Date.now(),score:total,maxScore,
+        grades:gr.map(g=>({...g}))};
+      LS.set("ng:exam:"+deck.id+":"+id,rec);
+      const idxKey="ng:examidx:"+deck.id;
+      const list=LS.get(idxKey)||[];
+      LS.set(idxKey,[{id,takenAt:rec.takenAt,score:total,maxScore},...list].slice(0,50));
+    }catch(e){console.warn("[exam] 기록 저장 실패",e);}
+  }
+
+  const pct=maxScore?Math.round(score/maxScore*100):0;
+  const vColor=(v)=>v==="correct"?"#1E9E5A":v==="incorrect"?"#D9534F":"#C98A00";
+  const vLabel=(v)=>v==="correct"?T("정답","Correct"):v==="incorrect"?T("오답","Wrong"):T("부분","Partial");
+
+  // ── 렌더 ──
+  return(
+    <section className="study">
+      <div className="card study-bar">
+        <span className="snm">📝 {deck.name} · {T("단원평가","Unit test")}</span>
+        {phase==="take"&&<span className="muted" style={{fontSize:11,marginLeft:"auto"}}>{T("문항 ","Q ")}{idx+1}/{items.length}</span>}
+        {phase==="result"&&<span className="muted" style={{fontSize:12,marginLeft:"auto",fontWeight:800,color:"var(--pri-d)"}}>{score}/{maxScore} · {pct}%</span>}
+        <button className="btn gho xs" style={{flexShrink:0,marginLeft:phase==="take"||phase==="result"?8:"auto"}} onClick={()=>{abortRef.current?.abort();onExit();}}>✕ {T("나가기","Exit")}</button>
+      </div>
+
+      <div className="stage">
+        {phase==="gen"&&(
+          <div className="card qcard msgcard"><div className="spinner"/><p className="muted">{genMsg}</p></div>
+        )}
+        {phase==="error"&&(
+          <div className="card qcard msgcard"><Prof size={56}/><p className="muted">{T("출제 실패: ","Failed: ")}{errMsg}</p>
+            <button className="btn pri" onClick={generate}>{T("다시 출제","Retry")}</button></div>
+        )}
+        {phase==="grading"&&(
+          <div className="card qcard msgcard">
+            <div className="spinner"/>
+            <p className="muted" style={{marginBottom:10}}>{T("최상 퀄리티로 채점 중… 손글씨 근거까지 꼼꼼히 봐","Grading at top quality — reading your handwritten reasoning too")}</p>
+            <div style={{width:"100%",maxWidth:320}}>
+              <div className="bar" style={{height:10}}><i style={{width:(items.length?Math.round(gradeProg/items.length*100):0)+"%",background:"linear-gradient(90deg,var(--pri),var(--mint))"}}/></div>
+              <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",marginTop:6}}>{gradeProg}/{items.length} {T("문항","graded")}</div>
+            </div>
+          </div>
+        )}
+
+        {phase==="take"&&items[idx]&&(()=>{const q=items[idx];const a=answers[idx]||{};return(
+          <div className="card qcard" key={q.id} style={{maxWidth:760,margin:"0 auto"}}>
+            <div className="chips" style={{marginBottom:12}}>
+              <span className="chip" style={{background:"var(--pri-s)",color:"var(--pri-d)"}}>{TYPE_LABEL(q.type)}</span>
+              {q.concept&&<MathText text={q.concept} tag="span" className="chip gho"/>}
+              <span className="chip gho">{q.points}{T("점","pt")}</span>
+              <span style={{marginLeft:"auto",fontSize:11,color:"var(--sub)"}}>{idx+1} / {items.length}</span>
+            </div>
+            <MathText text={q.question} tag="div" style={{fontSize:17,fontWeight:600,lineHeight:1.7,marginBottom:14}}/>
+
+            {q.type==="mc"&&(
+              <div style={{display:"flex",flexDirection:"column",gap:9,marginBottom:14}}>
+                {q.choices.map((ch,i)=>{const on=a.choice===i;return(
+                  <button key={i} type="button" onClick={()=>setChoice(i)}
+                    style={{textAlign:"left",padding:"12px 15px",borderRadius:12,border:"1.5px solid "+(on?"var(--pri)":"var(--line)"),
+                      background:on?"var(--pri-s)":"#FBFAFF",cursor:"pointer",display:"flex",gap:10,alignItems:"center"}}>
+                    <span style={{fontWeight:800,color:on?"var(--pri-d)":"var(--sub)"}}>{"ABCD"[i]}</span>
+                    <MathText text={ch} tag="span" style={{fontSize:15,lineHeight:1.5}}/>
+                  </button>);})}
+              </div>
+            )}
+            {q.type==="short"&&(
+              <input className="field" value={a.text||""} onChange={e=>setText(e.target.value)}
+                placeholder={T("정답을 입력 (또는 아래 연습장에 손글씨로)","Type your answer (or handwrite below)")} style={{marginBottom:14}}/>
+            )}
+            {q.type==="essay"&&(
+              <textarea className="field" rows={3} value={a.text||""} onChange={e=>setText(e.target.value)}
+                placeholder={T("서술 답안을 타이핑해도 되고, 아래 손글씨로 써도 돼 (둘 다 채점)","Type your essay, or handwrite below (both graded)")} style={{marginBottom:12,resize:"vertical"}}/>
+            )}
+
+            <div style={{fontSize:11.5,fontWeight:700,color:"var(--sub)",marginBottom:6}}>
+              {q.type==="essay"?T("✍️ 손글씨 답안","✍️ Handwritten answer"):T("✍️ 풀이·근거 (학원 제출용 — 왜 그렇게 답했는지 적어줘)","✍️ Your reasoning (write why you chose this)")}
+            </div>
+            <PenPad ref={padRef} kind="exam" onText={()=>{}} hideOcr/>
+
+            <div className="row" style={{marginTop:14,gap:8,alignItems:"center"}}>
+              <button className="btn gho" onClick={()=>goto(idx-1)} disabled={idx<=0}>◀ {T("이전","Prev")}</button>
+              <button className="btn gho" onClick={()=>goto(idx+1)} disabled={idx>=items.length-1}>{T("다음","Next")} ▶</button>
+              <button className="btn pri" style={{marginLeft:"auto"}} onClick={submit}>{T("제출하고 채점받기 ✓","Submit & grade ✓")}</button>
+            </div>
+            {/* 문항 번호 점프 */}
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:12}}>
+              {items.map((qq,i)=>(
+                <button key={qq.id} type="button" onClick={()=>goto(i)}
+                  title={answered(i)?T("응답함","answered"):T("미응답","blank")}
+                  style={{width:30,height:30,borderRadius:8,fontSize:12,fontWeight:700,cursor:"pointer",
+                    border:"1.5px solid "+(i===idx?"var(--pri)":"var(--line)"),
+                    background:i===idx?"var(--pri)":answered(i)?"var(--pri-s)":"#fff",
+                    color:i===idx?"#fff":answered(i)?"var(--pri-d)":"var(--sub)"}}>{i+1}</button>
+              ))}
+            </div>
+          </div>
+        );})()}
+
+        {phase==="result"&&(
+          <div className="card qcard" style={{maxWidth:760,margin:"0 auto"}}>
+            {/* 총점 헤더 */}
+            <div style={{textAlign:"center",padding:"6px 0 16px",borderBottom:"1px solid var(--line)",marginBottom:16}}>
+              <div style={{fontFamily:"'Jua',sans-serif",fontSize:40,color:pct>=80?"var(--mint)":pct>=60?"var(--gold)":"var(--rose)"}}>{score}<span style={{fontSize:20,color:"var(--sub)"}}> / {maxScore}</span></div>
+              <div style={{fontSize:14,fontWeight:700,color:"var(--ink)",marginTop:2}}>{pct}% · {pct>=80?T("훌륭해! 🎉","Excellent! 🎉"):pct>=60?T("좋아, 약점만 보강하자 💪","Good — shore up the gaps 💪"):T("여기서부터 키우자 🔁","Let's build from here 🔁")}</div>
+            </div>
+            {/* 문항 네비 */}
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+              <button className="btn gho sm" onClick={()=>setIdx(i=>Math.max(0,i-1))} disabled={idx<=0}>◀</button>
+              <span style={{fontSize:13,fontWeight:700}}>{T("문항 ","Q ")}{idx+1}/{grades.length}</span>
+              <button className="btn gho sm" onClick={()=>setIdx(i=>Math.min(grades.length-1,i+1))} disabled={idx>=grades.length-1}>▶</button>
+              {grades[idx]&&<span style={{marginLeft:"auto",fontWeight:800,color:vColor(grades[idx].verdict)}}>{grades[idx].score}/{grades[idx].points}{T("점","")} · {vLabel(grades[idx].verdict)}</span>}
+            </div>
+            {grades[idx]&&(()=>{const g=grades[idx];return(<>
+              <span className="chip" style={{background:"var(--pri-s)",color:"var(--pri-d)"}}>{TYPE_LABEL(g.type)}</span>
+              <MathText text={g.question} tag="div" style={{fontSize:15.5,fontWeight:600,lineHeight:1.6,margin:"10px 0 12px"}}/>
+              {/* 내 답 */}
+              {g.type==="mc"&&g.choices&&(
+                <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:12}}>
+                  {g.choices.map((ch,i)=>{const isAns=i===g.mcAnswer,isPick=g.choice===i;return(
+                    <div key={i} style={{padding:"8px 12px",borderRadius:10,fontSize:14,display:"flex",gap:8,alignItems:"center",
+                      border:"1.5px solid "+(isAns?"#3BB371":isPick?"#E06666":"var(--line)"),background:isAns?"#E9FBF0":isPick?"#FFEEEE":"#FBFAFF"}}>
+                      <b style={{color:"var(--sub)"}}>{"ABCD"[i]}</b><MathText text={ch} tag="span"/>
+                      {isAns&&<span style={{marginLeft:"auto"}}>✅</span>}{isPick&&!isAns&&<span style={{marginLeft:"auto"}}>❌</span>}
+                    </div>);})}
+                </div>
+              )}
+              {g.text&&<div style={{background:"var(--bg)",borderRadius:10,padding:"9px 12px",marginBottom:10}}>
+                <div style={{fontSize:10,fontWeight:700,color:"var(--sub)",marginBottom:3}}>{T("내 답(텍스트)","My answer")}</div>
+                <div style={{fontSize:13.5,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{g.text}</div></div>}
+              {g.inkImg&&<div style={{marginBottom:12}}>
+                <div style={{fontSize:10,fontWeight:700,color:"var(--sub)",marginBottom:4}}>{g.type==="essay"?T("내 손글씨 답안","My handwritten answer"):T("내 풀이·근거","My reasoning")}</div>
+                <img src={"data:image/jpeg;base64,"+g.inkImg} alt="" style={{width:"100%",border:"1px solid var(--line)",borderRadius:10,display:"block"}}/></div>}
+              {/* 깊은 피드백 */}
+              <div style={{display:"flex",flexDirection:"column",gap:9}}>
+                {g.essence&&<Fb label={T("핵심","Essence")} color="#221C39" bg="#F3F1FA" text={g.essence}/>}
+                {g.gotIt&&g.gotIt!=="없음"&&<Fb label={T("잘한 것","Strength")} color="#065F46" bg="#ECFDF3" text={g.gotIt}/>}
+                {g.gap&&g.gap!=="없음"&&<Fb label={T("결핍·약점","Gap")} color="#9B1C1C" bg="#FEF2F2" text={g.gap}/>}
+                {g.known&&<Fb label={T("내가 아는 것","You know")} color="#1E40AF" bg="#EFF6FF" text={g.known}/>}
+                {g.unknown&&<Fb label={T("모르는·헷갈리는 것","You're unsure")} color="#92400E" bg="#FFFBEB" text={g.unknown}/>}
+                {g.next&&<Fb label={T("보강 방향","Next")} color="#5B21B6" bg="#F5F3FF" text={g.next}/>}
+                {g.model&&<Fb label={T("모범답안","Model answer")} color="#0F766E" bg="#F0FDFA" text={g.model}/>}
+              </div>
+            </>);})()}
+            <button className="btn gho" style={{marginTop:18}} onClick={onExit}>{T("← 홈으로","← Home")}</button>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+function Fb({label,color,bg,text}){
+  return(
+    <div style={{background:bg,borderRadius:11,padding:"9px 13px"}}>
+      <div style={{fontSize:10,fontWeight:800,letterSpacing:".3px",color,marginBottom:4}}>{label}</div>
+      <MathText text={text} tag="div" style={{fontSize:13.5,lineHeight:1.7,color:"var(--ink)"}}/>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════
    APP ROOT
 ════════════════════════════════════════════ */
 function App(){
@@ -845,7 +1145,7 @@ function App(){
   async function logout(){try{await _auth.signOut();}catch(e){}setShowProfile(false);}
   function saveNick(n){const v=(n||"").trim();if(!v||!user)return;setNick(v);LS.set(nickKey(user.uid),v);}
 
-  function openStudy(id,mode){const d=LS.get(dk(id));if(d){setActiveDeck({...d,studyType:mode||d.studyType||"explain"});setView("study");}}
+  function openStudy(id,mode){const d=LS.get(dk(id));if(!d)return;if(mode==="exam"){setActiveDeck(d);setView("exam");return;}setActiveDeck({...d,studyType:mode||d.studyType||"explain"});setView("study");}
   function openNotes(id){const d=LS.get(dk(id));if(d){setNoteDeck(d);setView("notes");}}
   function studyWeak(deck){
     const fresh=LS.get(dk(deck.id))||deck;
@@ -920,6 +1220,7 @@ function App(){
       )}
       {view==="add"&&<AddMaterial subjects={subjects} onSave={saveSubjects} onDone={()=>{refresh();setView("home");}} onCancel={()=>setView("home")}/>}
       {view==="study"&&activeDeck&&<Study deck={activeDeck} subjects={subjects}/>}
+      {view==="exam"&&activeDeck&&<Exam deck={activeDeck} onExit={()=>{refresh();setView("home");}}/>}
       {view==="notes"&&noteDeck&&<WeakNotes deck={noteDeck} onBack={()=>{refresh();setView("home");}} onStudy={studyWeak}/>}
 
       <div className="footer">{tr("키와 자료는 이 기기에만 저장","Keys & data stay on this device only")} · {MODELS.find(m=>m.id===CFG.model)?.label.split(" ·")[0]||"Claude"}</div>
@@ -1206,10 +1507,11 @@ function Home({decks,subjects,onAdd,onOpen,onNotes,onChanged,nick}){
           <div onClick={e=>e.stopPropagation()} className="card" style={{maxWidth:360,width:"100%",padding:22,display:"flex",flexDirection:"column",gap:12}}>
             <div style={{fontFamily:"'Jua',sans-serif",fontSize:16,color:"var(--ink)"}}>{tr("이 자료, 어떻게 공부할래?","How do you want to study this?")}</div>
             {[["explain","🧠",tr("이해·설명형","Explain"),tr("손글씨로 풀고 AI 채점","Write it out, AI grades")],
-              ["quiz","📇",tr("암기·퀴즈형","Flashcards"),tr("OX·객관식·단답 즉시채점","Instant OX / choice / short")]].map(([val,emo,lbl,desc])=>{
+              ["quiz","📇",tr("암기·퀴즈형","Flashcards"),tr("OX·객관식·단답 즉시채점","Instant OX / choice / short")],
+              ["exam","📝",tr("단원평가(시험)","Unit test"),tr("객관식+단답+서술 실전 시험 → 한 번에 채점·점수","MC+short+essay test → graded at once")]].map(([val,emo,lbl,desc])=>{
               const cur=pickFor.def===val;
               return(
-                <button key={val} className="card" onClick={()=>{const id=pickFor.id;if(val!==pickFor.def)setMode(id,val);setPickFor(null);onOpen(id,val);}}
+                <button key={val} className="card" onClick={()=>{const id=pickFor.id;if(val!=="exam"&&val!==pickFor.def)setMode(id,val);setPickFor(null);onOpen(id,val);}}
                   style={{textAlign:"left",padding:"14px 16px",cursor:"pointer",
                     border:"1.5px solid "+(cur?"var(--pri)":"var(--line)"),background:cur?"var(--pri-s)":"#FBFAFF"}}>
                   <div style={{fontWeight:800,color:"var(--ink)"}}>{emo} {lbl}{cur?tr(" · 기본"," · default"):""}</div>
@@ -1526,6 +1828,9 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
     setEraser:()=>setTool("eraser"),
     setPen:()=>setTool("pen"),
     getSize:()=>exportSize(),
+    // 시험 모드: 문항 넘겨도 손글씨를 보존·재편집하려고 획 데이터를 통째로 빼고/싣는다
+    dump:()=>{const c=canvasRef.current,dpr=getDpr();return{pages:pages.current.map(pg=>pg.map(s=>({pts:s.pts.slice(),col:s.col,sz:s.sz}))),w:c?c.width/dpr:800,h:c?c.height/dpr:340};},
+    load:(data)=>{const pgs=(data&&Array.isArray(data.pages)&&data.pages.length)?data.pages:[[]];pages.current=pgs.map(pg=>pg.map(s=>({pts:(s.pts||[]).slice(),col:s.col,sz:s.sz})));curRef.current=0;strokes.current=pages.current[0];redraw();setHasInk(pages.current.some(p=>p.length>0));setPgUI({i:0,n:pages.current.length});},
   }));
 
   const getDpr=()=>window.devicePixelRatio||1;
@@ -1735,6 +2040,29 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
     </div>
   );
 });
+
+// 저장된 손글씨 획 데이터(dump 결과)를 라이브 패드 없이 JPEG로 굽는다 — 시험 채점·검토용
+function renderInkPNG(data){
+  if(!data||!Array.isArray(data.pages)||!data.pages.some(p=>p&&p.length))return null;
+  const w=data.w||800,h=data.h||340,n=data.pages.length,dpr=2;
+  const c=document.createElement("canvas");c.width=Math.round(w*dpr);c.height=Math.round(h*n*dpr);
+  const ctx=c.getContext("2d");ctx.scale(dpr,dpr);
+  for(let i=0;i<n;i++){
+    ctx.save();ctx.translate(0,i*h);
+    ctx.fillStyle="#FFFDF8";ctx.fillRect(0,0,w,h);
+    (data.pages[i]||[]).forEach(({pts,col,sz})=>{
+      if(!pts||pts.length<2)return;
+      ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle=col||"#221C39";
+      for(let j=1;j<pts.length;j++){
+        ctx.beginPath();ctx.lineWidth=(sz||1)*(0.8+(pts[j].p||.5)*0.4)*2;
+        ctx.moveTo(pts[j-1].x,pts[j-1].y);ctx.lineTo(pts[j].x,pts[j].y);ctx.stroke();
+      }
+    });
+    ctx.restore();
+  }
+  return c.toDataURL("image/jpeg",0.72).split(",")[1];
+}
+function inkHas(data){return !!(data&&Array.isArray(data.pages)&&data.pages.some(p=>p&&p.length));}
 
 /* ── 사진 버튼 ── */
 function PhotoButton({kind,onText,label}){
