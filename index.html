@@ -536,8 +536,8 @@ async function callGemini(system,userContent,wantJson,opts={},signal){
   if(!wantJson)return text;
   let clean=text.replace(/```json\s*/gi,"").replace(/```/g,"").trim();
   const s=clean.indexOf("{"),e=clean.lastIndexOf("}");
-  if(s===-1||e===-1||e<=s)throw new Error("JSON 응답 없음");
-  return JSON.parse(fixJson(clean.slice(s,e+1)));
+  if(s===-1)throw new Error("JSON 응답 없음");
+  return parseJsonLoose(clean.slice(s,e>s?e+1:clean.length));
 }
 function callAI(system,userContent,wantJson,opts={},signal){
   if(opts.lang==="en")system=
@@ -565,6 +565,29 @@ function fixJson(str){
     else{out+=c;i++;}
   }
   return out;
+}
+// 잘린(truncated) JSON 복구: 문자열/괄호 상태를 1회 스캔해 닫고, 완성된 앞쪽 객체들은 보존
+function repairJson(s){
+  let inStr=false,esc=false;const stack=[];
+  for(let i=0;i<s.length;i++){
+    const c=s[i];
+    if(inStr){if(esc)esc=false;else if(c==='\\')esc=true;else if(c==='"')inStr=false;continue;}
+    if(c==='"'){inStr=true;continue;}
+    if(c==='{'||c==='[')stack.push(c==='{'?'}':']');
+    else if(c==='}'||c===']')stack.pop();
+  }
+  let out=s;
+  if(inStr)out+='"';                 // 끝이 문자열 안이면 닫기
+  out=out.replace(/\s+$/,'');
+  out=out.replace(/,$/,'');           // 끝의 매달린 콤마 제거
+  if(/:$/.test(out))out+='null';      // 값 없는 콜론은 null로
+  for(let i=stack.length-1;i>=0;i--)out+=stack[i];  // 열린 괄호 역순으로 닫기
+  return out;
+}
+// 정상 JSON은 그대로 파싱(바이트 동일), 실패 시에만 복구 시도
+function parseJsonLoose(slice){
+  try{return JSON.parse(fixJson(slice));}
+  catch(_){return JSON.parse(fixJson(repairJson(slice)));}
 }
 // Parse gap-analysis grading response
 function parseGrading(txt){
@@ -670,8 +693,8 @@ async function callClaude(system,userContent,wantJson,opts={},signal){
   if(!wantJson)return text;
   let clean=text.replace(/```json\s*/gi,"").replace(/```/g,"").trim();
   const s=clean.indexOf("{"),e=clean.lastIndexOf("}");
-  if(s===-1||e===-1||e<=s)throw new Error("JSON 응답 없음 — 다시 시도해봐");
-  return JSON.parse(fixJson(clean.slice(s,e+1)));
+  if(s===-1)throw new Error("JSON 응답 없음 — 다시 시도해봐");
+  return parseJsonLoose(clean.slice(s,e>s?e+1:clean.length));   // 잘린 응답(닫는 } 없음/꼬리 잘림)도 복구
 }
 
 async function transcribeFile(base64,mediaType,kind){
@@ -831,7 +854,7 @@ function Exam({deck,topic,onExit}){
         ' {"type":"essay","concept":"개념명","points":15,"question":"문제","rubric":["채점기준1","채점기준2","채점기준3"],"model_answer":"모범답안(수식 LaTeX)"}\n'+
         "]} (answer는 정답 보기의 0-based 인덱스)";
       const commonRule=
-        "객관식(mc)·단답형(short)·서술/논술형(essay)을 적절히 섞고, 문항 수를 범위 깊이에 맞게 스스로 정해(보통 6~12문항). 난이도는 쉬움→어려움 고루.\n"+
+        "객관식(mc)·단답형(short)·서술/논술형(essay)을 적절히 섞고, 문항 수를 범위 깊이에 맞게 스스로 정해(보통 6~10문항). 난이도는 쉬움→어려움 고루.\n"+
         "출제 규칙: ① 정답이 문제 문장에 드러나면 안 됨 ② 객관식 오답 3개는 모두 그럴듯(흔한 오개념) ③ 서술형은 단계적 풀이·근거를 요구하는 좋은 문제 ④ 수식은 LaTeX($...$) ⑤ 범위 전반을 고르게.\n"+
         "배점: 객관식·단답은 작게, 서술은 크게. 총합 100점 근처.\n";
       let sys,userMsg;
@@ -844,7 +867,7 @@ function Exam({deck,topic,onExit}){
         sys="너는 대학·학원 단원평가 출제위원이야. 아래 [자료] 전체를 포괄하는 실전 시험지를 만들어. "+commonRule+"단, 자료에 근거가 있는 것만 출제.\n"+schema+"\n\n[자료]:\n"+studyMat.slice(0,7000);
         userMsg="개념 목록: "+concepts;
       }
-      const r=await callAI(sys,userMsg,true,{maxTok:6000,model:qmodel,lang:examLang},ctrl.signal);
+      const r=await callAI(sys,userMsg,true,{maxTok:8000,model:qmodel,lang:examLang},ctrl.signal);
       const arr=Array.isArray(r)?r:(r&&Array.isArray(r.questions)?r.questions:[]);
       const norm=arr.filter(q=>q&&q.question&&["mc","short","essay"].includes(q.type)).map(q=>({
         id:uid(),type:q.type,concept:q.concept||"",points:Math.max(1,Math.round(Number(q.points)||(q.type==="essay"?15:5))),
