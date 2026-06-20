@@ -945,7 +945,7 @@ function Exam({deck,onExit}){
   return(
     <section className="study">
       <div className="card study-bar">
-        <span className="snm">📝 {deck.name} · {T("단원평가","Unit test")}</span>
+        <span className="snm">📝 {deck.name} · {T("시험 보기","Exam")}</span>
         {phase==="take"&&<span className="muted" style={{fontSize:11,marginLeft:"auto"}}>{T("문항 ","Q ")}{idx+1}/{items.length}</span>}
         {phase==="result"&&<span className="muted" style={{fontSize:12,marginLeft:"auto",fontWeight:800,color:"var(--pri-d)"}}>{score}/{maxScore} · {pct}%</span>}
         <button className="btn gho xs" style={{flexShrink:0,marginLeft:phase==="take"||phase==="result"?8:"auto"}} onClick={()=>{abortRef.current?.abort();onExit();}}>✕ {T("나가기","Exit")}</button>
@@ -1508,7 +1508,7 @@ function Home({decks,subjects,onAdd,onOpen,onNotes,onChanged,nick}){
             <div style={{fontFamily:"'Jua',sans-serif",fontSize:16,color:"var(--ink)"}}>{tr("이 자료, 어떻게 공부할래?","How do you want to study this?")}</div>
             {[["explain","🧠",tr("이해·설명형","Explain"),tr("손글씨로 풀고 AI 채점","Write it out, AI grades")],
               ["quiz","📇",tr("암기·퀴즈형","Flashcards"),tr("OX·객관식·단답 즉시채점","Instant OX / choice / short")],
-              ["exam","📝",tr("단원평가(시험)","Unit test"),tr("객관식+단답+서술 실전 시험 → 한 번에 채점·점수","MC+short+essay test → graded at once")]].map(([val,emo,lbl,desc])=>{
+              ["exam","📝",tr("시험 보기","Exam"),tr("객관식+단답+서술 실전 시험 → 한 번에 채점·점수","MC+short+essay test → graded at once")]].map(([val,emo,lbl,desc])=>{
               const cur=pickFor.def===val;
               return(
                 <button key={val} className="card" onClick={()=>{const id=pickFor.id;if(val!=="exam"&&val!==pickFor.def)setMode(id,val);setPickFor(null);onOpen(id,val);}}
