@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -821,6 +822,59 @@ async function extractExamQuestions(material,conceptNames){
       true,{maxTok:3500});
     return Array.isArray(r.questions)?r.questions.filter(q=>q&&q.question):[];
   }catch(e){console.warn("[extractExamQuestions]",e.message);return[];}
+}
+
+/* ── 책(교재) 모드: 긴 PDF를 페이지로 쪼개 흡수 → 대/중/소단원 개념 트리 ── */
+// PDF base64를 per쪽씩 잘라 여러 PDF로 (pdf-lib). 짧거나 실패하면 원본 1개.
+async function splitPdfPages(b64,per){
+  per=per||40;
+  try{
+    if(!window.PDFLib)return[b64];
+    const src=await PDFLib.PDFDocument.load(b64);
+    const n=src.getPageCount();
+    if(n<=per)return[{b64,from:1,to:n}];
+    const chunks=[];
+    for(let s=0;s<n;s+=per){
+      const sub=await PDFLib.PDFDocument.create();
+      const idxs=[];for(let i=s;i<Math.min(s+per,n);i++)idxs.push(i);
+      const pages=await sub.copyPages(src,idxs);
+      pages.forEach(p=>sub.addPage(p));
+      chunks.push({b64:await sub.saveAsBase64(),from:s+1,to:Math.min(s+per,n)});
+    }
+    return chunks;
+  }catch(e){console.warn("[splitPdf]",e);return[b64];}
+}
+// 한 chunk(PDF 일부)에서 대>중>소단원(개념) + 개념별 과외용 핵심내용(src) 추출
+async function analyzeBookChunk(b64,label,lang){
+  const r=await callAI(
+    "너는 대학 전공 교재를 분석해 '목차 트리'로 정리하는 전문가야. 주어진 PDF 일부를 읽고 내용을 대단원>중단원>개념(소단원) 계층으로 정리해. 각 개념마다 그 개념을 1:1 과외할 수 있을 만큼의 핵심 내용(정의·직관·핵심 공식·대표 예시)을 src에 담아(수식은 LaTeX $...$). 실제 교재에 있는 내용만 쓰고 없는 건 지어내지 마.",
+    [{type:"document",source:{type:"base64",media_type:"application/pdf",data:b64}},
+     {type:"text",text:"이 부분("+label+")을 목차 트리로 정리해. JSON만 출력(코드블록 없이): {\"units\":[{\"u1\":\"대단원 이름\",\"u2\":\"중단원 이름\",\"concepts\":[{\"name\":\"개념(소단원) 이름\",\"src\":\"이 개념 과외용 핵심 내용 300~700자, LaTeX 유지\"}]}]}"}],
+    true,{maxTok:8000,model:ocrModel(),lang});
+  return (r&&Array.isArray(r.units))?r.units:[];
+}
+// 책 전체 흡수: 분할 → chunk별 분석 → 트리 합쳐 평탄화된 concepts[] (각 개념에 u1/u2/src)
+async function ingestBook(b64,onProgress,lang){
+  const chunks=await splitPdfPages(b64,40);
+  const allUnits=[];
+  for(let i=0;i<chunks.length;i++){
+    const ck=chunks[i];
+    if(onProgress)onProgress(i,chunks.length);
+    const label=ck&&ck.from?("p."+ck.from+"–"+ck.to):"전체";
+    try{allUnits.push(...await analyzeBookChunk(ck.b64||ck,label,lang));}
+    catch(e){console.warn("[ingestBook chunk]",i,e);}
+  }
+  if(onProgress)onProgress(chunks.length,chunks.length);
+  const concepts=[];
+  allUnits.forEach(u=>{
+    const u1=((u.u1||"")+"").slice(0,60)||"본문";
+    const u2=((u.u2||"")+"").slice(0,60);
+    (Array.isArray(u.concepts)?u.concepts:[]).forEach(c=>{
+      const name=((c&&c.name)||"").toString().slice(0,80);if(!name)return;
+      concepts.push({id:uid(),name,u1,u2,src:((c.src||"")+"").slice(0,1200),box:1,dueAt:0,reps:0,lapses:0});
+    });
+  });
+  return concepts;
 }
 
 /* 파일 → base64 */
@@ -2440,6 +2494,7 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
   const [pen,setPen]=useState(false);
   const [newSubj,setNewSubj]=useState("");
   const [isExam,setIsExam]=useState(false);
+  const [isBook,setIsBook]=useState(false);
   const [studyType,setStudyType]=useState("auto");
   const append=(t)=>{if(t)setMaterial(p=>(p.trim()?p.trim()+"\n":"")+t);};
 
@@ -2494,6 +2549,36 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
       setBusyMsg(tr("완료! 🎉 이제 공부 시작하자","Done! 🎉 Let's study"));
       setTimeout(()=>{setBusy(false);setBusyMsg("");onDone();},800);
     };
+
+    // ── 책(교재) 모드: 긴 PDF 흡수 → 대/중/소단원 트리 ──
+    if(isBook){
+      clearInterval(fakeTimer);
+      const pdf=files.find(f=>f.type==="application/pdf");
+      if(!pdf){fail(tr("책 모드는 PDF가 필요해. PDF를 첨부해줘.","Book mode needs a PDF. Attach one."));return;}
+      if(pdf.size>30*1024*1024){fail(tr("PDF가 너무 커. 30MB 이하만 지원해.","PDF too big. Max 30MB."));return;}
+      try{
+        setBusyMsg(tr("교재 페이지 나누는 중…","Splitting pages…"));
+        const b64=await toB64(pdf);
+        const bookConcepts=await ingestBook(b64,(d,t)=>{
+          setProgress(Math.round(t?d/t*88:0));
+          setBusyMsg(tr("교재 분석 중… ","Analyzing textbook… ")+"("+d+"/"+t+tr(" 묶음)"," parts)"));
+        },CFG.lang);
+        if(!bookConcepts.length){fail(tr("교재에서 목차를 못 뽑았어. 글자가 들어있는 PDF인지 확인해줘.","Couldn't extract a TOC — is it a text-based PDF?"));return;}
+        const id=uid();
+        const u1s=[...new Set(bookConcepts.map(c=>c.u1).filter(Boolean))];
+        const deck={id,name:name.trim()||pdf.name.replace(/\.pdf$/i,"")||tr("교재","Textbook"),subjId:useSubjId,
+          material:"",summary:tr("교재 목차: ","Textbook TOC: ")+u1s.join(" · "),createdAt:Date.now(),
+          isBook:true,studyType:"explain",concepts:bookConcepts};
+        setBusyMsg(tr("저장 공간 확인 중…","Checking storage…"));
+        const need=byteSize(dk(id),deck),est=await estimateStorage();
+        if(est.free<need*1.5){fail(tr("저장 공간이 부족해 (남은 ","Not enough storage (free ")+formatSize(est.free)+tr("). 오래된 자료를 삭제하고 다시 시도해줘.","). Delete old materials and retry."));return;}
+        setBusyMsg(tr("저장 중…","Saving…"));
+        if(!(await LS.setVerified(dk(id),deck))){LS.del(dk(id));fail(tr("저장 실패: 용량 부족이거나 저장이 거부됐어.","Save failed: out of space or blocked."));return;}
+        const prevList=LS.get(DECKS_KEY)||[];
+        if(!(await LS.setVerified(DECKS_KEY,[{id,name:deck.name,subjId:useSubjId,studyType:"explain"},...prevList]))){LS.del(dk(id));fail(tr("저장 실패: 저장 공간이 꽉 찼어.","Save failed: storage full."));return;}
+        done();return;
+      }catch(e){fail(tr("교재 분석 실패: ","Textbook analysis failed: ")+(e.message||e));return;}
+    }
 
     // ── 파일 처리 ──
     const pdfResults=[];
@@ -2650,6 +2735,18 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
         <div style={{minWidth:0}}>
           <div style={{fontSize:13.5,fontWeight:700,color:isExam?"var(--pri-d)":"var(--ink)"}}>{tr("📑 기출문제·족보예요","📑 These are past exam questions")}</div>
           <div style={{fontSize:11.5,color:"var(--sub)",marginTop:2,lineHeight:1.5}}>{tr("실제 문제를 뽑아서 그대로 풀고, 변형·심화문제까지 자동으로 만들어줘","I'll pull the real questions, drill them, and auto-make variants & harder ones")}</div>
+        </div>
+      </label>
+
+      {/* 책(교재) 모드 토글 */}
+      <label style={{display:"flex",alignItems:"center",gap:11,padding:"12px 15px",cursor:busy?"default":"pointer",
+        border:"1.5px solid "+(isBook?"var(--pri)":"var(--line)"),borderRadius:14,
+        background:isBook?"var(--pri-s)":"#FBFAFF",transition:"all .2s"}}>
+        <input type="checkbox" checked={isBook} disabled={busy} onChange={e=>setIsBook(e.target.checked)}
+          style={{width:18,height:18,accentColor:"var(--pri)",flexShrink:0}}/>
+        <div style={{minWidth:0}}>
+          <div style={{fontSize:13.5,fontWeight:700,color:isBook?"var(--pri-d)":"var(--ink)"}}>{tr("📚 전공책·교재 통째로예요 (긴 PDF)","📚 Whole textbook (long PDF)")}</div>
+          <div style={{fontSize:11.5,color:"var(--sub)",marginTop:2,lineHeight:1.5}}>{tr("긴 PDF를 페이지별로 나눠 읽고 대단원·중단원·소단원 목차로 정리해 개념마다 1:1 과외해줘 (분석에 몇 분 걸려)","I split a long PDF, build a chapter→section→topic outline, and tutor each topic 1:1 (takes a few min)")}</div>
         </div>
       </label>
 
@@ -2812,6 +2909,7 @@ function Tutor({deck:initial,onExit}){
   const [err,setErr]=useState("");
   const [stream,setStream]=useState("");        // 스트리밍: 도착 중인 교수님 답(글자씩)
   const [options,setOptions]=useState([]);      // 교수님이 준 '탭해서 고르기' 보기(OPTIONS:)
+  const [openU,setOpenU]=useState({});          // 책 모드 목차 트리: 펼친 대/중단원
   const padRef=useRef(null);
   const sysRef=useRef("");
   const abortRef=useRef(null);
@@ -2822,11 +2920,14 @@ function Tutor({deck:initial,onExit}){
   useEffect(()=>{const el=scrollRef.current;if(el)el.scrollTop=el.scrollHeight;},[turns,busy]);
 
   function tutorSystem(c){
-    const sibs=concepts.map(x=>x.name).filter(n=>n&&n!==c.name).slice(0,30).join(", ");
-    const mat=(deck.summary||deck.material||"").slice(0,4000);
-    return `너는 학생의 1:1 개인 과외 교수다(학생은 너를 '교수님'이라 부른다). **답변에서 너 자신을 가리킬 땐 절대 '선생님'이라고 쓰지 말고 '교수님' 또는 '나'라고 해라.** 지금 학생이 고른 개념은 "${c.name}"이고, "${deck.name}" 자료의 일부다.`+
-(sibs?` 같은 자료의 다른 개념들: ${sibs}.`:"")+
-(mat?`\n\n[참고 — 학생이 올린 강의자료 발췌. 이 내용에 뿌리내려 설명하고, 자료에 없는 건 일반 지식으로 보충하되 자료와 어긋나지 마라]\n${mat}\n`:"")+
+    const sibPool=c.u1?concepts.filter(x=>x.u1===c.u1):concepts;   // 책이면 같은 대단원 내 개념을 이웃으로
+    const sibs=sibPool.map(x=>x.name).filter(n=>n&&n!==c.name).slice(0,20).join(", ");
+    const loc=c.u1?` 교재 위치: ${c.u1}${c.u2?" > "+c.u2:""} > ${c.name}.`:"";
+    const mat=c.src?(""+c.src).slice(0,1400):(deck.summary||deck.material||"").slice(0,4000);
+    const matLabel=c.src?"교재에서 이 개념에 해당하는 핵심 내용":"학생이 올린 강의자료 발췌";
+    return `너는 학생의 1:1 개인 과외 교수다(학생은 너를 '교수님'이라 부른다). **답변에서 너 자신을 가리킬 땐 절대 '선생님'이라고 쓰지 말고 '교수님' 또는 '나'라고 해라.** 지금 학생이 고른 개념은 "${c.name}"이고, "${deck.name}" ${c.src?"교재":"자료"}의 일부다.${loc}`+
+(sibs?` 같은 단원의 다른 개념들: ${sibs}.`:"")+
+(mat?`\n\n[참고 — ${matLabel}. 이 내용에 뿌리내려 설명하고, 부족하면 일반 지식으로 보충하되 자료와 어긋나지 마라]\n${mat}\n`:"")+
 `
 
 학생은 공식을 그냥 외우기보다 "왜 그렇게 되는지"를 이해해야 문제를 푸는 사람이다. 가장 중요한 목표는 "학생이 스스로 문제를 풀 수 있는 골격을 잡아주는 것"이다. 답을 빨리 주는 것보다 개념의 흐름과 문제풀이 루틴을 만들어주는 게 중요하다. 설명은 한국어로 하되, 필요한 영어 용어는 괄호로 같이 알려줘라. 예: 확률수렴(convergence in probability), 일치추정량(consistent estimator).
@@ -2965,15 +3066,54 @@ OPTIONS: 보기1 | 보기2 | 보기3
       </div>
       <p className="hint" style={{marginBottom:14}}>{tr("개념을 하나 고르면, 교수님이 처음부터 1:1로 이해시켜줄게. 중간중간 직접 써보고 설명하면서 진짜 네 것으로 만드는 플립러닝이야.","Pick one concept and I'll teach it 1:1 from scratch — you'll write and explain along the way.")}</p>
       <div style={{display:"flex",flexDirection:"column",gap:9}}>
-        {concepts.map(c=>(
-          <button key={c.id} className="card" onClick={()=>start(c)}
-            style={{textAlign:"left",padding:"14px 16px",cursor:"pointer",display:"flex",alignItems:"center",gap:10,border:"1.5px solid var(--line)",background:"#FBFAFF"}}>
-            <span style={{fontSize:18}}>{c.taughtAt?"✅":"🎓"}</span>
-            <span style={{flex:1,fontWeight:700,color:"var(--ink)"}}><MathText text={c.name} tag="span"/></span>
-            {c.taughtAt&&<span style={{fontSize:11,color:"var(--sub)"}}>{tr("배웠어","learned")}</span>}
-          </button>
-        ))}
         {concepts.length===0&&<div className="empty">{tr("이 자료엔 아직 개념이 없어.","No concepts in this material yet.")}</div>}
+        {(()=>{
+          const leaf=(c)=>(
+            <button key={c.id} className="card" onClick={()=>start(c)}
+              style={{textAlign:"left",padding:"11px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:10,border:"1.5px solid var(--line)",background:"#FBFAFF"}}>
+              <span style={{fontSize:16}}>{c.taughtAt?"✅":"🎓"}</span>
+              <span style={{flex:1,fontWeight:600,color:"var(--ink)"}}><MathText text={c.name} tag="span"/></span>
+              {c.taughtAt&&<span style={{fontSize:11,color:"var(--sub)"}}>{tr("배웠어","learned")}</span>}
+            </button>
+          );
+          if(!concepts.some(c=>c.u1))return concepts.map(leaf);   // 일반 덱: 평탄 목록
+          // 책 덱: 대단원 > 중단원 > 개념 토글 트리
+          const tree={};
+          concepts.forEach(c=>{const a=c.u1||"본문",b=c.u2||"";(tree[a]=tree[a]||{});(tree[a][b]=tree[a][b]||[]).push(c);});
+          const tg=k=>setOpenU(o=>({...o,[k]:!o[k]}));
+          return Object.keys(tree).map(u1=>{
+            const mids=tree[u1];
+            const all=Object.keys(mids).reduce((a,k)=>a.concat(mids[k]),[]);
+            const dn=all.filter(x=>x.taughtAt).length,open=openU[u1];
+            return(
+              <div key={u1} style={{border:"1.5px solid var(--line)",borderRadius:14,overflow:"hidden"}}>
+                <button onClick={()=>tg(u1)} style={{width:"100%",textAlign:"left",padding:"13px 15px",cursor:"pointer",display:"flex",alignItems:"center",gap:10,background:"var(--pri-s)",border:"none"}}>
+                  <span style={{fontSize:12,color:"var(--pri-d)"}}>{open?"▾":"▸"}</span>
+                  <span style={{flex:1,fontWeight:800,color:"var(--pri-d)"}}><MathText text={u1} tag="span"/></span>
+                  <span style={{fontSize:11,color:"var(--sub)",fontWeight:700}}>{dn}/{all.length}</span>
+                </button>
+                {open&&(
+                  <div style={{padding:"8px 10px",display:"flex",flexDirection:"column",gap:7}}>
+                    {Object.keys(mids).map(u2=>{
+                      if(!u2)return mids[u2].map(leaf);
+                      const cs=mids[u2],k=u1+"||"+u2,o2=openU[k],d2=cs.filter(x=>x.taughtAt).length;
+                      return(
+                        <div key={k} style={{border:"1px solid var(--line)",borderRadius:11,overflow:"hidden"}}>
+                          <button onClick={()=>tg(k)} style={{width:"100%",textAlign:"left",padding:"10px 12px",cursor:"pointer",display:"flex",alignItems:"center",gap:9,background:"#FBFAFF",border:"none"}}>
+                            <span style={{fontSize:11,color:"var(--sub)"}}>{o2?"▾":"▸"}</span>
+                            <span style={{flex:1,fontWeight:700,color:"var(--ink)",fontSize:13.5}}><MathText text={u2} tag="span"/></span>
+                            <span style={{fontSize:10.5,color:"var(--sub)"}}>{d2}/{cs.length}</span>
+                          </button>
+                          {o2&&<div style={{padding:"7px 9px",display:"flex",flexDirection:"column",gap:6}}>{cs.map(leaf)}</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          });
+        })()}
       </div>
     </section>
   );
