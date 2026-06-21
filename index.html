@@ -1205,7 +1205,7 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
 
       <div className="stage">
         {phase==="gen"&&(
-          <div className="card qcard msgcard"><div className="spinner"/><p className="muted">{genMsg}</p></div>
+          <div className="card qcard msgcard"><div className="spinner"/><p className="muted">{genMsg}</p><Cheer style={{marginTop:6}}/></div>
         )}
         {phase==="error"&&(
           <div className="card qcard msgcard"><Prof size={56}/><p className="muted">{T("출제 실패: ","Failed: ")}{errMsg}</p>
@@ -1219,6 +1219,7 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
               <div className="bar" style={{height:10}}><i style={{width:(items.length?Math.round(gradeProg/items.length*100):0)+"%",background:"linear-gradient(90deg,var(--pri),var(--mint))"}}/></div>
               <div style={{textAlign:"center",fontSize:12,color:"var(--sub)",marginTop:6}}>{gradeProg}/{items.length} {T("문항","graded")}</div>
             </div>
+            <Cheer style={{marginTop:12}}/>
           </div>
         )}
 
@@ -2815,6 +2816,7 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
             ?<span style={{fontSize:12,color:"var(--mint)",fontWeight:600,textAlign:"center"}}>{tr("저장 완료! 이제 공부 시작하자 🎉","Saved! Let's start studying 🎉")}</span>
             :<span style={{fontSize:11.5,color:"var(--sub)"}}>{tr("페이지를 닫지 마. 분석이 끝나면 자동으로 저장돼.","Don't close the page. It saves automatically when analysis finishes.")}</span>
           }
+          {progress<100&&<Cheer style={{marginTop:2}}/>}
         </div>
       )}
       <div className="row">
@@ -3178,7 +3180,10 @@ OPTIONS: 보기1 | 보기2 | 보기3
           </div>
         )}
         {busy&&!stream&&(
-          <div style={{alignSelf:"flex-start",color:"var(--sub)",fontSize:13,padding:"4px 8px"}}>🎓 {tr("교수님이 준비 중…","Tutor is getting ready…")}</div>
+          <div style={{alignSelf:"stretch",padding:"4px 8px",display:"flex",flexDirection:"column",gap:6}}>
+            <div style={{color:"var(--sub)",fontSize:13}}>🎓 {tr("교수님이 준비 중…","Tutor is getting ready…")}</div>
+            <Cheer/>
+          </div>
         )}
         {err&&<div className="err" style={{fontSize:13}}>{err}</div>}
       </div>
@@ -3928,7 +3933,7 @@ function Study({deck:initial,subjects,onExit}){
             <button className="btn pri" onClick={()=>next()}>{T("다시 시도","Try again")}</button></div>
         )}
         {phase==="loading"&&(
-          <div className="card qcard msgcard"><div className="spinner"/><p className="muted">{T("문제 만드는 중…","Making a question…")}</p></div>
+          <div className="card qcard msgcard"><div className="spinner"/><p className="muted">{T("문제 만드는 중…","Making a question…")}</p><Cheer style={{marginTop:6}}/></div>
         )}
         {phase==="quiz"&&quizItem&&(
           <div key={concept?.id||""} style={{display:"flex",gap:14,alignItems:"flex-start",justifyContent:"center",flexWrap:"wrap",maxWidth:scratchOpen?1140:680,margin:"0 auto"}}>
@@ -4668,6 +4673,25 @@ function _renderInline(text,kp){
   });
   return nodes;
 }
+/* ── 로딩 중 응원 문구 (회전) ── */
+const CHEERS=[
+  "너는 오늘도 사랑받는 존재야 💜",
+  "난 네가 참 자랑스러워",
+  "너는 하나밖에 없는 걸작품이야 ✨",
+  "나는 너의 앞길을 응원해",
+  "두려워하거나 걱정하지 마!",
+  "오늘도 담대하게, 화이팅! 🔥",
+  "지금 이 노력, 분명히 너를 키우고 있어 🌱",
+  "조급해 말고 한 걸음씩 — 넌 잘하고 있어",
+  "어제의 너보다 오늘의 네가 더 단단해",
+  "막혀도 괜찮아, 막힌 만큼 자라는 거야",
+];
+function Cheer({style}){
+  const [i,setI]=useState(()=>Math.floor(Math.random()*CHEERS.length));
+  useEffect(()=>{const t=setInterval(()=>setI(v=>(v+1)%CHEERS.length),3500);return()=>clearInterval(t);},[]);
+  return <div style={{fontSize:13,color:"var(--pri-d)",fontWeight:600,textAlign:"center",lineHeight:1.6,transition:"opacity .3s",...style}}>💛 {CHEERS[i]}</div>;
+}
+
 function MathText({text,tag:Tag="p",className,style}){
   if(!text)return React.createElement(Tag,{className,style});
   const cleaned=String(text)
