@@ -382,6 +382,10 @@ function loadCFG(){
   CFG.qmodel=LS.get("ng:qmodel")||"claude-haiku-4-5-20251001";
   CFG.geminiKey=LS.get("ng:geminiKey")||"";
   CFG.lang=LS.get("ng:lang")||"ko";
+  // 종료된(2026-06-01) Gemini 2.0 모델을 저장해둔 사용자는 후속 모델로 자동 이전 (소스 치환만으론 안 고쳐짐)
+  const DEAD={"gemini-2.0-flash":"gemini-2.5-flash","gemini-2.0-flash-001":"gemini-2.5-flash","gemini-2.0-flash-lite":"gemini-2.5-flash-lite","gemini-2.0-flash-lite-001":"gemini-2.5-flash-lite"};
+  if(DEAD[CFG.model]){CFG.model=DEAD[CFG.model];LS.set("ng:model",CFG.model);}
+  if(DEAD[CFG.qmodel]){CFG.qmodel=DEAD[CFG.qmodel];LS.set("ng:qmodel",CFG.qmodel);}
 }
 // 앱 UI 언어(전역, 설정값 CFG.lang 기준) — 모든 컴포넌트 공용 라벨 번역
 const tr=(ko,en)=>CFG.lang==="en"?en:ko;
@@ -403,7 +407,7 @@ const RICH_FMT="\n\n[출력 형식 규칙 — 가독성 최우선, 반드시 지
 // 이미지·PDF 인식용 모델: 가진 키 기준 (Claude 우선, 없으면 Gemini) — Gemini-only 유저도 동작
 function ocrModel(){
   if(CFG.key)return"claude-sonnet-4-6";
-  if(CFG.geminiKey)return"gemini-2.0-flash";
+  if(CFG.geminiKey)return"gemini-2.5-flash";
   return CFG.model;
 }
 
@@ -498,13 +502,13 @@ async function cloudSyncOnLogin(uid){
 }
 const MODELS=[
   {id:"claude-sonnet-4-6",label:"Sonnet 4.6 · 추천"},
-  {id:"gemini-2.0-flash",label:"Gemini 2.0 Flash · 무료 가능"},
+  {id:"gemini-2.5-flash",label:"Gemini 2.5 Flash"},
   {id:"claude-haiku-4-5-20251001",label:"Haiku 4.5 · 가장 저렴"},
   {id:"claude-opus-4-8",label:"Opus 4.8 · 가장 똑똑"},
 ];
 const QMODELS=[
   {id:"claude-haiku-4-5-20251001",label:"Haiku 4.5 · 빠름 (권장)"},
-  {id:"gemini-2.0-flash",label:"Gemini 2.0 Flash · 무료"},
+  {id:"gemini-2.5-flash-lite",label:"Gemini 2.5 Flash-Lite · 저렴"},
   {id:"claude-sonnet-4-6",label:"Sonnet 4.6 · 정확"},
   {id:"claude-opus-4-8",label:"Opus 4.8 · 최고 품질"},
 ];
@@ -512,7 +516,7 @@ const QMODELS=[
 // opts: { cache:bool, maxTok:number, model:string }
 async function callGemini(system,userContent,wantJson,opts={},signal){
   if(!CFG.geminiKey)throw new Error("Gemini API 키가 없어 — 설정에서 추가해줘");
-  const model=(opts.model||"gemini-2.0-flash");
+  const model=(opts.model||"gemini-2.5-flash");
   const maxTok=opts.maxTok||(wantJson?2048:1024);
   const parts=[];
   if(typeof userContent==="string"){parts.push({text:userContent});}
@@ -1430,7 +1434,7 @@ function KeyForm({onSaved,cta,showCancel,onCancel}){
     CFG.key=key.trim();CFG.model=model;CFG.qmodel=qmodel;CFG.geminiKey=geminiKey.trim();CFG.lang=lang;
     try{
       if(hasA)await callClaude("ping","'ok'라고만 답해.",false);
-      else await callGemini("ping","'ok'라고만 답해.",false,{model:"gemini-2.0-flash"});
+      else await callGemini("ping","'ok'라고만 답해.",false,{model:"gemini-2.5-flash"});
       LS.set("ng:key",CFG.key);LS.set("ng:model",CFG.model);LS.set("ng:qmodel",CFG.qmodel);LS.set("ng:geminiKey",CFG.geminiKey);LS.set("ng:lang",CFG.lang);
       setTesting(false);onSaved();
     }catch(e){setTesting(false);setErr(tr("연결 실패: ","Connection failed: ")+e.message);}
