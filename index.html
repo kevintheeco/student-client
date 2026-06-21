@@ -3215,8 +3215,12 @@ function Study({deck:initial,subjects,onExit}){
     const hasInk=padRef.current?.hasStrokes();
     const hasTxt=answer.trim().length>0;
     const img=hasInk?padRef.current.getImageBase64():null;
-    setLimitBusy(true);setSubmitErr("");
+    setLimitBusy(true);setSubmitErr("");setLimitHelp("");
     const examSol=q?.examAnswer||q?.examRef||"";
+    // 전용 컨트롤러 + 타임아웃: 공유 abortRef가 중간에 끊거나 호출이 매달려도 항상 말풍선에 피드백을 남김
+    const myId=genId.current;
+    const ctrl=new AbortController();
+    const timer=setTimeout(()=>ctrl.abort("timeout"),60000);
     try{
       const userBlocks=[];
       if(img)userBlocks.push({type:"image",source:{type:"base64",media_type:"image/png",data:img}});
@@ -3231,11 +3235,16 @@ function Study({deck:initial,subjects,onExit}){
         "· 거의 다 왔거나 조금만 막혔으면 → '네가 ~까지 했는데, 그럼 …?' 식의 소크라테스식 유도 질문 하나로 스스로 떠올리게 해.\n"+
         "· 많이 막혔거나 백지에 가까우면 → 시작할 발판이 되는 구체적 힌트(어떤 개념·공식·접근을 떠올리면 되는지)를 줘.\n"+
         "규칙: ① 절대 최종 정답·완성된 풀이를 통째로 주지 마 — 학습자가 마지막 한 걸음은 직접 딛게. ② 반말, 따뜻하고 짧게(2~4문장). ③ 수식은 LaTeX($...$). ④ ##·목록·>> 같은 기호 없이 말풍선처럼 자연스러운 말투로. 격려 한마디로 끝맺어.\n\n자료:\n"+studyMat.slice(0,5000),
-        userBlocks,false,{maxTok:500,model:CFG.qmodel,lang:studyLang},abortRef.current?.signal);
-      setLimitHelp((r||"").trim());
+        userBlocks,false,{maxTok:500,model:CFG.qmodel,lang:studyLang},ctrl.signal);
+      if(genId.current!==myId)return;
+      const help=(r||"").trim();
+      setLimitHelp(help||T("막힌 부분을 한 줄만 적어줄래? 거기에 딱 맞춰 도와줄게.","Jot the part you're stuck on in one line and I'll target it."));
       setTimeout(()=>padRef.current?.forceColor(PEN_COLORS[0]),50);
-    }catch(e){if(e.name!=="AbortError")setSubmitErr(T("도움 불러오기 실패: ","Help failed: ")+e.message);}
-    setLimitBusy(false);
+    }catch(e){
+      if(genId.current===myId)setLimitHelp("⚠️ "+(ctrl.signal.reason==="timeout"
+        ?T("응답이 너무 오래 걸렸어. 잠깐 뒤 '여기가 내 한계야'를 다시 눌러줘.","Timed out — tap “I'm stuck here” again in a moment.")
+        :(T("도움을 못 불러왔어: ","Couldn't load help: ")+((e&&e.message)||String(e)))));
+    }finally{clearTimeout(timer);if(genId.current===myId)setLimitBusy(false);}
   }
 
   async function handleDontKnow(){
