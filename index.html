@@ -2720,7 +2720,9 @@ function Tutor({deck:initial,onExit}){
 · CONTROL: ASK    — 그 외 직접 풀어보거나 네 말로 설명해보라고 시켰을 때
 · CONTROL: NEXT   — 시킬 게 정말 없는 짧은 도입·전환일 때만(아껴 써라)
 · CONTROL: DONE   — 4단계를 다 마치고 마지막 정리까지 끝냈을 때
-**핵심 원칙: 설명만 하고 그냥 넘어가지 마라.** 핵심 조각 하나를 설명할 때마다 COPY/RECALL/ASK 중 하나로 학생이 직접 손으로 쓰게 시키고(=대부분의 답변은 이 셋 중 하나로 끝난다), 학생이 쓴 걸 받으면 구체적으로 피드백(잘한 점·틀린 곳·빠진 기호 교정)한 뒤 진행해라. RECALL을 적극 활용해 — 안 보고 떠올려 쓰는 게 가장 강하게 남는다.
+**핵심 원칙: 설명만 하고 그냥 넘어가지 마라.** 핵심 조각 하나를 설명할 때마다 COPY/RECALL/ASK 중 하나로 학생이 직접 손으로 쓰게 시켜라(=새 내용을 설명한 답변은 대부분 이 셋 중 하나로 끝난다).
+
+**★ 피드백 먼저, 새 과제는 그 다음 (절대 규칙).** 학생이 방금 과제 답(쓰기·말·손글씨)을 제출한 직후의 답변은 **반드시 그 답에 대한 구체적 피드백으로 시작**해라 — 무엇이 맞았고, 어디가 틀렸고, 어떤 기호·단계를 빠뜨렸는지 콕 집어서. **피드백을 건너뛰고 곧장 새 과제(특히 백지회상 RECALL)로 점프하는 것은 금지.** "학생 답 무시 + 새 과제만"인 답변은 절대 만들지 마라. 예: 학생이 'ASK(네 말로 설명해봐)'에 답했으면 → 그 설명을 짚어 교정·보강(이때 CONTROL은 보통 ASK나 NEXT). 학생이 충분히 이해했다고 보일 때에만 다음 단계나 새 과제로 넘어가라(아직 막혀 있으면 같은 지점을 다시 시켜라). RECALL은 한 조각을 충분히 설명·확인한 뒤에만 써라 — 안 보고 떠올려 쓰는 게 강하게 남지만, 피드백 단계를 건너뛰면서까지 쓰지는 마라.
 
 # 학생을 대하는 방식
 - "전혀 모르겠다/노베이스다/따로 논다"고 하면 추상적 설명을 반복하지 말고 어디서 끊겼는지부터 찾아 그 지점부터 다시. (예: "좋아, 네가 막힌 지점은 정확히 g가 갑자기 튀어나온 거야.")
@@ -2760,13 +2762,19 @@ function Tutor({deck:initial,onExit}){
     sysRef.current=tutorSystem(c);
     turn({role:"user",content:`'${c.name}' 개념 과외 시작해줘. 1단계 큰 질문부터 한 단계씩.`},[]);
   }
-  function sendText(){const t=input.trim();if(!t||busy)return;setInput("");turn({role:"user",content:t});}
+  // 학생이 '과제(ASK/COPY/RECALL)' 답을 막 냈을 때만, 모델에게 '피드백 먼저, 새 과제 점프 금지'를 숨겨서 상기시킨다(채팅엔 안 보임).
+  function fbHint(){
+    return (control==="ASK"||control==="COPY"||control==="RECALL")
+      ? "\n\n[흐름 규칙(학생에겐 안 보임): 위는 학생이 방금 낸 과제 답이다. 이번 답변은 반드시 이 답에 대한 구체적 피드백—잘한 점·틀린 곳·빠뜨린 기호나 단계—부터 시작해라. 피드백을 건너뛰고 곧장 새 과제(특히 백지회상 RECALL)로 점프하지 마라. 학생이 그 부분을 이해했다고 보일 때만 다음 단계로 넘어가라.]"
+      : "";
+  }
+  function sendText(){const t=input.trim();if(!t||busy)return;setInput("");const h=fbHint();turn(h?{role:"user",content:t+h,display:t}:{role:"user",content:t});}
   function sendPen(){
     if(busy)return;
     const pad=padRef.current;
     if(!pad||!pad.hasStrokes()){setErr(tr("먼저 손글씨로 써줘.","Write something first."));return;}
     const b64=pad.getImageBase64();pad.clear();setPenMode(false);
-    turn({role:"user",img:b64,content:[{type:"image",source:{type:"base64",media_type:"image/png",data:b64}},{type:"text",text:"(내가 손글씨로 쓴 답이야. 읽고 피드백 줘.)"}]});
+    turn({role:"user",img:b64,content:[{type:"image",source:{type:"base64",media_type:"image/png",data:b64}},{type:"text",text:"(내가 손글씨로 쓴 답이야.)"+(fbHint()||" 읽고 피드백 줘.")}]});
   }
   function quick(msg){if(busy)return;turn({role:"user",content:msg});}
   function markTaught(){
@@ -2832,7 +2840,7 @@ function Tutor({deck:initial,onExit}){
           ):(
             <div key={i} style={{alignSelf:"flex-end",maxWidth:"88%",background:"var(--pri-s)",border:"1.5px solid var(--pri)",borderRadius:"16px 4px 16px 16px",padding:"10px 14px"}}>
               {t.img?<img src={"data:image/png;base64,"+t.img} alt="손글씨" style={{maxWidth:"100%",borderRadius:8,display:"block"}}/>
-                :<div style={{color:"var(--ink)",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{t.content}</div>}
+                :<div style={{color:"var(--ink)",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{t.display||t.content}</div>}
             </div>
           )
         ))}
