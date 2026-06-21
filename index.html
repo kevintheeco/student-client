@@ -2901,7 +2901,7 @@ function Tutor({deck:initial,onExit}){
 
       {control==="DONE"?(
         <div style={{display:"flex",gap:8,flexWrap:"wrap",borderTop:"1.5px solid var(--line)",paddingTop:12}}>
-          <div style={{width:"100%",color:"var(--mint-d,#0F766E)",fontWeight:700,marginBottom:2}}>🎉 {tr("이 개념 끝! 잘 따라왔어.","Done with this concept!")}</div>
+          <div style={{width:"100%",color:"var(--mint-d,#0F766E)",fontWeight:700,marginBottom:2}}>🎓 {tr("이 개념 정복! 너, 점점 교수가 되고 있어 👏","Concept conquered — you're becoming the professor! 👏")}</div>
           <button className="btn pri" onClick={()=>setConcept(null)}>{tr("다음 개념 🎓","Next concept 🎓")}</button>
           <button className="btn gho" onClick={()=>quick("핵심만 한 번 더 짧게 정리해줘.")}>{tr("한 번 더 정리","Recap")}</button>
         </div>
@@ -2925,7 +2925,7 @@ function Tutor({deck:initial,onExit}){
             <>
               <PenPad ref={padRef} kind="answer" hideOcr penOnlyDefault={true}/>
               <div style={{display:"flex",gap:8}}>
-                <button className="btn pri" disabled={busy} onClick={sendPen}>{tr("✍️ 손글씨 보내기","✍️ Send writing")}</button>
+                <button className="btn pri" disabled={busy} onClick={sendPen}>{tr("🎓 교수님께 제출!","🎓 Submit to Professor!")}</button>
                 <button className="btn gho" onClick={()=>setPenMode(false)}>{tr("✕ 텍스트로","✕ Text")}</button>
               </div>
             </>
