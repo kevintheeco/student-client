@@ -2762,6 +2762,7 @@ function Tutor({deck:initial,onExit}){
   const [hidePeek,setHidePeek]=useState(false);  // RECALL(백지 회상): 직전 교수님 말풍선 가리기
   const [err,setErr]=useState("");
   const [stream,setStream]=useState("");        // 스트리밍: 도착 중인 교수님 답(글자씩)
+  const [options,setOptions]=useState([]);      // 교수님이 준 '탭해서 고르기' 보기(OPTIONS:)
   const padRef=useRef(null);
   const sysRef=useRef("");
   const abortRef=useRef(null);
@@ -2795,6 +2796,12 @@ function Tutor({deck:initial,onExit}){
 · CONTROL: ASK    — 그 외 직접 풀어보거나 네 말로 설명해보라고 시켰을 때
 · CONTROL: NEXT   — 시킬 게 정말 없는 짧은 도입·전환일 때만(아껴 써라)
 · CONTROL: DONE   — 4단계를 다 마치고 마지막 정리까지 끝냈을 때
+
+# 탭해서 고르기 (OPTIONS) — 손으로 안 쓰고 누르게
+학생이 '고르기'만 하면 되는 질문(예: "어디서 막혔어?", "어느 부분이 헷갈려?", "둘 중 뭐야?", "이거 맞을까 틀릴까?")을 할 땐, 답변 끝(CONTROL 줄 바로 위 줄)에 보기를 이 형식으로 붙여라:
+OPTIONS: 보기1 | 보기2 | 보기3
+그러면 학생이 손글씨 대신 버튼으로 탭해 고른다. 보기는 2~4개, 각각 한 구절로 짧게(학생이 실제로 고를 만한 선택지로). 단, **학생이 직접 써야 의미 있는 과제(COPY 따라쓰기·RECALL 백지회상·풀이/유도 ASK)에는 OPTIONS를 절대 붙이지 마라** — 그땐 손으로 쓰게 둬라. OPTIONS는 '어디가 막혔는지 고르기·간단한 갈림길' 같은 라우팅 질문에만.
+
 **핵심 원칙: 설명만 하고 그냥 넘어가지 마라.** 핵심 조각 하나를 설명할 때마다 COPY/RECALL/ASK 중 하나로 학생이 직접 손으로 쓰게 시켜라(=새 내용을 설명한 답변은 대부분 이 셋 중 하나로 끝난다).
 
 **★ 피드백 먼저, 새 과제는 그 다음 (절대 규칙).** 학생이 방금 과제 답(쓰기·말·손글씨)을 제출한 직후의 답변은 **반드시 그 답에 대한 구체적 피드백으로 시작**해라 — 무엇이 맞았고, 어디가 틀렸고, 어떤 기호·단계를 빠뜨렸는지 콕 집어서. **★ 정직하게 채점해라(가장 중요).** 학생이 쓴 걸 실제로 읽고, 답이나 흐름이 틀렸으면 **절대 "맞다"고 하지 마라 — 틀린 답을 맞다고 인정하는 것이 이 과외에서 가장 큰 잘못이다.** 손글씨 이미지는 글자·수식을 있는 그대로 판독해서 채점하고(예쁘게 봐주지 마라), 흐릿해서 안 읽히면 추측으로 맞다고 넘기지 말고 "이 부분이 안 읽혀, 다시 또렷하게 써줄래?"라고 해라. 친절한 건 톤이지 채점이 아니다 — 틀린 건 분명히 틀렸다고 짚고 어디가 왜 틀렸는지 고쳐줘라. **피드백을 건너뛰고 곧장 새 과제(특히 백지회상 RECALL)로 점프하는 것은 금지.** "학생 답 무시 + 새 과제만"인 답변은 절대 만들지 마라. 예: 학생이 'ASK(네 말로 설명해봐)'에 답했으면 → 그 설명을 짚어 교정·보강(이때 CONTROL은 보통 ASK나 NEXT). 학생이 충분히 이해했다고 보일 때에만 다음 단계나 새 과제로 넘어가라(아직 막혀 있으면 같은 지점을 다시 시켜라). **★ 백지 가리기(RECALL) 타이밍 — 이 조건이 모두 맞을 때만 써라.** ①직전에 중요한 공식·핵심 개념이 나왔고 ②학생이 그걸 잘 이해 못 해 막혔거나 다시 설명해 달라고 했고 ③네가 다시 설명해줬고 ④학생이 "이해했어/다음으로 넘어가자"고 할 때 — 즉 **어렵게 넘긴 개념을 통과시키기 직전에 백지로 점검**하는 것이다(바로 다음 단계로 넘기기 전에). 이때 RECALL 메시지 안에 **무엇을 떠올려 쓸지 한 줄로 짚어줘라**(예: "좋아, 넘어가기 전에 방금 그 ___ 공식을 안 보고 떠올려 써봐") — 그 메시지는 화면에서 가려지니 학생이 기억으로 써야 한다. 그 외(처음 설명한 직후, 학생이 안 막혔을 때, 사소한 내용, 학생이 막 답을 제출한 직후)에는 RECALL을 쓰지 말고 COPY·ASK를 쓰거나 그냥 다음으로 가라. 피드백 단계를 건너뛰면서까지 RECALL하지 마라. 또한 과제가 학생 수준에 비해 너무 쉬우면 굳이 반복시키지 말고, 학생이 "넘어갈게/안 쓸게/이미 알아"라고 하면 그건 답 제출이 아니니 억지로 채점·재시도시키지 말고 가볍게 인정한 뒤 바로 다음 단계로 가라.
@@ -2813,7 +2820,7 @@ function Tutor({deck:initial,onExit}){
   }
 
   // 스트리밍 표시용: 끝의 CONTROL 신호는 화면에 안 보이게 떼고 보여줌
-  const stripCtrl=s=>s.replace(/\n*CONTROL:[\s\S]*$/i,"").trimEnd();
+  const stripCtrl=s=>s.replace(/\n*(CONTROL:|OPTIONS:)[\s\S]*$/i,"").trimEnd();
   // 스트리밍 중 아직 안 닫힌 마지막 수식($···, $$···)은 날 LaTeX로 깨져 보임 → 닫히기 전까진 빼고 표시(완성되면 나타남)
   function trimOpenMath(s){
     let cut=s.length,i=0;
@@ -2837,7 +2844,7 @@ function Tutor({deck:initial,onExit}){
   async function turn(userTurn,base){
     const next=[...(base!==undefined?base:turns),userTurn];
     setTurns(next);setBusy(true);setControl(null);setErr("");setHidePeek(false);
-    setStream("");
+    setStream("");setOptions([]);
     const ctrl=new AbortController();abortRef.current=ctrl;
     try{
       const reply=await callAI(sysRef.current,"",false,
@@ -2845,9 +2852,12 @@ function Tutor({deck:initial,onExit}){
          onDelta:full=>setStream(trimOpenMath(stripCtrl(full)))},ctrl.signal);
       setStream("");
       const sig=(reply.match(/CONTROL:\s*(ASK|NEXT|DONE|COPY|RECALL)/i)||[])[1];
-      const clean=reply.replace(/CONTROL:\s*(ASK|NEXT|DONE|COPY|RECALL)\s*$/i,"").replace(/\n+$/,"").trim();
+      const clean=stripCtrl(reply).replace(/\n+$/,"").trim();
       setTurns(t=>[...t,{role:"assistant",content:clean}]);
       const c=(sig||"NEXT").toUpperCase();setControl(c);
+      // '탭해서 고르기' 보기 — 직접 써야 하는 과제(COPY/RECALL)엔 무시
+      const om=reply.match(/OPTIONS:\s*([^\n]+)/i);
+      setOptions((c==="COPY"||c==="RECALL"||!om)?[]:om[1].split("|").map(s=>s.trim()).filter(Boolean).slice(0,4));
       // 손글씨로 직접 쓰는 게 핵심 → 매 턴 손글씨 패드를 기본으로 펼침(타이핑은 '✕ 텍스트로'). RECALL은 직전 설명을 가려 '백지'로.
       setPenMode(true);
       setHidePeek(c==="RECALL");
@@ -2869,6 +2879,7 @@ function Tutor({deck:initial,onExit}){
       : "";
   }
   function sendText(){const t=input.trim();if(!t||busy)return;setInput("");const h=fbHint();turn(h?{role:"user",content:t+h,display:t}:{role:"user",content:t});}
+  function sendOption(opt){if(busy||!opt)return;setOptions([]);turn({role:"user",content:opt});}
   function sendPen(){
     if(busy)return;
     const pad=padRef.current;
@@ -2984,6 +2995,16 @@ function Tutor({deck:initial,onExit}){
             <button className="btn gho sm" disabled={busy} onClick={()=>quick("아직 잘 모르겠어요. 어디서 막히는 건지 더 쉽게 다시 설명해 주세요.")}>{tr("😵 모르겠어요","😵 Lost")}</button>
             {(control==="COPY"||control==="RECALL"||control==="ASK")&&<button className="btn gho sm" disabled={busy} onClick={()=>quick("이 과제는 이미 충분히 알아서 안 쓰고 넘어갈게요. 채점·피드백 말고 바로 다음 단계로 가 주세요.")}>{tr("넘어갈래요 ⏭","Skip ⏭")}</button>}
           </div>
+          {options.length>0&&(
+            <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+              {options.map((o,i)=>(
+                <button key={i} className="btn gho sm" disabled={busy} onClick={()=>sendOption(o)}
+                  style={{borderColor:"var(--pri)",color:"var(--pri-d)",background:"var(--pri-s)"}}>
+                  <MathText text={o} tag="span"/>
+                </button>
+              ))}
+            </div>
+          )}
           {penMode?(
             <>
               <PenPad ref={padRef} kind="answer" hideOcr penOnlyDefault={true}/>
