@@ -2762,7 +2762,6 @@ function Tutor({deck:initial,onExit}){
   const [hidePeek,setHidePeek]=useState(false);  // RECALL(백지 회상): 직전 교수님 말풍선 가리기
   const [err,setErr]=useState("");
   const [stream,setStream]=useState("");        // 스트리밍: 도착 중인 교수님 답(글자씩)
-  const [review,setReview]=useState(null);      // 로딩 중 '외워봐' 복습 개념
   const padRef=useRef(null);
   const sysRef=useRef("");
   const abortRef=useRef(null);
@@ -2813,13 +2812,6 @@ function Tutor({deck:initial,onExit}){
 위 예시들(LLN/CLT/Slutsky/Delta 등)은 '가르치는 방식'의 본보기일 뿐이다. 실제 내용은 학생이 고른 개념 "${c.name}"과 위 자료에 맞춰라. 지금부터 학생과 주고받으며 과외를 시작해라.`;
   }
 
-  // 로딩 동안 띄울 복습 개념: 이미 배운 옆 개념 우선 → 없으면 아무 옆 개념 → 없으면 현재 개념
-  function pickReview(){
-    const sibs=concepts.filter(x=>x.name&&x.name!==concept?.name);
-    const pool=sibs.filter(x=>x.taughtAt).length?sibs.filter(x=>x.taughtAt):sibs;
-    const arr=pool.length?pool:(concept?[concept]:[]);
-    return arr.length?arr[Math.floor(Math.random()*arr.length)]:null;
-  }
   // 스트리밍 표시용: 끝의 CONTROL 신호는 화면에 안 보이게 떼고 보여줌
   const stripCtrl=s=>s.replace(/\n*CONTROL:[\s\S]*$/i,"").trimEnd();
   // 스트리밍 중 아직 안 닫힌 마지막 수식($···, $$···)은 날 LaTeX로 깨져 보임 → 닫히기 전까진 빼고 표시(완성되면 나타남)
@@ -2845,7 +2837,7 @@ function Tutor({deck:initial,onExit}){
   async function turn(userTurn,base){
     const next=[...(base!==undefined?base:turns),userTurn];
     setTurns(next);setBusy(true);setControl(null);setErr("");setHidePeek(false);
-    setStream("");setReview(pickReview());
+    setStream("");
     const ctrl=new AbortController();abortRef.current=ctrl;
     try{
       const reply=await callAI(sysRef.current,"",false,
@@ -2868,7 +2860,7 @@ function Tutor({deck:initial,onExit}){
     abortRef.current?.abort();
     setConcept(c);setTurns([]);setControl(null);setErr("");setInput("");setPenMode(true);
     sysRef.current=tutorSystem(c);
-    turn({role:"user",content:`'${c.name}' 개념 과외 시작해줘. 1단계 큰 질문부터 한 단계씩.`},[]);
+    turn({role:"user",content:`'${c.name}' 개념 과외 시작해 주세요. 1단계 큰 질문부터 한 단계씩.`},[]);
   }
   // 학생이 '과제(ASK/COPY/RECALL)' 답을 막 냈을 때만, 모델에게 '피드백 먼저, 새 과제 점프 금지'를 숨겨서 상기시킨다(채팅엔 안 보임).
   function fbHint(){
@@ -2965,16 +2957,7 @@ function Tutor({deck:initial,onExit}){
           </div>
         )}
         {busy&&!stream&&(
-          <div style={{alignSelf:"flex-start",maxWidth:"92%",display:"flex",flexDirection:"column",gap:8}}>
-            <div style={{color:"var(--sub)",fontSize:13,padding:"2px 8px"}}>🎓 {tr("교수님이 준비 중…","Tutor is getting ready…")}</div>
-            {review&&(
-              <div style={{background:"#FFF6E9",border:"1.5px solid #FBD38D",borderRadius:12,padding:"11px 14px"}}>
-                <div style={{fontSize:11,fontWeight:800,color:"#92620A",marginBottom:4}}>⏳ {tr("기다리는 동안 — 이거 외워봐!","While you wait — memorize this!")}</div>
-                <div style={{fontSize:15,fontWeight:700,color:"var(--ink)"}}><MathText text={review.name} tag="span"/></div>
-                <div style={{fontSize:12,color:"var(--sub)",marginTop:3,lineHeight:1.4}}>{tr("안 보고 머릿속으로 한 번 떠올려봐.","Recall it in your head, no peeking.")}</div>
-              </div>
-            )}
-          </div>
+          <div style={{alignSelf:"flex-start",color:"var(--sub)",fontSize:13,padding:"4px 8px"}}>🎓 {tr("교수님이 준비 중…","Tutor is getting ready…")}</div>
         )}
         {err&&<div className="err" style={{fontSize:13}}>{err}</div>}
       </div>
@@ -2983,7 +2966,7 @@ function Tutor({deck:initial,onExit}){
         <div style={{display:"flex",gap:8,flexWrap:"wrap",borderTop:"1.5px solid var(--line)",paddingTop:12}}>
           <div style={{width:"100%",color:"var(--mint-d,#0F766E)",fontWeight:700,marginBottom:2}}>🎓 {tr("이 개념 정복! 너, 점점 교수가 되고 있어 👏","Concept conquered — you're becoming the professor! 👏")}</div>
           <button className="btn pri" onClick={()=>setConcept(null)}>{tr("다음 개념 🎓","Next concept 🎓")}</button>
-          <button className="btn gho" onClick={()=>quick("핵심만 한 번 더 짧게 정리해줘.")}>{tr("한 번 더 정리","Recap")}</button>
+          <button className="btn gho" onClick={()=>quick("핵심만 한 번 더 짧게 정리해 주세요.")}>{tr("한 번 더 정리","Recap")}</button>
         </div>
       ):(
         <div style={{borderTop:"1.5px solid var(--line)",paddingTop:12,display:"flex",flexDirection:"column",gap:8}}>
@@ -2997,9 +2980,9 @@ function Tutor({deck:initial,onExit}){
             </div>
           )}
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            {control==="NEXT"&&<button className="btn pri sm" disabled={busy} onClick={()=>quick("이해했어. 다음 단계로 넘어가줘.")}>{tr("이해했어, 다음 ▶","Got it, next ▶")}</button>}
-            <button className="btn gho sm" disabled={busy} onClick={()=>quick("아직 잘 모르겠어. 어디서 막히는 건지 더 쉽게 다시 설명해줘.")}>{tr("😵 모르겠어","😵 Lost")}</button>
-            {(control==="COPY"||control==="RECALL"||control==="ASK")&&<button className="btn gho sm" disabled={busy} onClick={()=>quick("이 과제는 이미 충분히 알아서 안 쓰고 넘어갈게. 채점·피드백 말고 바로 다음 단계로 가줘.")}>{tr("넘어갈래 ⏭","Skip ⏭")}</button>}
+            {control==="NEXT"&&<button className="btn pri sm" disabled={busy} onClick={()=>quick("이해했어요. 다음 단계로 넘어가 주세요.")}>{tr("이해했어요, 다음 ▶","Got it, next ▶")}</button>}
+            <button className="btn gho sm" disabled={busy} onClick={()=>quick("아직 잘 모르겠어요. 어디서 막히는 건지 더 쉽게 다시 설명해 주세요.")}>{tr("😵 모르겠어요","😵 Lost")}</button>
+            {(control==="COPY"||control==="RECALL"||control==="ASK")&&<button className="btn gho sm" disabled={busy} onClick={()=>quick("이 과제는 이미 충분히 알아서 안 쓰고 넘어갈게요. 채점·피드백 말고 바로 다음 단계로 가 주세요.")}>{tr("넘어갈래요 ⏭","Skip ⏭")}</button>}
           </div>
           {penMode?(
             <>
