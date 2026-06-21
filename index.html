@@ -2682,9 +2682,10 @@ function Tutor({deck:initial,onExit}){
   const [concept,setConcept]=useState(null);
   const [turns,setTurns]=useState([]);          // {role, content(API), img?}
   const [busy,setBusy]=useState(false);
-  const [control,setControl]=useState(null);    // ASK | NEXT | DONE
+  const [control,setControl]=useState(null);    // ASK | NEXT | DONE | COPY | RECALL
   const [input,setInput]=useState("");
   const [penMode,setPenMode]=useState(false);
+  const [hidePeek,setHidePeek]=useState(false);  // RECALL(백지 회상): 직전 선생님 말풍선 가리기
   const [err,setErr]=useState("");
   const padRef=useRef(null);
   const sysRef=useRef("");
@@ -2709,15 +2710,17 @@ function Tutor({deck:initial,onExit}){
 한 번에 다 쏟아붓지 말고 단계별로 끊어서 학생과 주고받아라. 한 번의 답변엔 한 단계(또는 그 일부)만 담고, 학생이 따라왔는지 확인한 뒤 넘어가라. 항상 이 4단계 흐름을 따른다.
 1단계 — 큰 질문: 이 개념이 속한 단원의 큰 질문을 한 문장으로 던져라.
 2단계 — 핵심 쪼개기: 이 개념을 두세 조각의 한 줄 의미로 압축해라. (예: LLN=어디로 가는가 / CLT=어떻게 흔들리는가)
-3단계 — 층층 설명 + 체크포인트: ①말로 된 직관 → ②아주 쉬운 숫자 예시 → ③원래 개념/문제의 수식 적용. 수식은 공식부터 던지지 말고 먼저 말로 번역한 뒤 보여주고, 기호를 하나씩 해석해라. 이 단계에선 반드시 중간중간 학생을 직접 시켜라: "이 공식 한번 써봐", "방금 설명한 거 네 말로 설명해봐", "안 보고 써봐". 학생이 직접 해본 답을 보고 막힌 지점을 짚어라.
+3단계 — 층층 설명 + 능동 과제: ①말로 된 직관 → ②아주 쉬운 숫자 예시 → ③원래 개념/문제의 수식 적용. 수식은 공식부터 던지지 말고 먼저 말로 번역한 뒤 보여주고, 기호를 하나씩 해석해라. **각 층을 설명한 직후 반드시 학생을 직접 손으로 쓰게 시켜라**: 공식을 보여줬으면 "따라 써봐"(COPY), 한 토막 이해했으면 "안 보고 네 손으로 적어봐"(RECALL), 적용을 배웠으면 "이 문제 직접 풀어봐"(ASK). 학생이 쓴 걸 받으면 막힌 지점·빠뜨린 기호를 콕 집어 교정한 뒤 다음으로.
 4단계 — 시험용 루틴: 시험장에서 바로 쓸 한 줄 판단 루틴으로 정리해라. (예: "plim·consistent 나오면 Slutsky, asymptotic variance 나오면 Delta Method.")
 
 # 답변 끝 제어 신호 (매우 중요)
 매 답변의 맨 마지막 줄에, 학생이 다음에 뭘 할지 알려주는 신호를 정확히 하나 붙여라. 이 줄은 학생에게 안 보이니 부가설명 없이 형식 그대로만:
-· CONTROL: ASK  — 방금 학생에게 직접 써보거나 설명해보라고 시켰을 때(학생 답을 기다림)
-· CONTROL: NEXT — 한 단계 설명을 끝냈고 학생이 "다음"으로 넘어가도 될 때
-· CONTROL: DONE — 4단계를 다 마치고 마지막 정리까지 끝냈을 때
-체크포인트(써봐/설명해봐)로 끝나면 거의 항상 ASK다.
+· CONTROL: COPY   — 방금 보여준 공식·식·문장을 학생에게 "직접 따라 써봐"라고 시켰을 때
+· CONTROL: RECALL — "안 보고, 방금 이해한 걸 네 손으로 적어봐"처럼 백지 회상을 시켰을 때
+· CONTROL: ASK    — 그 외 직접 풀어보거나 네 말로 설명해보라고 시켰을 때
+· CONTROL: NEXT   — 시킬 게 정말 없는 짧은 도입·전환일 때만(아껴 써라)
+· CONTROL: DONE   — 4단계를 다 마치고 마지막 정리까지 끝냈을 때
+**핵심 원칙: 설명만 하고 그냥 넘어가지 마라.** 핵심 조각 하나를 설명할 때마다 COPY/RECALL/ASK 중 하나로 학생이 직접 손으로 쓰게 시키고(=대부분의 답변은 이 셋 중 하나로 끝난다), 학생이 쓴 걸 받으면 구체적으로 피드백(잘한 점·틀린 곳·빠진 기호 교정)한 뒤 진행해라. RECALL을 적극 활용해 — 안 보고 떠올려 쓰는 게 가장 강하게 남는다.
 
 # 학생을 대하는 방식
 - "전혀 모르겠다/노베이스다/따로 논다"고 하면 추상적 설명을 반복하지 말고 어디서 끊겼는지부터 찾아 그 지점부터 다시. (예: "좋아, 네가 막힌 지점은 정확히 g가 갑자기 튀어나온 거야.")
@@ -2734,15 +2737,18 @@ function Tutor({deck:initial,onExit}){
 
   async function turn(userTurn,base){
     const next=[...(base!==undefined?base:turns),userTurn];
-    setTurns(next);setBusy(true);setControl(null);setErr("");
+    setTurns(next);setBusy(true);setControl(null);setErr("");setHidePeek(false);
     const ctrl=new AbortController();abortRef.current=ctrl;
     try{
       const reply=await callAI(sysRef.current,"",false,
         {maxTok:2000,cache:true,model:CFG.model,messages:next.map(t=>({role:t.role,content:t.content}))},ctrl.signal);
-      const sig=(reply.match(/CONTROL:\s*(ASK|NEXT|DONE)/i)||[])[1];
-      const clean=reply.replace(/CONTROL:\s*(ASK|NEXT|DONE)\s*$/i,"").replace(/\n+$/,"").trim();
+      const sig=(reply.match(/CONTROL:\s*(ASK|NEXT|DONE|COPY|RECALL)/i)||[])[1];
+      const clean=reply.replace(/CONTROL:\s*(ASK|NEXT|DONE|COPY|RECALL)\s*$/i,"").replace(/\n+$/,"").trim();
       setTurns(t=>[...t,{role:"assistant",content:clean}]);
       const c=(sig||"NEXT").toUpperCase();setControl(c);
+      // 능동 과제: 손글씨로 직접 쓰는 게 핵심 → 패드 자동 펼침. RECALL은 직전 설명을 가려 '백지'로.
+      setPenMode(c==="COPY"||c==="RECALL");
+      setHidePeek(c==="RECALL");
       if(c==="DONE")markTaught();
     }catch(e){if(e.name!=="AbortError")setErr(e.message||tr("오류가 났어. 다시 시도해줘.","Something went wrong. Try again."));}
     setBusy(false);
@@ -2793,6 +2799,13 @@ function Tutor({deck:initial,onExit}){
   );
 
   // ── 과외 세션 ──
+  const shown=turns.filter(t=>!(t.role==="user"&&typeof t.content==="string"&&t.content.startsWith("'"+concept.name)));
+  let lastAiIdx=-1;shown.forEach((t,i)=>{if(t.role==="assistant")lastAiIdx=i;});
+  const TASK={
+    COPY:{emo:"✍️",label:tr("따라 써보기","Copy it"),desc:tr("위 식을 안 보고도 쓰게, 직접 한 번 써봐 — 손이 기억해.","Write the formula above yourself.")},
+    RECALL:{emo:"🧠",label:tr("백지 테스트","Blank-paper recall"),desc:tr("안 보고! 방금 이해한 걸 네 손으로 적어봐.","No peeking — write what you just understood.")},
+    ASK:{emo:"✍️",label:tr("직접 해보기","Your turn"),desc:tr("배운 걸 직접 풀거나 네 말로 설명해봐.","Solve it / explain it in your own words.")}};
+  const task=TASK[control];
   return(
     <section className="wrap" style={{display:"flex",flexDirection:"column",minHeight:"70vh"}}>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
@@ -2802,12 +2815,20 @@ function Tutor({deck:initial,onExit}){
       </div>
 
       <div ref={scrollRef} style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:12,padding:"6px 2px 14px"}}>
-        {turns.filter(t=>!(t.role==="user"&&typeof t.content==="string"&&t.content.startsWith("'"+concept.name))).map((t,i)=>(
+        {shown.map((t,i)=>(
           t.role==="assistant"?(
+            (hidePeek&&i===lastAiIdx)?(
+            <div key={i} style={{alignSelf:"flex-start",maxWidth:"92%",background:"#fff",border:"1.5px dashed var(--pri)",borderRadius:"4px 16px 16px 16px",padding:"16px 15px",textAlign:"center"}}>
+              <div style={{fontSize:26,marginBottom:4}}>🙈</div>
+              <div style={{fontSize:12.5,color:"var(--sub)",marginBottom:9,lineHeight:1.5}}>{tr("선생님 설명을 가렸어.\n안 보고 먼저 손으로 적어봐!","Hidden — write from memory first!")}</div>
+              <button className="btn gho sm" onClick={()=>setHidePeek(false)}>{tr("👀 펼쳐보기","👀 Reveal")}</button>
+            </div>
+            ):(
             <div key={i} style={{alignSelf:"flex-start",maxWidth:"92%",background:"#fff",border:"1.5px solid var(--line)",borderRadius:"4px 16px 16px 16px",padding:"12px 15px"}}>
               <div style={{fontSize:11,color:"var(--pri)",fontWeight:700,marginBottom:3}}>🎓 {tr("선생님","Tutor")}</div>
               <MathText text={t.content}/>
             </div>
+            )
           ):(
             <div key={i} style={{alignSelf:"flex-end",maxWidth:"88%",background:"var(--pri-s)",border:"1.5px solid var(--pri)",borderRadius:"16px 4px 16px 16px",padding:"10px 14px"}}>
               {t.img?<img src={"data:image/png;base64,"+t.img} alt="손글씨" style={{maxWidth:"100%",borderRadius:8,display:"block"}}/>
@@ -2827,6 +2848,15 @@ function Tutor({deck:initial,onExit}){
         </div>
       ):(
         <div style={{borderTop:"1.5px solid var(--line)",paddingTop:12,display:"flex",flexDirection:"column",gap:8}}>
+          {task&&(
+            <div style={{display:"flex",gap:10,alignItems:"center",background:control==="RECALL"?"#EEF6FF":"#FFF6E9",border:"1.5px solid "+(control==="RECALL"?"#9CC3FF":"#FBD38D"),borderRadius:12,padding:"10px 13px"}}>
+              <span style={{fontSize:22}}>{task.emo}</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:800,color:control==="RECALL"?"#1E40AF":"#92620A",fontSize:13.5}}>{task.label}</div>
+                <div style={{fontSize:12,color:"var(--sub)",lineHeight:1.4,whiteSpace:"pre-line"}}>{task.desc}</div>
+              </div>
+            </div>
+          )}
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             {control==="NEXT"&&<button className="btn pri sm" disabled={busy} onClick={()=>quick("이해했어. 다음 단계로 넘어가줘.")}>{tr("이해했어, 다음 ▶","Got it, next ▶")}</button>}
             <button className="btn gho sm" disabled={busy} onClick={()=>quick("아직 잘 모르겠어. 어디서 막히는 건지 더 쉽게 다시 설명해줘.")}>{tr("😵 모르겠어","😵 Lost")}</button>
