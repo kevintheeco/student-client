@@ -3217,7 +3217,7 @@ OPTIONS: 보기1 | 보기2 | 보기3
           ):(
             <div key={i} style={{alignSelf:"flex-end",maxWidth:"88%",background:"var(--pri-s)",border:"1.5px solid var(--pri)",borderRadius:"16px 4px 16px 16px",padding:"10px 14px"}}>
               {t.img?<img src={"data:image/png;base64,"+t.img} alt="손글씨" style={{maxWidth:"100%",borderRadius:8,display:"block"}}/>
-                :<div style={{color:"var(--ink)",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{t.display||t.content}</div>}
+                :<MathText text={String(t.display||t.content||"")} style={{color:"var(--ink)",lineHeight:1.6}}/>}
             </div>
           )
         ))}
