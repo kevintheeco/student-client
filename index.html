@@ -847,9 +847,16 @@ async function splitPdfPages(b64,per){
 // 한 chunk(PDF 일부)에서 대>중>소단원(개념) + 개념별 과외용 핵심내용(src) 추출
 async function analyzeBookChunk(b64,label,lang){
   const r=await callAI(
-    "너는 대학 전공 교재를 분석해 '목차 트리'로 정리하는 전문가야. 주어진 PDF 일부를 읽고 내용을 대단원>중단원>개념(소단원) 계층으로 정리해. 각 개념마다 그 개념을 1:1 과외할 수 있을 만큼의 핵심 내용(정의·직관·핵심 공식·대표 예시)을 src에 담아(수식은 LaTeX $...$). 실제 교재에 있는 내용만 쓰고 없는 건 지어내지 마.",
+    "너는 대학 전공 교재를 분석해 '목차 트리'로 정확히 정리하는 전문가다. 주어진 PDF 일부를 읽고 내용을 대단원>중단원>개념(소단원) 3계층으로 정리한다.\n"+
+    "★ 정확도 규칙:\n"+
+    "- u1(대단원)·u2(중단원)은 교재가 실제로 쓰는 제목·번호를 그대로 따라라(예: '제3장 극한', '3.2 연속함수'). 번호가 있으면 번호도 포함. 네가 새 분류를 지어내지 마라.\n"+
+    "- 교재에 나온 순서를 유지하라(앞에서 뒤로).\n"+
+    "- 개념(소단원)은 '하나의 가르칠 단위'(정의·정리·공식·기법 하나)로 잘라라. 너무 뭉뚱그려 묶지도, 한 문장씩 잘게 쪼개지도 마라.\n"+
+    "- 표지·목차·머리말·참고문헌·연습문제답안처럼 가르칠 내용이 없는 페이지는 건너뛰고 units에 넣지 마라.\n"+
+    "- 한 중단원이 이 chunk 경계에서 잘렸으면, 이 chunk에 실제로 있는 내용만 담아라(다음 chunk와 자연히 이어진다).\n"+
+    "- src는 그 개념을 1:1 과외할 수 있을 만큼의 핵심(정의·직관·핵심 공식·대표 예시)을 교재 내용 그대로 압축해라(수식은 LaTeX $...$). 교재에 없는 건 지어내지 마라.",
     [{type:"document",source:{type:"base64",media_type:"application/pdf",data:b64}},
-     {type:"text",text:"이 부분("+label+")을 목차 트리로 정리해. JSON만 출력(코드블록 없이): {\"units\":[{\"u1\":\"대단원 이름\",\"u2\":\"중단원 이름\",\"concepts\":[{\"name\":\"개념(소단원) 이름\",\"src\":\"이 개념 과외용 핵심 내용 300~700자, LaTeX 유지\"}]}]}"}],
+     {type:"text",text:"이 부분("+label+")을 목차 트리로 정리해. 실제 교재 제목·순서·번호를 따라. JSON만 출력(코드블록 없이): {\"units\":[{\"u1\":\"대단원(장) 제목\",\"u2\":\"중단원(절) 제목\",\"concepts\":[{\"name\":\"개념(소단원) 이름\",\"src\":\"이 개념 과외용 핵심 내용 300~700자, LaTeX 유지\"}]}]}"}],
     true,{maxTok:8000,model:ocrModel(),lang});
   return (r&&Array.isArray(r.units))?r.units:[];
 }
@@ -1528,6 +1535,8 @@ function App(){
   function saveNick(n){const v=(n||"").trim();if(!v||!user)return;setNick(v);LS.set(nickKey(user.uid),v);}
 
   function openStudy(id,mode){const d=LS.get(dk(id));if(!d)return;if(mode==="exam"){setActiveDeck(d);setView("exam");return;}if(mode==="learn"){setActiveDeck(d);setView("tutor");return;}setActiveDeck({...d,studyType:mode||d.studyType||"explain"});setView("study");}
+  // 책 소주제 하나만 집중 학습(이해=explain / 암기=quiz). focusId로 그 개념만 출제.
+  function openConcept(deckId,conceptId,mode){const d=LS.get(dk(deckId));if(!d)return;setActiveDeck({...d,studyType:mode||"explain",focusId:conceptId});setView("study");}
   function openNotes(id){const d=LS.get(dk(id));if(d){setNoteDeck(d);setView("notes");}}
   function studyWeak(deck){
     const fresh=LS.get(dk(deck.id))||deck;
@@ -1616,7 +1625,7 @@ function App(){
       {view==="add"&&<AddMaterial subjects={subjects} onSave={saveSubjects} onDone={()=>{refresh();setView("home");}} onCancel={()=>setView("home")}/>}
       {view==="study"&&activeDeck&&<Study deck={activeDeck} subjects={subjects} onExit={()=>{refresh();setView("home");}}/>}
       {view==="exam"&&activeDeck&&<Exam deck={activeDeck} onExit={()=>{refresh();setView("home");}}/>}
-      {view==="tutor"&&activeDeck&&<Tutor deck={activeDeck} onExit={()=>{refresh();setView("home");}}/>}
+      {view==="tutor"&&activeDeck&&<Tutor deck={activeDeck} onExit={()=>{refresh();setView("home");}} onPractice={(cid,mode)=>openConcept(activeDeck.id,cid,mode)}/>}
       {view==="notes"&&noteDeck&&<WeakNotes deck={noteDeck} onBack={()=>{refresh();setView("home");}} onStudy={studyWeak}/>}
 
       <div className="footer">{tr("키와 자료는 이 기기에만 저장","Keys & data stay on this device only")} · {MODELS.find(m=>m.id===CFG.model)?.label.split(" ·")[0]||"Claude"}</div>
@@ -2897,7 +2906,7 @@ function WeakNotes({deck,onBack,onStudy}){
 }
 
 /* ── 개념 과외(플립러닝) ── AI가 먼저 이해시키고, 단계마다 써보기/설명하기로 주고받는 1:1 과외 */
-function Tutor({deck:initial,onExit}){
+function Tutor({deck:initial,onExit,onPractice}){
   const [deck,setDeck]=useState(initial);
   const [concept,setConcept]=useState(null);
   const [turns,setTurns]=useState([]);          // {role, content(API), img?}
@@ -3069,12 +3078,18 @@ OPTIONS: 보기1 | 보기2 | 보기3
         {concepts.length===0&&<div className="empty">{tr("이 자료엔 아직 개념이 없어.","No concepts in this material yet.")}</div>}
         {(()=>{
           const leaf=(c)=>(
-            <button key={c.id} className="card" onClick={()=>start(c)}
-              style={{textAlign:"left",padding:"11px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:10,border:"1.5px solid var(--line)",background:"#FBFAFF"}}>
-              <span style={{fontSize:16}}>{c.taughtAt?"✅":"🎓"}</span>
-              <span style={{flex:1,fontWeight:600,color:"var(--ink)"}}><MathText text={c.name} tag="span"/></span>
-              {c.taughtAt&&<span style={{fontSize:11,color:"var(--sub)"}}>{tr("배웠어","learned")}</span>}
-            </button>
+            <div key={c.id} style={{display:"flex",gap:6,alignItems:"stretch"}}>
+              <button className="card" onClick={()=>start(c)}
+                style={{flex:1,minWidth:0,textAlign:"left",padding:"11px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:10,border:"1.5px solid var(--line)",background:"#FBFAFF"}}>
+                <span style={{fontSize:16}}>{c.taughtAt?"✅":"🎓"}</span>
+                <span style={{flex:1,minWidth:0,fontWeight:600,color:"var(--ink)"}}><MathText text={c.name} tag="span"/></span>
+                {c.taughtAt&&<span style={{fontSize:11,color:"var(--sub)",flexShrink:0}}>{tr("배웠어","learned")}</span>}
+              </button>
+              {onPractice&&<button title={tr("이해 문제 풀이","Practice — understand")} onClick={()=>onPractice(c.id,"explain")}
+                style={{flexShrink:0,padding:"0 11px",fontSize:15,cursor:"pointer",border:"1.5px solid var(--line)",borderRadius:11,background:"#FBFAFF"}}>🧠</button>}
+              {onPractice&&<button title={tr("암기 문제 풀이","Practice — memorize")} onClick={()=>onPractice(c.id,"quiz")}
+                style={{flexShrink:0,padding:"0 11px",fontSize:15,cursor:"pointer",border:"1.5px solid var(--line)",borderRadius:11,background:"#FBFAFF"}}>📇</button>}
+            </div>
           );
           if(!concepts.some(c=>c.u1))return concepts.map(leaf);   // 일반 덱: 평탄 목록
           // 책 덱: 대단원 > 중단원 > 개념 토글 트리
@@ -3295,7 +3310,8 @@ function Study({deck:initial,subjects,onExit}){
   function persist(d){
     deckRef.current=d;
     setDeck(d);
-    if(!LS.set(dk(d.id),d)){
+    const {focusId,...store}=d;   // focusId는 집중학습용 임시값 — 저장엔 안 남겨 다음 일반 학습 오염 방지
+    if(!LS.set(dk(d.id),store)){
       setSubmitErr(T("⚠️ 학습 기록 저장 실패: 저장 공간 부족. 설정에서 오래된 자료를 삭제해줘.","⚠️ Couldn't save progress: storage full. Delete old materials in Settings."));
     }
   }
@@ -3303,6 +3319,7 @@ function Study({deck:initial,subjects,onExit}){
   const quizMode=deck.studyType==="quiz";
   // 세션 전체에서 캐시 공유: summary 있으면 우선 사용 (8000자 이하)
   const studyMat=deck.summary||deck.material.slice(0,8000);
+  const matFor=(c)=>(c&&c.src)?(""+c.src):studyMat;   // 책 개념이면 그 섹션(src)을 자료로 — 소주제별 정확한 출제·채점
   // 두 축: UI 라벨 언어 = 설정(CFG.lang) / AI 출제·채점 내용 언어 = 덱별 override(deck.lang) 우선
   const studyLang=(deck.lang||CFG.lang)==="en"?"en":"ko";   // callAI lang: (내용)
   const T=tr;                                                // UI 라벨 (앱 언어)
@@ -3355,6 +3372,7 @@ function Study({deck:initial,subjects,onExit}){
 
   async function next(d,forceId,practical){
     d=d||deck;
+    if(!forceId&&d.focusId)forceId=d.focusId;   // 책 소주제 집중 학습: 항상 그 개념만 출제
     abortRef.current?.abort();
     const ctrl=new AbortController();
     abortRef.current=ctrl;
@@ -3397,7 +3415,7 @@ function Study({deck:initial,subjects,onExit}){
           ?"너는 심화문제 출제 전문가야. 아래 [원본 기출문제]가 다루는 개념을 더 깊이 파고드는 심화문제 하나를 만들어. 원본보다 어렵게: 여러 개념을 연결하거나, '왜/어떤 경우에'를 묻거나, 한 단계 더 응용하게. 수식은 LaTeX($...$). 반드시 형식으로만 출력:\nQTYPE: understand 또는 apply\nQUESTION: 질문 내용\nPOINTS: 핵심1 | 핵심2 | 핵심3"
           :"너는 기출문제 변형 출제 전문가야. 아래 [원본 기출문제]와 같은 개념·유형을 묻되 숫자·상황·예시만 바꾼 변형문제 하나를 만들어."+(box>=4?" 난이도는 원본보다 살짝 높여 응용을 더해.":" 난이도는 원본과 비슷하게.")+" 수식은 LaTeX($...$). 반드시 형식으로만 출력:\nQTYPE: recall 또는 understand 또는 apply\nQUESTION: 질문 내용\nPOINTS: 핵심1 | 핵심2 | 핵심3";
         try{
-          const raw=await callAI(sys+"\n\n자료:\n"+studyMat.slice(0,4000),
+          const raw=await callAI(sys+"\n\n자료:\n"+matFor(c).slice(0,4000),
             "개념: "+c.name+"\n[원본 기출문제]:\n"+picked.question,
             false,{maxTok:800,model:CFG.qmodel,lang:studyLang},ctrl.signal);
           if(genId.current!==myId)return;
@@ -3443,7 +3461,7 @@ function Study({deck:initial,subjects,onExit}){
         "recall: '$\\mathbf{a}\\times\\mathbf{b}$를 성분으로 나타내어라', '피타고라스 정리를 써라', '선형변환이 되기 위한 두 가지 조건을 말하시오 (개수 명시하며 묻는 것이 좋음)'\n"+
         "understand: '외적이 내적과 근본적으로 다른 점은? 기하학적으로 설명해봐', '왜 이 조건에서 해가 유일한가?', '$\\mathbf{a}\\times\\mathbf{a}$가 항상 영벡터인 이유는?', '자료의 반례를 이용해 이 함수가 왜 선형변환이 아닌지 서술하시오 (반례+이유 설명 요구)', '왜 [특정 케이스]에서 [특정 결과]가 나오는가?'\n"+
         "apply: '$\\mathbf{a}=(1,2,3),\\,\\mathbf{b}=(4,0,-1)$일 때 $\\mathbf{a}\\times\\mathbf{b}$를 구하시오', '$T(x,y)=2x+y$가 선형변환인지 두 조건으로 보여라 (정의를 직접 적용해 검증하는 문제)'\n\n"+
-        "수식은 LaTeX($...$, $$...$$). 반드시 아래 형식으로만 출력:\nQTYPE: recall 또는 understand 또는 apply\nQUESTION: 질문 내용\nPOINTS: 핵심1 | 핵심2 | 핵심3 (| 구분, 3~5개)\n\n자료:\n"+studyMat.slice(0,6000),
+        "수식은 LaTeX($...$, $$...$$). 반드시 아래 형식으로만 출력:\nQTYPE: recall 또는 understand 또는 apply\nQUESTION: 질문 내용\nPOINTS: 핵심1 | 핵심2 | 핵심3 (| 구분, 3~5개)\n\n자료:\n"+matFor(c).slice(0,6000),
         "목표 개념: "+c.name+"\n복습 단계: "+diffLong(c.box),
         false,{cache:true,maxTok:800,model:CFG.qmodel,lang:studyLang},ctrl.signal);
       if(genId.current!==myId)return;
@@ -3463,7 +3481,7 @@ function Study({deck:initial,subjects,onExit}){
     }else{
       sys=common+" 단답형으로 만들어.\n규칙: ① 정답은 용어·정의·연도·짧은 구절 등 짧고 명확한 것 ② 표현·표기·동의어 차이를 허용 목록으로 함께 제공.\nJSON만 출력: {\"question\":\"질문\",\"answer\":\"대표 정답\",\"accept\":[\"허용되는 다른 표기·동의어들\"],\"explain\":\"짧은 해설\"}";
     }
-    const r=await callAI(sys+"\n\n자료:\n"+studyMat.slice(0,5000),
+    const r=await callAI(sys+"\n\n자료:\n"+matFor(c).slice(0,5000),
       "목표 개념: "+c.name,
       true,{cache:true,maxTok:700,model:CFG.qmodel,lang:studyLang},signal);
     if(!r||(fmt==="mc"&&!Array.isArray(r.choices)))throw new Error(T("형식 오류","bad format"));
@@ -3625,7 +3643,7 @@ function Study({deck:initial,subjects,onExit}){
         "② 학습자가 이미 쓴 답(GOT_IT)을 출발점으로 삼아, '네가 ~라고 했는데, 그럼 …?' 처럼 그 답에 이어 붙는 질문으로 만들어. 학습자가 흐릿하게 기억하는 부분을 스스로 끄집어내도록 유도해.\n"+
         "③ 절대 정답·모범답안을 알려주지 말 것. 답을 떠먹여주지 말고 떠올리게만 해.\n"+
         "④ '왜', '그렇다면', '어떤 경우에' 같은 소크라테스식, 반말, 친근하게.\n"+
-        "⑤ 질문 한 문장만 출력 (설명·안내 없이).\n\n자료:\n"+studyMat.slice(0,4000),
+        "⑤ 질문 한 문장만 출력 (설명·안내 없이).\n\n자료:\n"+matFor(concept).slice(0,4000),
         userCtx,
         false,{maxTok:200,model:CFG.qmodel,lang:studyLang},abortRef.current?.signal
       );
@@ -3690,7 +3708,7 @@ function Study({deck:initial,subjects,onExit}){
     try{
       const raw=await callAI(
         "수식 유도 튜터. 학습자가 한 단계씩 공식을 직접 유도할 수 있도록 계획을 세워. 각 단계는 한 줄~두 줄 수식 하나로 분리해. 수식은 LaTeX($...$).",
-        "개념: "+concept.name+"\n자료:\n"+studyMat.slice(0,4000)+"\n\n다음 형식으로만 출력:\nSTEPS: 단계수(3~6)\nSTART: 시작 안내 문장\nHINT1: 1단계 힌트\nHINT2: 2단계 힌트\n... (단계수만큼)",
+        "개념: "+concept.name+"\n자료:\n"+matFor(concept).slice(0,4000)+"\n\n다음 형식으로만 출력:\nSTEPS: 단계수(3~6)\nSTART: 시작 안내 문장\nHINT1: 1단계 힌트\nHINT2: 2단계 힌트\n... (단계수만큼)",
         false,{maxTok:700,model:CFG.qmodel,lang:studyLang},abortRef.current?.signal);
       setDerivePlan(parseDerivePlan(raw));
       setPhase("derive_step");
@@ -3709,7 +3727,7 @@ function Study({deck:initial,subjects,onExit}){
     userBlocks.push({type:"text",text:
       "개념: "+concept.name+"\n현재 단계: "+(deriveIdx+1)+"/"+derivePlan.totalSteps+"\n"+histTxt+
       "학습자 답"+(hasTxt?":\n"+answer.trim():" (손글씨 이미지)")+"\n\n"+
-      "자료:\n"+studyMat.slice(0,2500)+"\n\n"+
+      "자료:\n"+matFor(concept).slice(0,2500)+"\n\n"+
       "다음 형식으로 평가:\nCORRECT: yes 또는 no\nDONE: yes 또는 no (마지막 단계가 맞을 때만)\nFEEDBACK: 1~2문장 반말\nNEXT: 다음 단계 안내 (CORRECT=yes·DONE=no일 때만)"
     });
     try{
@@ -3761,7 +3779,7 @@ function Study({deck:initial,subjects,onExit}){
         "너는 '니가교수'라는 따뜻한 교수 캐릭터야. 학습자가 문제를 풀다 막혀서 '여기가 내 한계야' 버튼을 눌렀어. 학습자가 지금까지 쓴 답을 보고, 막힌 정도를 스스로 판단해서 딱 맞는 도움을 한 번 줘:\n"+
         "· 거의 다 왔거나 조금만 막혔으면 → '네가 ~까지 했는데, 그럼 …?' 식의 소크라테스식 유도 질문 하나로 스스로 떠올리게 해.\n"+
         "· 많이 막혔거나 백지에 가까우면 → 시작할 발판이 되는 구체적 힌트(어떤 개념·공식·접근을 떠올리면 되는지)를 줘.\n"+
-        "규칙: ① 절대 최종 정답·완성된 풀이를 통째로 주지 마 — 학습자가 마지막 한 걸음은 직접 딛게. ② 반말, 따뜻하고 짧게(2~4문장). ③ 수식은 LaTeX($...$). ④ ##·목록·>> 같은 기호 없이 말풍선처럼 자연스러운 말투로. 격려 한마디로 끝맺어.\n\n자료:\n"+studyMat.slice(0,5000),
+        "규칙: ① 절대 최종 정답·완성된 풀이를 통째로 주지 마 — 학습자가 마지막 한 걸음은 직접 딛게. ② 반말, 따뜻하고 짧게(2~4문장). ③ 수식은 LaTeX($...$). ④ ##·목록·>> 같은 기호 없이 말풍선처럼 자연스러운 말투로. 격려 한마디로 끝맺어.\n\n자료:\n"+matFor(concept).slice(0,5000),
         userBlocks,false,{maxTok:500,model:CFG.qmodel,lang:studyLang},ctrl.signal);
       if(genId.current!==myId)return;
       const help=(r||"").trim();
