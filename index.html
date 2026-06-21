@@ -709,12 +709,31 @@ async function callClaude(system,userContent,wantJson,opts={},signal){
   const sysPay=opts.cache
     ?[{type:"text",text:system,cache_control:{type:"ephemeral"}}]
     :system;
+  const wantStream=!!opts.onDelta&&!wantJson;   // 스트리밍: 글자씩 onDelta로 흘려보냄(정확도 동일, 체감속도 ↑)
   const res=await fetch("https://api.anthropic.com/v1/messages",{
     method:"POST",headers:hdrs,signal,
     body:JSON.stringify({model:opts.model||CFG.model,max_tokens:maxTok,system:sysPay,
-      messages:opts.messages||[{role:"user",content:userContent}]}),
+      messages:opts.messages||[{role:"user",content:userContent}],...(wantStream?{stream:true}:{})}),
   });
   if(!res.ok){let m="API "+res.status;try{const j=await res.json();if(j.error?.message)m=j.error.message}catch{}throw new Error(m)}
+  if(wantStream&&res.body&&res.body.getReader){
+    const reader=res.body.getReader(),dec=new TextDecoder();let buf="",full="";
+    while(true){
+      const {done,value}=await reader.read();
+      if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      let nl;
+      while((nl=buf.indexOf("\n"))>=0){
+        const line=buf.slice(0,nl).trim();buf=buf.slice(nl+1);
+        if(!line.startsWith("data:"))continue;
+        const pl=line.slice(5).trim();if(pl==="[DONE]")continue;
+        let ev;try{ev=JSON.parse(pl);}catch{continue;}
+        if(ev.type==="content_block_delta"&&ev.delta&&ev.delta.type==="text_delta"){full+=ev.delta.text;try{opts.onDelta(full);}catch{}}
+        else if(ev.type==="error")throw new Error(ev.error?.message||"stream error");
+      }
+    }
+    return full.trim();
+  }
   const data=await res.json();
   const text=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n").trim();
   if(!wantJson)return text;
@@ -2687,6 +2706,8 @@ function Tutor({deck:initial,onExit}){
   const [penMode,setPenMode]=useState(true);   // 손글씨 우선 — 타이핑은 '✕ 텍스트로'
   const [hidePeek,setHidePeek]=useState(false);  // RECALL(백지 회상): 직전 선생님 말풍선 가리기
   const [err,setErr]=useState("");
+  const [stream,setStream]=useState("");        // 스트리밍: 도착 중인 선생님 답(글자씩)
+  const [review,setReview]=useState(null);      // 로딩 중 '외워봐' 복습 개념
   const padRef=useRef(null);
   const sysRef=useRef("");
   const abortRef=useRef(null);
@@ -2737,13 +2758,26 @@ function Tutor({deck:initial,onExit}){
 위 예시들(LLN/CLT/Slutsky/Delta 등)은 '가르치는 방식'의 본보기일 뿐이다. 실제 내용은 학생이 고른 개념 "${c.name}"과 위 자료에 맞춰라. 지금부터 학생과 주고받으며 과외를 시작해라.`;
   }
 
+  // 로딩 동안 띄울 복습 개념: 이미 배운 옆 개념 우선 → 없으면 아무 옆 개념 → 없으면 현재 개념
+  function pickReview(){
+    const sibs=concepts.filter(x=>x.name&&x.name!==concept?.name);
+    const pool=sibs.filter(x=>x.taughtAt).length?sibs.filter(x=>x.taughtAt):sibs;
+    const arr=pool.length?pool:(concept?[concept]:[]);
+    return arr.length?arr[Math.floor(Math.random()*arr.length)]:null;
+  }
+  // 스트리밍 표시용: 끝의 CONTROL 신호는 화면에 안 보이게 떼고 보여줌
+  const stripCtrl=s=>s.replace(/\n*CONTROL:[\s\S]*$/i,"").trimEnd();
+
   async function turn(userTurn,base){
     const next=[...(base!==undefined?base:turns),userTurn];
     setTurns(next);setBusy(true);setControl(null);setErr("");setHidePeek(false);
+    setStream("");setReview(pickReview());
     const ctrl=new AbortController();abortRef.current=ctrl;
     try{
       const reply=await callAI(sysRef.current,"",false,
-        {maxTok:2000,cache:true,model:CFG.model,messages:next.map(t=>({role:t.role,content:t.content}))},ctrl.signal);
+        {maxTok:2000,cache:true,model:CFG.model,messages:next.map(t=>({role:t.role,content:t.content})),
+         onDelta:full=>setStream(stripCtrl(full))},ctrl.signal);
+      setStream("");
       const sig=(reply.match(/CONTROL:\s*(ASK|NEXT|DONE|COPY|RECALL)/i)||[])[1];
       const clean=reply.replace(/CONTROL:\s*(ASK|NEXT|DONE|COPY|RECALL)\s*$/i,"").replace(/\n+$/,"").trim();
       setTurns(t=>[...t,{role:"assistant",content:clean}]);
@@ -2752,7 +2786,7 @@ function Tutor({deck:initial,onExit}){
       setPenMode(true);
       setHidePeek(c==="RECALL");
       if(c==="DONE")markTaught();
-    }catch(e){if(e.name!=="AbortError")setErr(e.message||tr("오류가 났어. 다시 시도해줘.","Something went wrong. Try again."));}
+    }catch(e){setStream("");if(e.name!=="AbortError")setErr(e.message||tr("오류가 났어. 다시 시도해줘.","Something went wrong. Try again."));}
     setBusy(false);
   }
 
@@ -2844,7 +2878,24 @@ function Tutor({deck:initial,onExit}){
             </div>
           )
         ))}
-        {busy&&<div style={{alignSelf:"flex-start",color:"var(--sub)",fontSize:13,padding:"4px 8px"}}>🎓 {tr("선생님이 쓰는 중…","Tutor is writing…")}</div>}
+        {busy&&stream&&(
+          <div style={{alignSelf:"flex-start",maxWidth:"92%",background:"#fff",border:"1.5px solid var(--line)",borderRadius:"4px 16px 16px 16px",padding:"12px 15px"}}>
+            <div style={{fontSize:11,color:"var(--pri)",fontWeight:700,marginBottom:3}}>🎓 {tr("선생님","Tutor")}</div>
+            <MathText text={stream}/><span style={{opacity:.5}}>▍</span>
+          </div>
+        )}
+        {busy&&!stream&&(
+          <div style={{alignSelf:"flex-start",maxWidth:"92%",display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{color:"var(--sub)",fontSize:13,padding:"2px 8px"}}>🎓 {tr("선생님이 준비 중…","Tutor is getting ready…")}</div>
+            {review&&(
+              <div style={{background:"#FFF6E9",border:"1.5px solid #FBD38D",borderRadius:12,padding:"11px 14px"}}>
+                <div style={{fontSize:11,fontWeight:800,color:"#92620A",marginBottom:4}}>⏳ {tr("기다리는 동안 — 이거 외워봐!","While you wait — memorize this!")}</div>
+                <div style={{fontSize:15,fontWeight:700,color:"var(--ink)"}}><MathText text={review.name} tag="span"/></div>
+                <div style={{fontSize:12,color:"var(--sub)",marginTop:3,lineHeight:1.4}}>{tr("안 보고 머릿속으로 한 번 떠올려봐.","Recall it in your head, no peeking.")}</div>
+              </div>
+            )}
+          </div>
+        )}
         {err&&<div className="err" style={{fontSize:13}}>{err}</div>}
       </div>
 
