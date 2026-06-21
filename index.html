@@ -2704,9 +2704,9 @@ function Tutor({deck:initial,onExit}){
   const [control,setControl]=useState(null);    // ASK | NEXT | DONE | COPY | RECALL
   const [input,setInput]=useState("");
   const [penMode,setPenMode]=useState(true);   // 손글씨 우선 — 타이핑은 '✕ 텍스트로'
-  const [hidePeek,setHidePeek]=useState(false);  // RECALL(백지 회상): 직전 선생님 말풍선 가리기
+  const [hidePeek,setHidePeek]=useState(false);  // RECALL(백지 회상): 직전 교수님 말풍선 가리기
   const [err,setErr]=useState("");
-  const [stream,setStream]=useState("");        // 스트리밍: 도착 중인 선생님 답(글자씩)
+  const [stream,setStream]=useState("");        // 스트리밍: 도착 중인 교수님 답(글자씩)
   const [review,setReview]=useState(null);      // 로딩 중 '외워봐' 복습 개념
   const padRef=useRef(null);
   const sysRef=useRef("");
@@ -2720,7 +2720,7 @@ function Tutor({deck:initial,onExit}){
   function tutorSystem(c){
     const sibs=concepts.map(x=>x.name).filter(n=>n&&n!==c.name).slice(0,30).join(", ");
     const mat=(deck.summary||deck.material||"").slice(0,4000);
-    return `너는 학생의 1:1 개인 과외 선생님이다. 지금 학생이 고른 개념은 "${c.name}"이고, "${deck.name}" 자료의 일부다.`+
+    return `너는 학생의 1:1 개인 과외 교수다(학생은 너를 '교수님'이라 부른다). 지금 학생이 고른 개념은 "${c.name}"이고, "${deck.name}" 자료의 일부다.`+
 (sibs?` 같은 자료의 다른 개념들: ${sibs}.`:"")+
 (mat?`\n\n[참고 — 학생이 올린 강의자료 발췌. 이 내용에 뿌리내려 설명하고, 자료에 없는 건 일반 지식으로 보충하되 자료와 어긋나지 마라]\n${mat}\n`:"")+
 `
@@ -2825,7 +2825,7 @@ function Tutor({deck:initial,onExit}){
         <button className="btn gho sm" onClick={onExit}>{tr("← 목록","← Back")}</button>
         <div style={{fontFamily:"'Jua',sans-serif",fontSize:17,color:"var(--ink)"}}>🎓 {tr("개념 과외","Tutor")} · {deck.name}</div>
       </div>
-      <p className="hint" style={{marginBottom:14}}>{tr("개념을 하나 고르면, 선생님이 처음부터 1:1로 이해시켜줄게. 중간중간 직접 써보고 설명하면서 진짜 네 것으로 만드는 플립러닝이야.","Pick one concept and I'll teach it 1:1 from scratch — you'll write and explain along the way.")}</p>
+      <p className="hint" style={{marginBottom:14}}>{tr("개념을 하나 고르면, 교수님이 처음부터 1:1로 이해시켜줄게. 중간중간 직접 써보고 설명하면서 진짜 네 것으로 만드는 플립러닝이야.","Pick one concept and I'll teach it 1:1 from scratch — you'll write and explain along the way.")}</p>
       <div style={{display:"flex",flexDirection:"column",gap:9}}>
         {concepts.map(c=>(
           <button key={c.id} className="card" onClick={()=>start(c)}
@@ -2862,12 +2862,12 @@ function Tutor({deck:initial,onExit}){
             (hidePeek&&i===lastAiIdx)?(
             <div key={i} style={{alignSelf:"flex-start",maxWidth:"92%",background:"#fff",border:"1.5px dashed var(--pri)",borderRadius:"4px 16px 16px 16px",padding:"16px 15px",textAlign:"center"}}>
               <div style={{fontSize:26,marginBottom:4}}>🙈</div>
-              <div style={{fontSize:12.5,color:"var(--sub)",marginBottom:9,lineHeight:1.5}}>{tr("선생님 설명을 가렸어.\n안 보고 먼저 손으로 적어봐!","Hidden — write from memory first!")}</div>
+              <div style={{fontSize:12.5,color:"var(--sub)",marginBottom:9,lineHeight:1.5}}>{tr("교수님 설명을 가렸어.\n안 보고 먼저 손으로 적어봐!","Hidden — write from memory first!")}</div>
               <button className="btn gho sm" onClick={()=>setHidePeek(false)}>{tr("👀 펼쳐보기","👀 Reveal")}</button>
             </div>
             ):(
             <div key={i} style={{alignSelf:"flex-start",maxWidth:"92%",background:"#fff",border:"1.5px solid var(--line)",borderRadius:"4px 16px 16px 16px",padding:"12px 15px"}}>
-              <div style={{fontSize:11,color:"var(--pri)",fontWeight:700,marginBottom:3}}>🎓 {tr("선생님","Tutor")}</div>
+              <div style={{fontSize:11,color:"var(--pri)",fontWeight:700,marginBottom:3}}>🎓 {tr("교수님","Tutor")}</div>
               <MathText text={t.content}/>
             </div>
             )
@@ -2880,13 +2880,13 @@ function Tutor({deck:initial,onExit}){
         ))}
         {busy&&stream&&(
           <div style={{alignSelf:"flex-start",maxWidth:"92%",background:"#fff",border:"1.5px solid var(--line)",borderRadius:"4px 16px 16px 16px",padding:"12px 15px"}}>
-            <div style={{fontSize:11,color:"var(--pri)",fontWeight:700,marginBottom:3}}>🎓 {tr("선생님","Tutor")}</div>
+            <div style={{fontSize:11,color:"var(--pri)",fontWeight:700,marginBottom:3}}>🎓 {tr("교수님","Tutor")}</div>
             <MathText text={stream}/><span style={{opacity:.5}}>▍</span>
           </div>
         )}
         {busy&&!stream&&(
           <div style={{alignSelf:"flex-start",maxWidth:"92%",display:"flex",flexDirection:"column",gap:8}}>
-            <div style={{color:"var(--sub)",fontSize:13,padding:"2px 8px"}}>🎓 {tr("선생님이 준비 중…","Tutor is getting ready…")}</div>
+            <div style={{color:"var(--sub)",fontSize:13,padding:"2px 8px"}}>🎓 {tr("교수님이 준비 중…","Tutor is getting ready…")}</div>
             {review&&(
               <div style={{background:"#FFF6E9",border:"1.5px solid #FBD38D",borderRadius:12,padding:"11px 14px"}}>
                 <div style={{fontSize:11,fontWeight:800,color:"#92620A",marginBottom:4}}>⏳ {tr("기다리는 동안 — 이거 외워봐!","While you wait — memorize this!")}</div>
