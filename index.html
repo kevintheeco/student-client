@@ -22,6 +22,16 @@
   --sh: 0 14px 34px -16px rgba(108,92,231,.35);
   --sh-sm: 0 6px 16px -10px rgba(108,92,231,.4);
 }
+/* 학원용(#academy) 전용 — 단정한 B2B 테마. 개인앱엔 영향 없음(스코프 한정) */
+body:has(.academy-skin){background:#EDF1F6}
+.academy-skin{
+  --bg:#EDF1F6; --card:#fff; --ink:#1A2436; --sub:#5B6779; --line:#DCE3EC;
+  --pri:#27406B; --pri-d:#1B2D4D; --pri-s:#EAF0F7;
+  --mint:#2F855A; --rose:#C0392B; --gold:#B7791F;
+  --sh:0 10px 28px -18px rgba(26,36,54,.32); --sh-sm:0 4px 14px -10px rgba(26,36,54,.4);
+  font-family:'Pretendard','Noto Sans KR',system-ui,'Segoe UI',sans-serif;
+}
+.academy-skin h1,.academy-skin h2{font-family:'Pretendard','Noto Sans KR',system-ui,sans-serif;letter-spacing:-.01em}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg)}
 body{font-family:'Noto Sans KR','Segoe UI Symbol','Apple Symbols','Symbola',system-ui,sans-serif;color:var(--ink);
@@ -830,7 +840,7 @@ function Prof({size=56}){
    단원평가(시험) 모드 — 이해+암기 합친 실전 시험
    출제(AI) → 응시(손글씨 보존) → 일괄 깊은 채점 → 검토. box(복습)와 독립.
 ════════════════════════════════════════════ */
-function Exam({deck,topic,onExit,student,academy}){
+function Exam({deck,topic,onExit,student,academy,academyName}){
   const examLang=((deck&&deck.lang)||CFG.lang)==="en"?"en":"ko";
   const T=(ko,en)=>examLang==="en"?en:ko;
   const studyMat=deck?(deck.summary||deck.material.slice(0,8000)):"";
@@ -1181,14 +1191,11 @@ function Exam({deck,topic,onExit,student,academy}){
           return(
           <div id="parent-report" className="card qcard" style={{maxWidth:760,margin:"0 auto",padding:"24px 26px"}}>
             <style>{`@media print{body *{visibility:hidden!important}#parent-report,#parent-report *{visibility:visible!important}#parent-report{position:absolute;left:0;top:0;width:100%;max-width:none;border:none;box-shadow:none;margin:0}.report-noprint{display:none!important}}`}</style>
-            {/* 리포트 헤더 */}
-            <div style={{display:"flex",alignItems:"center",gap:10,borderBottom:"2px solid var(--pri)",paddingBottom:12,marginBottom:16}}>
-              <Prof size={40}/>
-              <div style={{flex:1}}>
-                <div style={{fontFamily:"'Jua',sans-serif",fontSize:18,color:"var(--ink)"}}>{T("레벨테스트 진단 리포트","Level Test Report")}</div>
-                <div style={{fontSize:12,color:"var(--sub)"}}>{T("니가교수 · 학부모 상담용","YouAreProfessor · for parent consultation")}</div>
-              </div>
-              <div style={{textAlign:"right",fontSize:12,color:"var(--sub)"}}>{new Date().toLocaleDateString(examLang==="en"?"en-US":"ko-KR",{year:"numeric",month:"long",day:"numeric"})}</div>
+            {/* 레터헤드 */}
+            <div style={{textAlign:"center",borderBottom:"3px double var(--pri)",paddingBottom:14,marginBottom:18}}>
+              <div style={{fontSize:13,fontWeight:700,letterSpacing:".06em",color:"var(--pri-d)"}}>{academyName||T("○○ 학원","Academy")}</div>
+              <div style={{fontSize:24,fontWeight:800,color:"var(--ink)",letterSpacing:"-.01em",margin:"4px 0 2px"}}>{T("레벨테스트 진단 리포트","Level Test Diagnostic Report")}</div>
+              <div style={{fontSize:11.5,color:"var(--sub)"}}>{T("학부모 상담용","For parent consultation")} · {new Date().toLocaleDateString(examLang==="en"?"en-US":"ko-KR",{year:"numeric",month:"long",day:"numeric"})}</div>
             </div>
             {/* 학생·범위·총점 */}
             <div style={{display:"flex",flexWrap:"wrap",gap:"10px 24px",marginBottom:16,fontSize:14}}>
@@ -1262,7 +1269,13 @@ function Exam({deck,topic,onExit,student,academy}){
                 </tbody>
               </table>
             </div>
-            <div className="report-noprint" style={{display:"flex",gap:8,flexWrap:"wrap",borderTop:"1px solid var(--line)",paddingTop:14}}>
+            {/* 서명·확인란 (인쇄 포함) */}
+            <div style={{display:"flex",gap:18,flexWrap:"wrap",marginTop:10,paddingTop:16,borderTop:"1px solid var(--line)",fontSize:13,color:"var(--sub)"}}>
+              <div style={{flex:"1 1 150px"}}>{T("상담일","Date")} <span style={{display:"inline-block",minWidth:84,borderBottom:"1px solid var(--ink)"}}>&nbsp;</span></div>
+              <div style={{flex:"1 1 150px"}}>{T("담당 선생님","Teacher")} <span style={{display:"inline-block",minWidth:84,borderBottom:"1px solid var(--ink)"}}>&nbsp;</span> {T("(인)","")}</div>
+              <div style={{flex:"1 1 150px"}}>{T("학부모 확인","Parent")} <span style={{display:"inline-block",minWidth:84,borderBottom:"1px solid var(--ink)"}}>&nbsp;</span> {T("(인)","")}</div>
+            </div>
+            <div className="report-noprint" style={{display:"flex",gap:8,flexWrap:"wrap",borderTop:"1px solid var(--line)",paddingTop:14,marginTop:14}}>
               <button className="btn pri" onClick={()=>window.print()}>🖨️ {T("인쇄 / PDF 저장","Print / Save PDF")}</button>
               <button className="btn gho" onClick={()=>setShowReport(false)}>{T("← 채점 결과로","← Back to results")}</button>
               <button className="btn gho" onClick={onExit}>{T("홈으로","Home")}</button>
@@ -4322,6 +4335,8 @@ function AcademyApp(){
   const [view,setView]=useState("build");   // build | preview | exam
   const [topic,setTopic]=useState(null);
   const [student,setStudent]=useState(LS.get("ng:academy:student")||"");
+  const [acaName,setAcaName]=useState(LS.get("ng:academy:name")||"");
+  const saveAca=(v)=>{setAcaName(v);LS.set("ng:academy:name",v);};
   const [picked,setPicked]=useState({});     // "subjId::단원" → {name,subj,count,difficulty}
   const [openSubj,setOpenSubj]=useState(null);
   const [keyReady,setKeyReady]=useState(!!(CFG.key||CFG.geminiKey));
@@ -4346,7 +4361,7 @@ function AcademyApp(){
     </div>
   );
   if(!keyReady)return(<><Head/><div className="card panel"><div className="eyebrow" style={{marginBottom:8}}>{tr("API 키 입력","API key")}</div><KeyForm onSaved={()=>setKeyReady(true)} cta={tr("저장하고 시작","Save & start")}/></div></>);
-  if(view==="exam"&&topic)return(<Exam topic={topic} student={student} academy onExit={()=>setView("build")}/>);
+  if(view==="exam"&&topic)return(<Exam topic={topic} student={student} academy academyName={acaName} onExit={()=>setView("build")}/>);
 
   // ── 미리보기 ──
   if(view==="preview"&&topic)return(<>
@@ -4389,10 +4404,16 @@ function AcademyApp(){
           <p>{tr("학생 이름을 적고, 과목을 펼쳐 진단할 단원을 골라줘. 단원별 문항 수·난이도를 정한 뒤 테스트를 만들면 손글씨 풀이까지 AI가 채점해 단원별 약점과 학부모 리포트를 보여줘.","Name the student, expand a subject, pick units, set counts/difficulty.")}</p>
         </div>
       </div>
-      {/* 학생 이름 */}
-      <div className="card" style={{padding:"14px 16px",marginBottom:16}}>
-        <label style={{fontSize:12.5,fontWeight:700,color:"var(--sub)",display:"block",marginBottom:6}}>🧑‍🎓 {tr("학생 이름","Student name")}</label>
-        <input className="field" value={student} onChange={e=>saveStudent(e.target.value)} placeholder={tr("예: 김도윤","e.g. Jane")} style={{maxWidth:280}}/>
+      {/* 학원명 · 학생 이름 */}
+      <div className="card" style={{padding:"14px 16px",marginBottom:16,display:"flex",gap:14,flexWrap:"wrap"}}>
+        <div style={{flex:"1 1 220px"}}>
+          <label style={{fontSize:12.5,fontWeight:700,color:"var(--sub)",display:"block",marginBottom:6}}>🏫 {tr("학원명","Academy name")}</label>
+          <input className="field" value={acaName} onChange={e=>saveAca(e.target.value)} placeholder={tr("예: 구주이배수학학원","e.g. Acme Math")}/>
+        </div>
+        <div style={{flex:"1 1 220px"}}>
+          <label style={{fontSize:12.5,fontWeight:700,color:"var(--sub)",display:"block",marginBottom:6}}>🧑‍🎓 {tr("학생 이름","Student name")}</label>
+          <input className="field" value={student} onChange={e=>saveStudent(e.target.value)} placeholder={tr("예: 김도윤","e.g. Jane")}/>
+        </div>
       </div>
       {/* 과목·단원 선택 */}
       {CURRICULUM.map((lv,li)=>(
@@ -4459,7 +4480,7 @@ function AcademyApp(){
 function Root(){
   const [academy,setAcademy]=useState(/academy/i.test(location.hash));
   useEffect(()=>{const f=()=>setAcademy(/academy/i.test(location.hash));window.addEventListener("hashchange",f);return ()=>window.removeEventListener("hashchange",f);},[]);
-  return academy?<AcademyApp/>:<App/>;
+  return academy?<div className="academy-skin"><AcademyApp/></div>:<App/>;
 }
 
 initStorage().then(()=>{
