@@ -3027,7 +3027,7 @@ OPTIONS: 보기1 | 보기2 | 보기3
 - 말투는 친절·차분하되 과한 칭찬·감정적 위로 없이 과외하듯 정확히 이끌어라. "좋아, 지금 막힌 지점은 여기야", "복잡해 보여도 구조는 하나야", "시험장에선 이렇게 판단하면 돼" 톤. "답만/간단히"면 핵심만, "자세히/이해 안 돼"면 단계별로 길게.
 
 # 수식·표기
-수식은 LaTeX로(인라인 $...$, 디스플레이 $$...$$), 한 줄씩 나누고 중간 계산(분산·표준화·미분)을 생략하지 마라. 필요하면 마크다운 표, 라벨 있는 인라인 SVG 그래프도 써도 된다.
+수식은 LaTeX로(인라인 $...$, 디스플레이 $$...$$), 한 줄씩 나누고 중간 계산(분산·표준화·미분)을 생략하지 마라. **수식 기호는 반드시 짝을 맞춰 닫아라 — 여는 $ 또는 $$ 를 닫지 않고 남기면 화면에 날것 LaTeX($s^2=...)가 그대로 깨져 보인다.** 인라인 $…$ 는 한 줄 안에서 열고 닫고(줄을 넘기지 마라), 여러 줄·행렬·긴 식은 $$…$$ 로 써라. 필요하면 마크다운 표, 라벨 있는 인라인 SVG 그래프도 써도 된다.
 
 위 예시들(LLN/CLT/Slutsky/Delta 등)은 '가르치는 방식'의 본보기일 뿐이다. 실제 내용은 학생이 고른 개념 "${c.name}"과 위 자료에 맞춰라. 지금부터 학생과 주고받으며 과외를 시작해라.`;
   }
@@ -4646,6 +4646,30 @@ function _fixLatex(s){
   if(!s)return s;
   return s.replace(/(^|[^\\])%/g,"$1\\%");
 }
+// 수식 깨짐 방지: 짝 안 맞는 $/$$(모델이 닫는 기호를 빼먹음)를 자동으로 닫아 raw LaTeX 노출을 막는다.
+// 인라인 $…$는 줄 끝까지만 닫아(다음 줄 본문까지 수식으로 빨려들지 않게), 디스플레이 $$…$$는 끝까지 닫는다.
+function _balanceMath(s){
+  if(!s||s.indexOf("$")<0)return s;
+  const D=String.fromCharCode(2);
+  s=s.split("\\$").join(D);                                  // 통화 \$ 보호
+  let out="",i=0;const n=s.length;
+  while(i<n){
+    if(s[i]==="$"&&s[i+1]==="$"){                            // 디스플레이 $$..$$
+      const c=s.indexOf("$$",i+2);
+      if(c<0){out+=s.slice(i).replace(/\s+$/,"")+"$$";i=n;}  // 안 닫힘 → 닫아줌
+      else{out+=s.slice(i,c+2);i=c+2;}
+      continue;
+    }
+    if(s[i]==="$"){                                          // 인라인 $..$
+      const c=s.indexOf("$",i+1),nl=s.indexOf("\n",i+1);
+      if(c>=0&&(nl<0||c<nl)){out+=s.slice(i,c+1);i=c+1;}     // 같은 줄에서 정상 닫힘
+      else{const end=nl<0?n:nl;out+="$"+s.slice(i+1,end).replace(/\s+$/,"")+"$";i=end;}  // 안 닫힘 → 줄 끝에서 닫아줌
+      continue;
+    }
+    out+=s[i];i++;
+  }
+  return out.split(D).join("\\$");
+}
 function _renderLatexInline(text,kp){
   if(!text)return[];
   const D=String.fromCharCode(1);            // 통화 달러($) 보호용 placeholder
@@ -4780,12 +4804,12 @@ function Cheer({style}){
 
 function MathText({text,tag:Tag="p",className,style}){
   if(!text)return React.createElement(Tag,{className,style});
-  const cleaned=String(text)
+  const cleaned=_balanceMath(String(text)
     .replace(/<!--[\s\S]*?-->/g,"")
     .replace(/```[\w]*\s*(<svg[\s\S]*?<\/svg>)\s*```/gi,"$1")
     .replace(/<svg(?![\s\S]*<\/svg>)[\s\S]*$/i,"")                      // 닫히지 않은(잘린) svg는 통째로 제거 — 날것 노출 방지
     .replace(/\\\[([\s\S]+?)\\\]/g,(m,p)=>"\n\n$$"+p.trim()+"$$\n\n")   // \[..\] → $$..$$
-    .replace(/\\\(([\s\S]+?)\\\)/g,(m,p)=>"$"+p.trim()+"$");            // \(..\) → $..$
+    .replace(/\\\(([\s\S]+?)\\\)/g,(m,p)=>"$"+p.trim()+"$"));           // \(..\) → $..$ → 마지막에 짝 안 맞는 $ 보정
   if(Tag==="span")return React.createElement("span",{className,style},..._renderInline(cleaned,"s"));
   const nodes=[];const kr={n:0};
   const svgSegs=cleaned.split(/(<svg[\s\S]*?<\/svg>)/i);
