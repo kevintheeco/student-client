@@ -1,13 +1,13 @@
 // 니가교수 AI 백업 프록시 (Cloudflare Worker)
 // 클로드 API 장애 시 클라이언트가 여기로 폴백한다. 키는 이 서버(시크릿)에만 존재.
-// 순서: Gemini → (실패 시) OpenAI(GPT).
+// 순서: Gemini → (실패 시) OpenAI(GPT). smart 단계 OpenAI는 추론 모델 지원.
 //
 // 시크릿 등록:  wrangler secret put GEMINI_KEY  /  wrangler secret put OPENAI_KEY
 // 배포:        wrangler deploy
 //
 // 요청(POST /):  { system, messages:[{role,content}], wantJson, maxTok, tier:"fast"|"smart" }
 //   content: 문자열 또는 Anthropic식 블록배열 [{type:"text"|"image"|"document", ...}]
-// 응답:          { text, provider } | { error }
+// 응답:          { text, provider, model } | { error }
 
 export default {
   async fetch(request, env) {
@@ -16,7 +16,6 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     if (request.method !== "POST") return json({ error: "POST only" }, 405, cors);
 
-    // 오리진 검사 — 브라우저 호출은 허용목록만. (Origin 없으면 비브라우저=테스트로 간주해 통과)
     const origin = request.headers.get("Origin");
     if (origin && !originAllowed(origin, env)) return json({ error: "forbidden origin" }, 403, cors);
 
@@ -32,16 +31,16 @@ export default {
     // 1) Gemini
     if (env.GEMINI_KEY) {
       try {
-        const text = await callGemini(env, system, messages, tokens, tier);
-        return json({ text, provider: "gemini" }, 200, cors);
+        const r = await callGemini(env, system, messages, tokens, tier);
+        return json({ text: r.text, provider: "gemini", model: r.model }, 200, cors);
       } catch (e) { errors.push("gemini: " + (e && e.message || e)); }
     } else errors.push("gemini: no key");
 
-    // 2) OpenAI (GPT)
+    // 2) OpenAI (GPT) — smart는 추론 모델, 실패 시 gpt-4o로 자동 복구
     if (env.OPENAI_KEY) {
       try {
-        const text = await callOpenAI(env, system, messages, tokens, tier);
-        return json({ text, provider: "openai" }, 200, cors);
+        const r = await callOpenAI(env, system, messages, tokens, tier);
+        return json({ text: r.text, provider: "openai", model: r.model }, 200, cors);
       } catch (e) { errors.push("openai: " + (e && e.message || e)); }
     } else errors.push("openai: no key");
 
@@ -76,12 +75,12 @@ async function callGemini(env, system, messages, maxTok, tier) {
   const data = await res.json();
   const text = (data.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("").trim();
   if (!text) throw new Error("empty");
-  return text;
+  return { text, model };
 }
 
 /* ---------- OpenAI (Chat Completions) ---------- */
 async function callOpenAI(env, system, messages, maxTok, tier) {
-  const model = tier === "fast"
+  const primary = tier === "fast"
     ? (env.OPENAI_MODEL_FAST || "gpt-4o-mini")
     : (env.OPENAI_MODEL_SMART || "gpt-4o");
   const oaMsgs = [{ role: "system", content: system }];
@@ -96,16 +95,32 @@ async function callOpenAI(env, system, messages, maxTok, tier) {
     }
     oaMsgs.push({ role: m.role || "user", content: parts });
   }
+  try { return await oaRequest(env, primary, oaMsgs, maxTok); }
+  catch (e) {
+    // 지정 모델 실패(오타·미접근·추론모델 이슈) → 안전 모델 gpt-4o로 복구. 라이브 제품 보호.
+    if (primary !== "gpt-4o") return await oaRequest(env, "gpt-4o", oaMsgs, maxTok);
+    throw e;
+  }
+}
+async function oaRequest(env, model, oaMsgs, maxTok) {
+  const reasoning = /^o\d/i.test(model) || /^gpt-5/i.test(model);   // o1/o3/o4..., 향후 추론 모델
+  const payload = { model, messages: oaMsgs };
+  if (reasoning) {
+    payload.max_completion_tokens = Math.max(maxTok, 6000);          // 추론 토큰 여유(답 잘림 방지)
+  } else {
+    payload.max_tokens = maxTok;
+    payload.temperature = 0.3;
+  }
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: "Bearer " + env.OPENAI_KEY },
-    body: JSON.stringify({ model, messages: oaMsgs, max_tokens: maxTok, temperature: 0.3 }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error("HTTP " + res.status + " " + (await safeText(res)));
   const data = await res.json();
   const text = (data.choices?.[0]?.message?.content || "").trim();
   if (!text) throw new Error("empty");
-  return text;
+  return { text, model };
 }
 
 /* ---------- helpers ---------- */
