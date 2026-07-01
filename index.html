@@ -4900,19 +4900,36 @@ function _renderBlocks(seg,nodes,kr,kp){
 }
 function _renderInline(text,kp){
   if(!text)return[];
+  // ★ 수식($$..$$, $..$)을 마크다운(*,**,`)보다 먼저 자리표시자로 보호한다.
+  // 안 그러면 $c_1^*$ 처럼 별표(^*)로 끝나는 수식이 한 줄에 둘 이상 있을 때, 그 사이가
+  // 마크다운 이탤릭 *...* 으로 묶여 수식이 깨지고 화면에 날 LaTeX($c_1^ 등)가 노출됨.
+  const S=String.fromCharCode(0),C=String.fromCharCode(3);
+  const store=[];
+  const prot=String(text).split("\\$").join(C)                                  // 통화 \$ 보호
+    .replace(/\$\$[\s\S]+?\$\$|\$[^$\n]+?\$/g,m=>{store.push(m);return S+(store.length-1)+S;});
+  // 자리표시자 → 실제 수식 노드로 복원(사이 텍스트는 통화 $ 복원 후 그대로)
+  const restore=(str,key)=>{
+    const out=[];
+    str.split(new RegExp(S+"(\\d+)"+S)).forEach((b,bi)=>{
+      if(!b)return;
+      if(bi%2===1)out.push(..._renderLatexInline(store[+b],key+'x'+bi));
+      else out.push(b.split(C).join("$"));
+    });
+    return out;
+  };
+  const rawText=(str)=>str.replace(new RegExp(S+"(\\d+)"+S,"g"),(m,d)=>store[+d]).split(C).join("$"); // 코드용 리터럴 복원
   const nodes=[];
-  const segs=text.split(/(\*\*[^*\n]+?\*\*|\*[^*\n]+?\*|`[^`\n]+?`)/);
-  segs.forEach((seg,i)=>{
+  prot.split(/(\*\*[^*\n]+?\*\*|\*[^*\n]+?\*|`[^`\n]+?`)/).forEach((seg,i)=>{
     if(!seg)return;
     const k=kp+'_i'+i;
     if(seg.startsWith('**')&&seg.endsWith('**')&&seg.length>4)
-      nodes.push(React.createElement('strong',{key:k},..._renderLatexInline(seg.slice(2,-2),k)));
+      nodes.push(React.createElement('strong',{key:k},...restore(seg.slice(2,-2),k)));
     else if(seg.startsWith('*')&&seg.endsWith('*')&&seg.length>2)
-      nodes.push(React.createElement('em',{key:k},..._renderLatexInline(seg.slice(1,-1),k)));
+      nodes.push(React.createElement('em',{key:k},...restore(seg.slice(1,-1),k)));
     else if(seg.startsWith('`')&&seg.endsWith('`')&&seg.length>2)
-      nodes.push(React.createElement('code',{key:k,style:{background:'#F0EDFF',borderRadius:4,padding:'0 5px',fontSize:'.88em',color:"var(--pri-d)"}},seg.slice(1,-1)));
+      nodes.push(React.createElement('code',{key:k,style:{background:'#F0EDFF',borderRadius:4,padding:'0 5px',fontSize:'.88em',color:"var(--pri-d)"}},rawText(seg.slice(1,-1))));
     else
-      nodes.push(..._renderLatexInline(seg,k));
+      nodes.push(...restore(seg,k));
   });
   return nodes;
 }
