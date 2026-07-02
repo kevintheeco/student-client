@@ -4,6 +4,7 @@ import { Cheer, DepthGauge, Meter, Prof, RateBar, ratePct } from "../ui/common.j
 import { DAY, deckSummary, diffLong, diffWord, pickConcept, quizFormat, schedule } from "../core/srs.js";
 import { MathText } from "../ui/math.jsx";
 import { callAI, parseDeriveCheck, parseDerivePlan, parseGrading, parseOcrCheck, parseQuestion, uid } from "../core/ai.js";
+import { logAttempt } from "../core/attempts.js";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
 
@@ -294,6 +295,8 @@ function Study({deck:initial,subjects,onExit}){
       }
     }
     persist({...deckRef.current,concepts:deckRef.current.concepts.map(x=>x.id===concept.id?schedule(x,correct?"correct":"incorrect"):x)});
+    logAttempt({src:"quiz",deckId:deck.id,concept:concept.name,unit:[concept.u1,concept.u2].filter(Boolean).join(" "),
+      verdict:correct?"correct":"incorrect",qtype:quizItem.format,box:concept.box||1});
     setQuizSel(sel);setQuizCorrect(correct);setQuizGraded(true);setCount(n=>n+1);
     prefetchNext();   // 다음 문제 미리 생성
   }
@@ -360,11 +363,13 @@ function Study({deck:initial,subjects,onExit}){
       if(img)textParts.push("\n학습자가 위 이미지에 손으로 쓴 답도 포함돼. 이미지 속 내용을 읽고 함께 채점해줘.");
       userBlocks.push({type:"text",text:textParts.join("\n")});
       const gradingRaw=await callAI(
-        "너는 학습 분석 튜터야. "+qtypeCtx+" 학습자 답안을 보고 '이 개념의 본질 대비 내 답의 갭'을 분석해. 수식·행렬·그리스 문자·수학 기호(⊥ ∥ ∈ ∉ ⊆ ℝ ∇ 등)는 반드시 LaTeX로: 인라인 $...$, 블록 $$...$$. 유니코드 기호 직접 사용 금지. 다음 형식으로만 출력 (JSON·코드블록 없이):\nESSENCE: 이 질문이 진짜 요구하는 핵심 요소 1~3가지 (학습자가 반드시 알아야 할 것)\nGOT_IT: 내 답이 제대로 담은 부분 (인정해줄 것, 반말)\nGAP: 본질 대비 빠지거나 얕거나 비껴간 핵심 부분 (없으면 정확히 '없음')\nGAP_TYPE: 개념누락 / 이해얕음 / 핵심비껴감 / 표현부족 / 갭없음 중 정확히 하나\nDEPTH: 암기 수준 / 이해 수준 / 설명가능 수준 / 응용가능 수준 중 정확히 하나\nNEXT: 이 갭을 메우려면 구체적으로 뭘 보강해야 하는지 (반말, 1~2문장)\nVERDICT: correct 또는 partial 또는 incorrect (갭없음이면 correct, 핵심 갭이면 partial, 본질 전체 누락이면 incorrect)\nANSWER: 모범답안 3~5문장 (수식 LaTeX, 그래프 필요시 <svg> 태그 직접)"+RICH_FMT+"\n\n자료:\n"+studyMat,
+        "너는 학습 분석 튜터야. "+qtypeCtx+" 학습자 답안을 보고 '이 개념의 본질 대비 내 답의 갭'을 분석해. 수식·행렬·그리스 문자·수학 기호(⊥ ∥ ∈ ∉ ⊆ ℝ ∇ 등)는 반드시 LaTeX로: 인라인 $...$, 블록 $$...$$. 유니코드 기호 직접 사용 금지. 다음 형식으로만 출력 (JSON·코드블록 없이):\nESSENCE: 이 질문이 진짜 요구하는 핵심 요소 1~3가지 (학습자가 반드시 알아야 할 것)\nGOT_IT: 내 답이 제대로 담은 부분 (인정해줄 것, 반말)\nGAP: 본질 대비 빠지거나 얕거나 비껴간 핵심 부분 (없으면 정확히 '없음')\nGAP_TYPE: 개념누락 / 이해얕음 / 핵심비껴감 / 표현부족 / 갭없음 중 정확히 하나\nDEPTH: 암기 수준 / 이해 수준 / 설명가능 수준 / 응용가능 수준 중 정확히 하나\nNEXT: 이 갭을 메우려면 구체적으로 뭘 보강해야 하는지 (반말, 1~2문장)\nFACTORS: 이 답안에서 드러난 능력을 각각 평가 — 개념(개념 이해)·계산(절차·연산 정확성)·전략(문제 해석·식 세우기)·추론(논리 전개·정당화)을 0(부족)/1(보통)/2(좋음)으로, 이 문제에서 드러나지 않는 능력은 - 로. 예: 개념=2 계산=1 전략=- 추론=1\nVERDICT: correct 또는 partial 또는 incorrect (갭없음이면 correct, 핵심 갭이면 partial, 본질 전체 누락이면 incorrect)\nANSWER: 모범답안 3~5문장 (수식 LaTeX, 그래프 필요시 <svg> 태그 직접)"+RICH_FMT+"\n\n자료:\n"+studyMat,
         userBlocks,false,{cache:true,maxTok:3500,lang:studyLang},abortRef.current?.signal);
       const r=parseGrading(gradingRaw);setEv(r);
       const v=["correct","partial","incorrect"].includes(r.verdict)?r.verdict:"partial";
       lastAnswerRef.current={answer:hasTxt?answer.trim():"[손글씨]",gap:r.gap||"",gapType:r.gap_type||""};
+      logAttempt({src:"study",deckId:deck.id,concept:concept.name,unit:[concept.u1,concept.u2].filter(Boolean).join(" "),
+        verdict:v,gapType:r.gap_type||"",gap:r.gap&&r.gap!=="없음"?r.gap:"",qtype,box:concept.box||1,factors:r.factors});
       const enrichConcept=(c)=>({...c,lastAnswer:lastAnswerRef.current.answer,lastGap:lastAnswerRef.current.gap,lastGapType:lastAnswerRef.current.gapType});
       if(v==="correct"){
         const uc=schedule(enrichConcept(concept),v);
@@ -445,6 +450,8 @@ function Study({deck:initial,subjects,onExit}){
       );
       const r=parseGrading(raw);
       setFollowupEv(r);
+      logAttempt({src:"followup",deckId:deck.id,concept:concept.name,unit:[concept.u1,concept.u2].filter(Boolean).join(" "),
+        verdict:r.verdict,gapType:r.gap_type||"",box:concept.box||1});
       const newHistory=[...followupHistory,{answer:answer.trim()||(img?"|손글씨|":""),verdict:r.verdict}];
       setFollowupHistory(newHistory);
       const newCount=followupCount+1;

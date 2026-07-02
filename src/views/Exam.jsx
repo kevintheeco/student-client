@@ -3,6 +3,7 @@ import { Cheer, Fb, Prof } from "../ui/common.jsx";
 import { MathText } from "../ui/math.jsx";
 import { PenPad, inkHas, renderInkPNG } from "../ui/pads.jsx";
 import { callAI, uid } from "../core/ai.js";
+import { logAttempt } from "../core/attempts.js";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
 
@@ -180,13 +181,15 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
     const sys=
       "너는 학원 시험 채점위원이자 1:1 튜터야. 아래 한 문항을 깊이 채점해. 단순 정오를 넘어, 학생이 무엇을 알고 무엇을 모르는지·무엇을 잘했고 어디가 결핍인지 구체적으로 짚어줘(반말, 따뜻하지만 정확하게). 객관식은 고른 답의 정오뿐 아니라 손글씨 '근거'의 타당성도 채점에 반영. 서술형은 rubric 항목별 부분점수. 점수는 반드시 [배점] 범위(0~배점) 안의 숫자.\n"+
       "수식·기호는 LaTeX($...$). 반드시 JSON만 출력(코드블록 없이):\n"+
-      '{"score":획득점수숫자,"verdict":"correct|partial|incorrect","essence":"이 문항이 진짜 묻는 핵심 1~2문장","gotIt":"내가 제대로 한 것(구체적, 없으면 \'없음\')","gap":"결핍·약점(구체적, 없으면 \'없음\')","known":"내 답에서 드러난, 내가 확실히 아는 것","unknown":"드러난, 내가 모르거나 헷갈리는 것","next":"이 약점을 메우려면 뭘 보강해야 하는지","model":"모범답안/풀이(수식 LaTeX)"}';
+      '{"score":획득점수숫자,"verdict":"correct|partial|incorrect","essence":"이 문항이 진짜 묻는 핵심 1~2문장","gotIt":"내가 제대로 한 것(구체적, 없으면 \'없음\')","gap":"결핍·약점(구체적, 없으면 \'없음\')","known":"내 답에서 드러난, 내가 확실히 아는 것","unknown":"드러난, 내가 모르거나 헷갈리는 것","next":"이 약점을 메우려면 뭘 보강해야 하는지","model":"모범답안/풀이(수식 LaTeX)","factors":{"개념":0~2,"계산":0~2,"전략":0~2,"추론":0~2}}\n'+
+      '(factors는 답안에서 드러난 능력 평가 — 개념 이해/계산 정확성/식 세우기·문제 해석/논리 전개. 0=부족 1=보통 2=좋음, 드러나지 않은 능력은 키 자체를 생략)';
     const r=await callAI(sys,blocks,true,{maxTok:1600,lang:examLang},signal);
     const pts=q.points||0;
     let sc=Number(r&&r.score);
     if(!isFinite(sc))sc=(q.type==="mc"?(ans.choice===q.answer?pts:0):0);
     sc=Math.max(0,Math.min(pts,Math.round(sc*10)/10));
     return {score:sc,points:pts,verdict:r&&r.verdict,essence:r&&r.essence,gotIt:r&&r.gotIt,gap:r&&r.gap,known:r&&r.known,unknown:r&&r.unknown,next:r&&r.next,
+      factors:(r&&r.factors)||null,
       model:(r&&r.model)||q.model_answer||q.solution||"",type:q.type,mcAnswer:q.answer,choices:q.choices,choice:ans.choice,text:ans.text,question:q.question,concept:q.concept,unit:q.unit||q.concept||"",inkImg};
   }
 
@@ -214,6 +217,9 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
       const idxKey="ng:examidx:"+scopeId;
       const list=LS.get(idxKey)||[];
       LS.set(idxKey,[{id,takenAt:rec.takenAt,score:total,maxScore},...list].slice(0,50));
+      // 시도 로그에도 문항별로 기록 — 지식 그래프·요인 분석의 원천 데이터 (이미지 제외, 텍스트만)
+      gr.forEach(g=>{if(g)logAttempt({src:"exam",deckId:deck?deck.id:undefined,concept:g.concept||"",unit:g.unit||"",
+        verdict:g.verdict||"partial",gap:g.gap&&g.gap!=="없음"?g.gap:"",qtype:g.type,score:g.score,points:g.points,factors:g.factors});});
       return key;
     }catch(e){console.warn("[exam] 기록 저장 실패",e);return null;}
   }

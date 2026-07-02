@@ -3,6 +3,7 @@ import { CFG, DECKS_KEY, LS, SUBJS_KEY, SUBJ_COLORS, _auth, _db, cloudSyncOnLogi
 import { COMPANY_MODE, MODELS, uid } from "../core/ai.js";
 import { Exam } from "./Exam.jsx";
 import { Home } from "./Home.jsx";
+import { Insight } from "./Insight.jsx";
 import { Onboard, Settings } from "./Settings.jsx";
 import { Prof } from "../ui/common.jsx";
 import { Study } from "./Study.jsx";
@@ -159,9 +160,10 @@ function App(){
       {view==="home"&&(
         <>
           <SubjectTabs subjects={subjects} active={filterSubj} onChange={setFilterSubj} onSave={saveSubjects}/>
-          <Home decks={filteredDecks} subjects={subjects} onAdd={()=>setView("add")} onOpen={openStudy} onNotes={openNotes} onChanged={refresh} nick={nick}/>
+          <Home decks={filteredDecks} subjects={subjects} onAdd={()=>setView("add")} onOpen={openStudy} onNotes={openNotes} onChanged={refresh} nick={nick} onInsight={()=>setView("insight")}/>
         </>
       )}
+      {view==="insight"&&<Insight onExit={()=>{refresh();setView("home");}}/>}
       {view==="add"&&<AddMaterial subjects={subjects} onSave={saveSubjects} onDone={()=>{refresh();setView("home");}} onCancel={()=>setView("home")}/>}
       {view==="study"&&activeDeck&&<Study deck={activeDeck} subjects={subjects} onExit={()=>{refresh();setView("home");}}/>}
       {view==="exam"&&(activeDeck||examTopic)&&<Exam deck={examTopic?null:activeDeck} topic={examTopic} onExit={()=>{setExamTopic(null);refresh();setView("home");}}/>}
