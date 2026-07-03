@@ -1,4 +1,5 @@
 import { CFG, LS, _auth, tr } from "../core/platform.js";
+import { AcademyDash } from "./AcademyDash.jsx";
 import { Exam } from "./Exam.jsx";
 import { Insight } from "./Insight.jsx";
 import { KeyForm } from "./Settings.jsx";
@@ -104,12 +105,16 @@ function AcademyApp(){
   const Head=()=>(
     <div className="hd">
       <div className="brand"><Prof size={44}/><div><h1>{tr("니가교수 학원","Academy")}</h1><div className="tag">{tr("단원 선택 → 레벨테스트 → 학부모 리포트","Pick units → level test → parent report")}</div></div></div>
-      <div className="hd-r"><button className="btn gho sm" onClick={toPersonal}>{tr("← 개인 학습","← Personal")}</button></div>
+      <div className="hd-r">
+        {students.length>0&&view!=="dash"&&<button className="btn gho sm" onClick={()=>setView("dash")}>📋 {tr("대시보드","Dashboard")}</button>}
+        <button className="btn gho sm" onClick={toPersonal}>{tr("← 개인 학습","← Personal")}</button>
+      </div>
     </div>
   );
   if(!keyReady)return(<><Head/><div className="card panel"><div className="eyebrow" style={{marginBottom:8}}>{tr("API 키 입력","API key")}</div><KeyForm onSaved={()=>setKeyReady(true)} cta={tr("저장하고 시작","Save & start")}/></div></>);
   if(view==="exam"&&topic)return(<Exam topic={topic} student={student} academy academyName={acaName} onExit={()=>setView("build")}/>);
   if(view==="insight")return(<><Head/><Insight onExit={()=>setView("build")} studentName={activeStu?.name||student}/></>);
+  if(view==="dash")return(<><Head/><AcademyDash students={students} onBack={()=>setView("build")} onInsight={(s)=>{selectStudent(s);setView("insight");}}/></>);
 
   // ── 미리보기 ──
   if(view==="preview"&&topic)return(<>

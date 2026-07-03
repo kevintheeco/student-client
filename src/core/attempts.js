@@ -102,6 +102,8 @@ const allAttempts=()=>{
   return _sid?list.filter(a=>a.sid===_sid):list;
 };
 const attemptsForNode=(nodeId)=>allAttempts().filter(a=>a.nodeId===nodeId);
+// 특정 학생의 시도 (활성 학생과 무관 — 학원 대시보드처럼 여러 학생을 한 번에 볼 때)
+const attemptsOf=(sid)=>(LS.get(ATT_KEY)||[]).filter(a=>a.sid===sid);
 const lifetimeAgg=()=>LS.get(_aggKey())||{};
 
-export { ATT_KEY, AGG_KEY, MISC_KEY, MAX_ATTEMPTS, setActiveStudent, activeStudent, logAttempt, allAttempts, attemptsForNode, lifetimeAgg, miscLexFor, updateMiscLex };
+export { ATT_KEY, AGG_KEY, MISC_KEY, MAX_ATTEMPTS, setActiveStudent, activeStudent, logAttempt, allAttempts, attemptsForNode, attemptsOf, lifetimeAgg, miscLexFor, updateMiscLex };
