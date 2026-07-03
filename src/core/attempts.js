@@ -21,8 +21,37 @@ import { scoreOf } from "./mastery.js";
 
 const ATT_KEY="ng:attempts";
 const AGG_KEY="ng:attagg";
+const MISC_KEY="ng:misclex";
 const MAX_ATTEMPTS=2000;   // ~400KB 상한 (Firestore 문서 1MB 대비 여유)
+const MISC_PER_NODE=20;    // 노드당 오개념 라벨 상한 (빈도 낮고 오래된 것부터 탈락)
 const clip=(s,n)=>s==null?undefined:String(s).slice(0,n);
+
+/* ── 오개념 사전 (misconception lexicon) ──
+   AI가 붙인 오개념 라벨("부호 분배 실수")을 노드별로 누적.
+   같은 라벨이 2회 이상 반복되면 '이 학생이 이 단원에서 반복해서 밟는 함정'으로 승격 —
+   다음 출제 때 그 함정을 정조준하는 문제를 내는 피드포워드 루프의 재료.
+   학원 데이터가 모이면 학생 간 클러스터링으로 단원 공통 함정 통제어휘로 발전시킨다. */
+const normMiscKey=(s)=>String(s||"").trim().replace(/\s+/g," ").replace(/[.,!?~'"·]/g,"");
+function updateMiscLex(nodeId,label){
+  const key=normMiscKey(label);
+  if(!key||key.length<2)return;
+  const lex=LS.get(MISC_KEY)||{};
+  const node=lex[nodeId]||(lex[nodeId]={});
+  const e=node[key]||(node[key]={n:0,label:String(label).trim().slice(0,48)});
+  e.n++;e.lastT=Date.now();
+  const keys=Object.keys(node);
+  if(keys.length>MISC_PER_NODE){
+    keys.sort((a,b)=>(node[a].n-node[b].n)||((node[a].lastT||0)-(node[b].lastT||0)));
+    delete node[keys[0]];
+  }
+  LS.set(MISC_KEY,lex);
+}
+// 노드의 오개념 라벨(빈도순). minN=2면 '반복 함정'만
+function miscLexFor(nodeId,minN){
+  if(!nodeId)return[];
+  const node=(LS.get(MISC_KEY)||{})[nodeId]||{};
+  return Object.values(node).filter(e=>e.n>=(minN||1)).sort((a,b)=>b.n-a.n);
+}
 
 function logAttempt(a){
   try{
@@ -42,6 +71,7 @@ function logAttempt(a){
     const list=LS.get(ATT_KEY)||[];
     list.push(rec);
     LS.set(ATT_KEY,list.length>MAX_ATTEMPTS?list.slice(list.length-MAX_ATTEMPTS):list);
+    if(rec.nodeId&&rec.misc)updateMiscLex(rec.nodeId,rec.misc);
     // ── 평생 집계: 노드별 누적 카운터 (로그 순환과 무관하게 영구) ──
     if(rec.nodeId&&rec.src!=="followup"){
       const agg=LS.get(AGG_KEY)||{};
@@ -58,4 +88,4 @@ const allAttempts=()=>LS.get(ATT_KEY)||[];
 const attemptsForNode=(nodeId)=>allAttempts().filter(a=>a.nodeId===nodeId);
 const lifetimeAgg=()=>LS.get(AGG_KEY)||{};
 
-export { ATT_KEY, AGG_KEY, MAX_ATTEMPTS, logAttempt, allAttempts, attemptsForNode, lifetimeAgg };
+export { ATT_KEY, AGG_KEY, MISC_KEY, MAX_ATTEMPTS, logAttempt, allAttempts, attemptsForNode, lifetimeAgg, miscLexFor, updateMiscLex };

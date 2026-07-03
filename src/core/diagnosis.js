@@ -6,6 +6,7 @@
 import { LS, tr } from "./platform.js";
 import { callAI } from "./ai.js";
 import { courseOf, impactOf, nodeById, traceRootCauses } from "./knowledgeGraph.js";
+import { miscBreakdown } from "./mastery.js";
 
 const diagKey=(nodeId)=>"ng:diag:"+nodeId;
 
@@ -17,6 +18,7 @@ function buildEvidence(nodeId,mastery,attempts){
   const causes=traceRootCauses(nodeId,mastery).slice(0,5);
   const gapLines=mine.filter(a=>a.gap&&a.gap!=="없음").slice(-6)
     .map(a=>"· ["+(a.gapType||"갭")+"] "+String(a.gap).replace(/\s+/g," ").slice(0,110));
+  const traps=miscBreakdown(attempts,nodeId,2).slice(0,5);
   const causeLines=causes.map(c=>{
     const chain=c.chain.map(e=>nodeById(e.from).name).reverse().join(" → ")+" → "+node.name;
     return "· "+(courseOf(c.id)?.name||"")+" 「"+c.node.name+"」 (경로: "+chain+" / 의존도 "+Math.round(c.pathW*100)+"%"+
@@ -27,7 +29,8 @@ function buildEvidence(nodeId,mastery,attempts){
       "[현재 숙련도] "+(st.m!=null?Math.round(st.m*100)+"% ("+st.n+"회 측정)":"미측정")+"\n"+
       "[이 단원이 무너지면 영향받는 후속 단원 수] "+impactOf(nodeId)+"개\n"+
       "[선수 개념 의심 후보 — 그래프 역추적]\n"+(causeLines.join("\n")||"· 없음(뿌리 단원)")+"\n"+
-      "[이 단원에서 실제 드러난 갭 — AI 채점 기록]\n"+(gapLines.join("\n")||"· 기록 없음")};
+      "[이 단원에서 실제 드러난 갭 — AI 채점 기록]\n"+(gapLines.join("\n")||"· 기록 없음")+"\n"+
+      "[반복 실수·오개념 패턴 (2회 이상)]\n"+(traps.map(t=>"· "+t.label+" ×"+t.n).join("\n")||"· 없음")};
 }
 
 /* 서술식 진단 생성 (캐시 우선). 반환: {story, rootCause, plan:[..], t}

@@ -4,7 +4,7 @@ import { MathText } from "../ui/math.jsx";
 import { PenPad, inkHas, renderInkPNG } from "../ui/pads.jsx";
 import { callAI, uid } from "../core/ai.js";
 import { logAttempt } from "../core/attempts.js";
-import { normErrType, normStage } from "../core/knowledgeGraph.js";
+import { errTypeById, normErrType, normFactors, normStage } from "../core/knowledgeGraph.js";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
 
@@ -149,7 +149,10 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
         "너는 수학 학원의 베테랑 진단 교수다. 한 학생의 시험 전체를 보고 '총체적이고 심층적인' 분석을 한다. 단순 점수 나열이 아니라 학생의 사고 특성을 읽어라 — 수학적 감각·사고력, 개념 간 유기성(개념을 따로따로 아는지 서로 연결하는지), 계산 능력, 영역 편차(예: 도형 약함), 실수 빈도(아는데 틀리는지), 답은 맞아도 풀이에 핵심개념이 빠졌는지 등을 복합적으로 짚어라. 반드시 구체적 문항을 근거로 들어라(예: '2번은 맞았지만 핵심개념이 풀이에서 누락'). 칭찬할 점은 분명하고 구체적으로 칭찬해라. 따뜻하지만 정확하게, 학부모가 읽을 상담 소견 톤(반말 금지, 존중하는 평어체).\n"+
         "수식·기호는 LaTeX($...$). 반드시 JSON만 출력(코드블록 없이):\n"+
         '{"overall":"학생의 큰 그림 2~4문장(수학적 감/사고력/개념 유기성 등)","praise":["확실히 칭찬할 점 1~3개, 구체적으로"],"strengths":[{"label":"강점 한마디","evidence":"몇 번 문항을 근거로 구체적으로"}],"growth":[{"label":"성장이 필요한 영역 한마디","evidence":"몇 번 문항 근거로 구체적으로(예: n번은 맞았지만 핵심개념 누락)"}],"advice":"앞으로의 학습 방향 1~2가지 구체 제언"}';
-      const usr="[학생] "+(student||"학생")+"\n[시험] "+examTitle+"\n[총점] "+total+"/"+maxScore+" ("+(maxScore?Math.round(total/maxScore*100):0)+"%)\n[단원별] "+unitLines+"\n[문항별]\n"+qlines;
+      const ep=errProfileData(out);
+      const errLine=Object.entries(ep.counts).map(([k,n])=>(errTypeById(k)?.name||k)+" "+n).join(" · ");
+      const usr="[학생] "+(student||"학생")+"\n[시험] "+examTitle+"\n[총점] "+total+"/"+maxScore+" ("+(maxScore?Math.round(total/maxScore*100):0)+"%)\n[단원별] "+unitLines+
+        (errLine?"\n[오류 성격 분포 — 실수는 개념이 아니라 절차 문제] "+errLine:"")+"\n[문항별]\n"+qlines;
       const r=await callAI(sys,usr,true,{maxTok:1800,lang:examLang},signal);
       if(r&&(r.overall||(r.strengths&&r.strengths.length)||(r.praise&&r.praise.length))){setAnalysis(r);setAnalysisBusy(false);return r;}
     }catch(e){if(e.name!=="AbortError")console.warn("[exam] 분석 실패",e);}
@@ -231,6 +234,65 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
   const pct=maxScore?Math.round(score/maxScore*100):0;
   const vColor=(v)=>v==="correct"?"#1E9E5A":v==="incorrect"?"#D9534F":"#C98A00";
   const vLabel=(v)=>v==="correct"?T("정답","Correct"):v==="incorrect"?T("오답","Wrong"):T("부분","Partial");
+
+  // ── 오류 프로파일: 문항 채점의 error/factors 집계 (결과·학부모 리포트 공용) ──
+  function errProfileData(gr){
+    const counts={};const fs={cu:[],pf:[],sc:[],ar:[]};
+    gr.forEach(g=>{
+      if(!g)return;
+      const e=g.verdict==="correct"?null:normErrType(g.error&&g.error.type);
+      if(e&&e!=="none")counts[e]=(counts[e]||0)+1;
+      const f=normFactors(g.factors);
+      if(f)for(const k in f)if(fs[k])fs[k].push(f[k]);
+    });
+    const favg={};for(const k in fs)favg[k]=fs[k].length?fs[k].reduce((s,v)=>s+v,0)/fs[k].length:null;
+    return{counts,favg,hasErr:Object.keys(counts).length>0,hasF:Object.values(favg).some(v=>v!=null)};
+  }
+  function errAdvice(counts){
+    const n=(k)=>counts[k]||0;
+    if(n("slip")>=2&&n("slip")>=n("concept"))return T("오답의 다수가 '실수' 유형입니다 — 개념은 알고 있으므로 계산 절차·검산 습관 훈련이 가장 효과적입니다.","Most misses are slips — the concepts are there; drill procedure and checking habits.");
+    if(n("concept")>=2)return T("'개념 결여'형 오답이 많습니다 — 해당 단원의 선수 개념부터 다시 잡는 보강을 권합니다.","Concept-gap errors dominate — remediate prerequisite concepts first.");
+    if(n("interpret")>=2)return T("문제 조건을 놓치는 '해석 오류'가 잦습니다 — 조건에 표시하며 읽는 훈련을 권합니다.","Frequent misreading of conditions — train annotated reading.");
+    if(n("strategy")>=2)return T("풀이 '전략 선택' 오류가 반복됩니다 — 유형별 접근법을 정리하는 학습을 권합니다.","Repeated strategy-choice errors — organize approach patterns by problem type.");
+    return null;
+  }
+  const FLABEL={cu:[T("개념 이해","Concept"),"#6C5CE7"],pf:[T("계산","Fluency"),"#4FACFE"],sc:[T("식 세우기","Strategy"),"#27C2A0"],ar:[T("논리","Reasoning"),"#FFC24B"]};
+  // compact=결과 화면용 칩 / 아니면 리포트용 풀 섹션
+  function errProfileView(gr,compact){
+    const ep=errProfileData(gr);
+    if(!ep.hasErr&&!ep.hasF)return null;
+    const chips=Object.entries(ep.counts).sort((a,b)=>b[1]-a[1]).map(([id,n])=>{
+      const et=errTypeById(id);
+      return <span key={id} className="chip" title={et?.desc||""} style={{background:(et?.color||"#888")+"1e",color:et?.color||"var(--sub)",border:"1px solid "+(et?.color||"#888")+"55"}}>{(et?.name||id)+" "+n}</span>;});
+    const advice=errAdvice(ep.counts);
+    if(compact)return(
+      <div style={{marginBottom:16}}>
+        <div style={{fontSize:12,fontWeight:700,color:"var(--sub)",marginBottom:6}}>{T("오류 성격","Error profile")}</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>{chips}</div>
+        {advice&&<div style={{fontSize:12.5,color:"var(--pri-d)",fontWeight:700,marginTop:6}}>💡 {advice}</div>}
+      </div>);
+    return(
+      <div style={{marginBottom:18}}>
+        <div style={{fontFamily:"'Jua',sans-serif",fontSize:15,color:"var(--ink)",marginBottom:8}}>🔬 {T("오류 성격 분석","Error profile")}</div>
+        {ep.hasErr&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:advice?6:10}}>{chips}</div>}
+        {advice&&<div style={{background:"#FFFBEB",border:"1px solid #FDE68A",borderRadius:10,padding:"9px 13px",fontSize:13,lineHeight:1.6,marginBottom:10}}>💡 {advice}</div>}
+        {ep.hasF&&(
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:"8px 14px"}}>
+            {Object.keys(FLABEL).map(k=>{
+              const v=ep.favg[k];if(v==null)return null;
+              const[lbl,col]=FLABEL[k];
+              return(
+                <div key={k}>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:11.5,marginBottom:3}}>
+                    <span style={{color:"var(--sub)",fontWeight:600}}>{lbl}</span>
+                    <b style={{color:col}}>{Math.round(v*100)}%</b>
+                  </div>
+                  <div className="bar" style={{height:7}}><i style={{width:Math.round(v*100)+"%",background:col}}/></div>
+                </div>);})}
+          </div>)}
+        <div style={{fontSize:10.5,color:"var(--sub)",marginTop:8}}>{T("이 시험의 답안에서 드러난 능력 평가 (NRC 수학적 숙련도 요인 기준)","Ability evidence from this exam (NRC proficiency strands)")}</div>
+      </div>);
+  }
 
   // 학생 총체 분석 렌더(결과 화면·학부모 리포트 공용). analysis 없으면 null.
   function analysisInner(){
@@ -363,6 +425,8 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
                 </div>
               </div>
             ):null;})()}
+            {/* 오류 성격 (실수 vs 개념 결여) */}
+            {errProfileView(grades,true)}
             {/* 총체 분석 */}
             {(analysis||analysisBusy)&&(
               <div style={{marginBottom:16,border:"1.5px solid var(--line)",borderRadius:12,padding:"13px 15px"}}>
@@ -465,6 +529,8 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
                 </tbody>
               </table>
             </div>
+            {/* 오류 성격 분석 (실수 vs 개념 결여 + 능력 요인) */}
+            {errProfileView(grades,false)}
             {/* 집중 보완 단원 */}
             <div style={{fontFamily:"'Jua',sans-serif",fontSize:15,color:"#9B1C1C",marginBottom:8}}>🎯 {T("집중 보완이 필요한 단원","Focus units")} ({weakUnits.length})</div>
             {weakUnits.length?(

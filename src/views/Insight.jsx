@@ -10,7 +10,7 @@ import { tr } from "../core/platform.js";
 import { MathText } from "../ui/math.jsx";
 import { allAttempts } from "../core/attempts.js";
 import { COURSES, FACTORS, GRAPH_EDGES, GRAPH_NODES, courseOf, dependentsOf, errTypeById, impactOf, nodeById, prereqsOf, strandOf, traceRootCauses } from "../core/knowledgeGraph.js";
-import { errBreakdown, factorSeries, factorSummary, masteryByNode, nodeTrends } from "../core/mastery.js";
+import { errBreakdown, factorSeries, factorSummary, masteryByNode, miscBreakdown, nodeTrends } from "../core/mastery.js";
 import { narrateDiagnosis } from "../core/diagnosis.js";
 import React from "react";
 const { useState, useMemo, useRef } = React;
@@ -48,6 +48,7 @@ function demoAttempts(){
       const err=verdict==="correct"?"none":(rand()<(p.base>.6?.6:.3)?"slip":(rand()<.7?"concept":(rand()<.5?"strategy":"interpret")));
       out.push({t,src:"study",concept:nodeById(p.node).name,nodeId:p.node,verdict,
         err,stage:err==="none"?undefined:(err==="slip"?"compute":"setup"),
+        misc:err==="none"?undefined:(err==="slip"?"부호 계산 실수":(GAPS[p.node]||"개념 연결 혼동").slice(0,20)),
         dur:60+Math.floor(rand()*180),
         gapType:verdict==="correct"?"":"개념누락",gap:verdict==="correct"?"":(GAPS[p.node]||"핵심 개념 연결 누락"),
         factors:{cu:f(pr),pf:f(Math.min(1,pr+.12)),sc:f(Math.max(0,pr-.1)),ar:f(Math.max(0,pr-.05))}});
@@ -102,6 +103,7 @@ function Insight({onExit}){
 
   const causes=useMemo(()=>sel?traceRootCauses(sel,mastery).slice(0,5):[],[sel,mastery]);
   const selErr=useMemo(()=>sel?errBreakdown(attempts,sel):null,[sel,attempts]);
+  const selTraps=useMemo(()=>sel?miscBreakdown(attempts,sel,2).slice(0,4):[],[sel,attempts]);
 
   const weakList=useMemo(()=>Object.keys(mastery)
     .map(id=>({id,st:mastery[id],impact:impactOf(id)}))
@@ -286,6 +288,15 @@ function Insight({onExit}){
                       {selErr.avgDur!=null&&<span style={{fontSize:11.5,color:"var(--sub)"}}>{tr("평균 풀이 ","avg ")}{selErr.avgDur}{tr("초","s")}</span>}
                     </div>
                     {insight&&<div style={{fontSize:12.5,color:"var(--pri-d)",fontWeight:700,marginTop:6}}>💡 {insight}</div>}
+                    {selTraps.length>0&&(
+                      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginTop:7}}>
+                        <span className="eyebrow">{tr("반복 함정","Repeated traps")}</span>
+                        {selTraps.map(t=>(
+                          <span key={t.label} className="subj-badge" style={{background:"#FFF3F5",color:"#B4234B",border:"1px dashed #F5B8C6"}}>
+                            <MathText text={t.label} tag="span"/> ×{t.n}
+                          </span>))}
+                        <span style={{fontSize:11,color:"var(--sub)"}}>{tr("→ 다음 출제에 이 함정을 정조준한 문제가 나가","→ next questions will target these")}</span>
+                      </div>)}
                   </div>);})()}
 
               <div style={{marginTop:12}}>

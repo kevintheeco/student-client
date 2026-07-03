@@ -4,7 +4,8 @@ import { Cheer, DepthGauge, Meter, Prof, RateBar, ratePct } from "../ui/common.j
 import { DAY, deckSummary, diffLong, diffWord, pickConcept, quizFormat, schedule } from "../core/srs.js";
 import { MathText } from "../ui/math.jsx";
 import { callAI, parseDeriveCheck, parseDerivePlan, parseGrading, parseOcrCheck, parseQuestion, uid } from "../core/ai.js";
-import { logAttempt } from "../core/attempts.js";
+import { logAttempt, miscLexFor } from "../core/attempts.js";
+import { matchNode } from "../core/knowledgeGraph.js";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
 
@@ -88,6 +89,15 @@ function Study({deck:initial,subjects,onExit}){
   }
 
   const quizMode=deck.studyType==="quiz";
+  // 끈질긴 과외의 피드포워드: 이 개념(그래프 노드)에서 학생이 2회 이상 반복한 함정을
+  // 출제 프롬프트에 주입 — 그 실수를 하면 틀리는 문제를 정조준해서 낸다.
+  function trapLine(c){
+    const nid=matchNode([c.u1,c.u2,c.name].filter(Boolean).join(" "));
+    const traps=miscLexFor(nid,2).slice(0,3);
+    if(!traps.length)return"";
+    return"\n[이 학습자가 반복해서 밟는 함정 — 끈질긴 과외 모드]: "+traps.map(x=>x.label+"("+x.n+"회)").join(", ")+
+      "\n→ 가능하면 이 함정을 그대로 밟으면 틀리게 되는 문제로 설계해. 단, 문제 지문에서 함정을 직접 언급하거나 경고하지는 마.";
+  }
   // 세션 전체에서 캐시 공유: summary 있으면 우선 사용 (8000자 이하)
   const studyMat=deck.summary||deck.material.slice(0,8000);
   const matFor=(c)=>(c&&c.src)?(""+c.src):studyMat;   // 책 개념이면 그 섹션(src)을 자료로 — 소주제별 정확한 출제·채점
@@ -114,7 +124,7 @@ function Study({deck:initial,subjects,onExit}){
     try{
       const raw=await callAI(
         "너는 문제 변형 출제 전문가야. 아래 [원래 문제]와 똑같은 개념·유형을 묻되, 숫자·상황·예시·표현만 살짝 바꾼 변형문제 하나를 만들어. 방금 본 모범답안을 그대로 베껴 쓸 수 없고 새로 풀어야 하도록. 난이도는 원래와 비슷하게. 수식은 LaTeX($...$). 반드시 아래 형식으로만 출력 (코드블록 없이):\nQTYPE: recall 또는 understand 또는 apply\nQUESTION: 질문 내용\nPOINTS: 핵심1 | 핵심2 | 핵심3\n\n자료:\n"+studyMat.slice(0,4000),
-        "개념: "+c.name+"\n원래 문제 유형: "+(baseQ?.qtype||"understand")+"\n[원래 문제]:\n"+(baseQ?.question||""),
+        "개념: "+c.name+"\n원래 문제 유형: "+(baseQ?.qtype||"understand")+"\n[원래 문제]:\n"+(baseQ?.question||"")+trapLine(c),
         false,{maxTok:800,model:CFG.qmodel,lang:studyLang},ctrl.signal);
       if(genId.current!==myId)return;
       const pq=parseQuestion(raw);
@@ -187,7 +197,7 @@ function Study({deck:initial,subjects,onExit}){
           :"너는 기출문제 변형 출제 전문가야. 아래 [원본 기출문제]와 같은 개념·유형을 묻되 숫자·상황·예시만 바꾼 변형문제 하나를 만들어."+(box>=4?" 난이도는 원본보다 살짝 높여 응용을 더해.":" 난이도는 원본과 비슷하게.")+" 수식은 LaTeX($...$). 반드시 형식으로만 출력:\nQTYPE: recall 또는 understand 또는 apply\nQUESTION: 질문 내용\nPOINTS: 핵심1 | 핵심2 | 핵심3";
         try{
           const raw=await callAI(sys+"\n\n자료:\n"+matFor(c).slice(0,4000),
-            "개념: "+c.name+"\n[원본 기출문제]:\n"+picked.question,
+            "개념: "+c.name+"\n[원본 기출문제]:\n"+picked.question+trapLine(c),
             false,{maxTok:800,model:CFG.qmodel,lang:studyLang},ctrl.signal);
           if(genId.current!==myId)return;
           const pq=parseQuestion(raw);pq.source=deep?"심화":"변형";
@@ -233,7 +243,7 @@ function Study({deck:initial,subjects,onExit}){
         "understand: '외적이 내적과 근본적으로 다른 점은? 기하학적으로 설명해봐', '왜 이 조건에서 해가 유일한가?', '$\\mathbf{a}\\times\\mathbf{a}$가 항상 영벡터인 이유는?', '자료의 반례를 이용해 이 함수가 왜 선형변환이 아닌지 서술하시오 (반례+이유 설명 요구)', '왜 [특정 케이스]에서 [특정 결과]가 나오는가?'\n"+
         "apply: '$\\mathbf{a}=(1,2,3),\\,\\mathbf{b}=(4,0,-1)$일 때 $\\mathbf{a}\\times\\mathbf{b}$를 구하시오', '$T(x,y)=2x+y$가 선형변환인지 두 조건으로 보여라 (정의를 직접 적용해 검증하는 문제)'\n\n"+
         "수식은 LaTeX($...$, $$...$$). 반드시 아래 형식으로만 출력:\nQTYPE: recall 또는 understand 또는 apply\nQUESTION: 질문 내용\nPOINTS: 핵심1 | 핵심2 | 핵심3 (| 구분, 3~5개)\n\n자료:\n"+matFor(c).slice(0,6000),
-        "목표 개념: "+c.name+"\n복습 단계: "+diffLong(c.box),
+        "목표 개념: "+c.name+"\n복습 단계: "+diffLong(c.box)+trapLine(c),
         false,{cache:true,maxTok:800,model:CFG.qmodel,lang:studyLang},ctrl.signal);
       if(genId.current!==myId)return;
       setQ(parseQuestion(raw));setPhase("answering");

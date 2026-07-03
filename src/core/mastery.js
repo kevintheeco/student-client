@@ -32,6 +32,18 @@ function errBreakdown(attempts,nodeId){
   return out;
 }
 
+/* 시도 배열에서 오개념 라벨 빈도(데모 데이터도 동작): [{label,n}] 빈도순 */
+function miscBreakdown(attempts,nodeId,minN){
+  const m={};
+  for(const a of attempts){
+    if(nodeId&&a.nodeId!==nodeId)continue;
+    if(!a.misc)continue;
+    const k=String(a.misc).trim();
+    (m[k]=m[k]||{label:k,n:0}).n++;
+  }
+  return Object.values(m).filter(e=>e.n>=(minN||1)).sort((a,b)=>b.n-a.n);
+}
+
 /* 노드별 숙련도: {nodeId:{m:EWMA 0~1, n, lastT, recent:[최근점수]}} */
 function masteryByNode(attempts){
   const out={};
@@ -131,4 +143,4 @@ function nodeTrends(attempts){
   return out.sort((a,b)=>b.slope-a.slope);
 }
 
-export { DAY, WEEK, scoreOf, errBreakdown, masteryByNode, linreg, factorSeries, factorSummary, nodeTrends };
+export { DAY, WEEK, scoreOf, errBreakdown, miscBreakdown, masteryByNode, linreg, factorSeries, factorSummary, nodeTrends };
