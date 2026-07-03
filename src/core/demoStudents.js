@@ -3,7 +3,8 @@
    각 학생은 뚜렷한 페르소나(성장형·실수형·개념결여형·고1·회피형)를 갖고,
    26주치 시도 로그가 ng:attempts에 sid로 귀속돼 실제 파이프라인
    (Rasch·요인 회귀·습관 프로파일)이 그대로 돌아간다.
-   시딩된 학생은 demo:true 플래그 + 이름 (예시) 접미사 — 한 번에 제거 가능. */
+   시딩된 학생은 demo:true 플래그로만 표시 — 화면에는 일반 학생처럼 보이고,
+   "불러온 목록 지우기"로 한 번에 제거 (실제 등록 학생은 건드리지 않음). */
 import { LS } from "./platform.js";
 import { ATT_KEY, AGG_KEY, MISC_KEY } from "./attempts.js";
 import { nodeById } from "./knowledgeGraph.js";
@@ -29,35 +30,35 @@ const TRAP={
 /* 페르소나: plan=[node,시작 숙련도,주당 성장], beh=행동 파라미터.
    errW = 오답일 때 오류 유형 가중치. density = 주당 각 단원을 잡을 확률. */
 const PERSONAS=[
-  {id:"demo-kim",name:"김하늘 (예시)",seed:11,density:.5,
+  {id:"demo-kim",name:"김하늘",seed:11,density:.5,
    // 중3 성실 성장형: 인수분해 계열이 약했지만 6개월간 꾸준히 끌어올림 — retry·follow 높음
    plan:[["m2_poly",.40,.021],["m3_factor",.30,.024],["m3_quad",.28,.025],["m3_quadfun",.35,.022],
      ["m3_sqrt",.55,.012],["m1_lineq",.82,.004],["m2_sys",.78,.005],["m2_linfun",.65,.010],
      ["m2_pyth",.55,.012],["m3_trig",.45,.015],["m3_circle",.50,.012],["m3_stat",.80,.002]],
    beh:{hintWeak:.30,hintStrong:.05,giveup:.02,skip:.02,retry:.80,follow:.70,dur:210,durTrend:-3.2},
    errW:{slip:.30,concept:.40,strategy:.15,interpret:.15},fOff:{cu:0,pf:0,sc:-.03,ar:0}},
-  {id:"demo-lee",name:"이준서 (예시)",seed:23,density:.5,
+  {id:"demo-lee",name:"이준서",seed:23,density:.5,
    // 중3 실수형: 개념은 아는데 계산이 빠르고 거칠다 — slip 다수, 재도전은 안 하는 편
    plan:[["m2_poly",.68,.006],["m3_factor",.62,.008],["m3_quad",.60,.008],["m3_quadfun",.58,.008],
      ["m3_sqrt",.70,.005],["m2_sys",.72,.004],["m2_ineq",.65,.005],["m3_trig",.60,.007],
      ["m2_case",.66,.005],["m3_circle",.55,.008],["m3_stat",.72,.003]],
    beh:{hintWeak:.10,hintStrong:.06,giveup:.01,skip:.06,retry:.40,follow:.30,dur:85,durTrend:-.4},
    errW:{slip:.72,concept:.08,strategy:.08,interpret:.12},fOff:{cu:.14,pf:-.16,sc:.05,ar:.04}},
-  {id:"demo-park",name:"박서준 (예시)",seed:37,density:.5,
+  {id:"demo-park",name:"박서준",seed:37,density:.5,
    // 개념 결여형: 중1 대수 뿌리(문자식·일차방정식)부터 흔들려 후속이 다 무너짐 — 힌트 의존 높음
    plan:[["m1_int",.50,.004],["m1_expr",.38,.006],["m1_lineq",.42,.008],["m2_poly",.30,.007],
      ["m2_ineq",.35,.006],["m2_sys",.33,.008],["m2_linfun",.30,.006],["m3_factor",.22,.005],
      ["m2_tri",.48,.004],["m2_sim",.40,.005]],
    beh:{hintWeak:.52,hintStrong:.25,giveup:.16,skip:.10,retry:.22,follow:.28,dur:265,durTrend:-.6},
    errW:{slip:.10,concept:.62,strategy:.16,interpret:.12},fOff:{cu:-.10,pf:-.02,sc:-.14,ar:-.08}},
-  {id:"demo-choi",name:"최유나 (예시)",seed:53,density:.5,
+  {id:"demo-choi",name:"최유나",seed:53,density:.5,
    // 고1 공통수학1: 중3 기반은 준수, 나머지정리→고차방정식 사슬이 새 병목 — 자기주도형
    plan:[["cm1_polyop",.55,.012],["cm1_rem",.40,.015],["cm1_complex",.45,.014],["cm1_quadfun",.50,.013],
      ["cm1_eqs",.35,.014],["cm1_ineqs",.50,.012],["cm1_perm",.50,.010],["m3_factor",.62,.008],
      ["m3_quad",.66,.007],["m3_quadfun",.56,.010]],
    beh:{hintWeak:.16,hintStrong:.04,giveup:.04,skip:.03,retry:.65,follow:.50,dur:225,durTrend:-2.1},
    errW:{slip:.25,concept:.35,strategy:.25,interpret:.15},fOff:{cu:.04,pf:.02,sc:0,ar:.06}},
-  {id:"demo-jung",name:"정민재 (예시)",seed:71,density:.42,
+  {id:"demo-jung",name:"정민재",seed:71,density:.42,
    // 회피형: '모르겠어'·스킵이 잦고 오답을 다시 안 잡는다 — 상담 포인트가 가장 많이 뜨는 학생
    plan:[["m2_poly",.36,.004],["m3_factor",.30,.003],["m3_sqrt",.42,.004],["m3_quad",.30,.004],
      ["m2_linfun",.38,.003],["m2_pyth",.40,.004],["m3_trig",.34,.003],["m2_case",.45,.002],

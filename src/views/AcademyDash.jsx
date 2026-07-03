@@ -50,12 +50,12 @@ function AcademyDash({students,onInsight,onBack}){
         <span style={{fontSize:12.5,color:"var(--sub)"}}>
           {tr("학생 ","students ")}{students.length}{tr("명 · 이번 주 활동 "," · active this week ")}{activeWeek}{tr("명 · 관심 필요 "," · needs attention ")}{needCare.length}{tr("명","")}
         </span>
-        <button className="btn gho sm" style={{marginLeft:"auto"}} onClick={onBack}>{tr("← 시험 만들기","← Back")}</button>
+        <button className="btn gho sm" style={{marginLeft:"auto"}} onClick={onBack}>{tr("← 학생 관리","← Students")}</button>
       </div>
 
       {students.length===0?(
         <div className="card" style={{padding:"26px",textAlign:"center",color:"var(--sub)",lineHeight:1.8}}>
-          {tr("학생 명단이 비어 있어요. 시험 만들기 화면에서 학생을 추가하거나, 🔗 홈학습 연동으로 가져오세요.","Add students first, or import via home-study link.")}
+          {tr("학생 목록이 비어 있어요. 학생 관리에서 학생을 추가하거나, 🔗 홈학습 연동으로 가져오세요.","Add students first, or import via home-study link.")}
         </div>
       ):(
       <div className="card" style={{padding:"14px 12px"}}>
