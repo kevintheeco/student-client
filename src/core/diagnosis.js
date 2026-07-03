@@ -7,8 +7,10 @@ import { LS, tr } from "./platform.js";
 import { callAI } from "./ai.js";
 import { courseOf, impactOf, nodeById, traceRootCauses } from "./knowledgeGraph.js";
 import { miscBreakdown } from "./mastery.js";
+import { activeStudent } from "./attempts.js";
 
-const diagKey=(nodeId)=>"ng:diag:"+nodeId;
+// 학원 모드에선 학생별로 캐시 분리 (같은 기기에서 학생 간 진단이 섞이면 안 됨)
+const diagKey=(nodeId)=>"ng:diag:"+(activeStudent()?activeStudent()+":":"")+nodeId;
 
 // 진단에 먹일 증거 텍스트 조립 (프롬프트 재료)
 function buildEvidence(nodeId,mastery,attempts){

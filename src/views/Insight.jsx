@@ -60,7 +60,7 @@ function demoAttempts(){
   return out.sort((a,b)=>a.t-b.t);
 }
 
-function Insight({onExit}){
+function Insight({onExit,studentName}){
   const [tab,setTab]=useState("graph");
   const [demo,setDemo]=useState(false);
   const [sel,setSel]=useState(null);
@@ -220,7 +220,7 @@ function Insight({onExit}){
   return(
     <section>
       <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:14}}>
-        <h2 style={{margin:0,fontFamily:"'Jua',sans-serif",fontSize:22,color:"var(--ink)"}}>{tr("📊 성장 인사이트","📊 Growth insight")}</h2>
+        <h2 style={{margin:0,fontFamily:"'Jua',sans-serif",fontSize:22,color:"var(--ink)"}}>{tr("📊 성장 인사이트","📊 Growth insight")}{studentName?" · "+studentName:""}</h2>
         <span style={{fontSize:12,color:"var(--sub)"}}>
           {tr("시도 ","attempts ")}{attempts.length}{tr("회 · 측정 단원 "," · units measured ")}{measuredN}
         </span>

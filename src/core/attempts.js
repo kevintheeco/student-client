@@ -26,6 +26,17 @@ const MAX_ATTEMPTS=2000;   // ~400KB 상한 (Firestore 문서 1MB 대비 여유)
 const MISC_PER_NODE=20;    // 노드당 오개념 라벨 상한 (빈도 낮고 오래된 것부터 탈락)
 const clip=(s,n)=>s==null?undefined:String(s).slice(0,n);
 
+/* ── 학생 컨텍스트 (학원 모드) ──
+   학원은 한 기기에서 여러 학생이 응시한다. 활성 학생을 지정하면:
+   · 모든 시도 레코드에 sid가 찍히고, allAttempts()가 그 학생 것만 돌려줌
+   · 평생 집계·오개념 사전이 학생별 키(ng:attagg:<sid> 등)로 분리됨
+   개인 모드는 학생 미지정(null) — 기존 동작 그대로. */
+let _sid=null;
+function setActiveStudent(sid){_sid=sid||null;}
+const activeStudent=()=>_sid;
+const _aggKey=()=>_sid?AGG_KEY+":"+_sid:AGG_KEY;
+const _miscKey=()=>_sid?MISC_KEY+":"+_sid:MISC_KEY;
+
 /* ── 오개념 사전 (misconception lexicon) ──
    AI가 붙인 오개념 라벨("부호 분배 실수")을 노드별로 누적.
    같은 라벨이 2회 이상 반복되면 '이 학생이 이 단원에서 반복해서 밟는 함정'으로 승격 —
@@ -35,7 +46,7 @@ const normMiscKey=(s)=>String(s||"").trim().replace(/\s+/g," ").replace(/[.,!?~'
 function updateMiscLex(nodeId,label){
   const key=normMiscKey(label);
   if(!key||key.length<2)return;
-  const lex=LS.get(MISC_KEY)||{};
+  const lex=LS.get(_miscKey())||{};
   const node=lex[nodeId]||(lex[nodeId]={});
   const e=node[key]||(node[key]={n:0,label:String(label).trim().slice(0,48)});
   e.n++;e.lastT=Date.now();
@@ -44,18 +55,19 @@ function updateMiscLex(nodeId,label){
     keys.sort((a,b)=>(node[a].n-node[b].n)||((node[a].lastT||0)-(node[b].lastT||0)));
     delete node[keys[0]];
   }
-  LS.set(MISC_KEY,lex);
+  LS.set(_miscKey(),lex);
 }
 // 노드의 오개념 라벨(빈도순). minN=2면 '반복 함정'만
 function miscLexFor(nodeId,minN){
   if(!nodeId)return[];
-  const node=(LS.get(MISC_KEY)||{})[nodeId]||{};
+  const node=(LS.get(_miscKey())||{})[nodeId]||{};
   return Object.values(node).filter(e=>e.n>=(minN||1)).sort((a,b)=>b.n-a.n);
 }
 
 function logAttempt(a){
   try{
     const rec={v:2,t:Date.now(),...a};
+    if(_sid&&!rec.sid)rec.sid=_sid;
     rec.concept=clip(rec.concept,60);
     rec.unit=clip(rec.unit,60);
     rec.gap=clip(rec.gap,140);
@@ -74,18 +86,22 @@ function logAttempt(a){
     if(rec.nodeId&&rec.misc)updateMiscLex(rec.nodeId,rec.misc);
     // ── 평생 집계: 노드별 누적 카운터 (로그 순환과 무관하게 영구) ──
     if(rec.nodeId&&rec.src!=="followup"){
-      const agg=LS.get(AGG_KEY)||{};
+      const agg=LS.get(_aggKey())||{};
       const g=agg[rec.nodeId]||(agg[rec.nodeId]={n:0,sum:0,err:{},durSum:0,durN:0,lastT:0});
       g.n++;g.sum=Math.round((g.sum+scoreOf(rec))*100)/100;
       if(rec.err&&rec.err!=="none")g.err[rec.err]=(g.err[rec.err]||0)+1;
       if(rec.dur){g.durSum+=rec.dur;g.durN++;}
       g.lastT=rec.t;
-      LS.set(AGG_KEY,agg);
+      LS.set(_aggKey(),agg);
     }
   }catch(e){console.warn("[attempts] 기록 실패",e);}
 }
-const allAttempts=()=>LS.get(ATT_KEY)||[];
+// 활성 학생이 있으면 그 학생의 시도만 (학원 기기에서 학생 간 데이터 섞임 방지)
+const allAttempts=()=>{
+  const list=LS.get(ATT_KEY)||[];
+  return _sid?list.filter(a=>a.sid===_sid):list;
+};
 const attemptsForNode=(nodeId)=>allAttempts().filter(a=>a.nodeId===nodeId);
-const lifetimeAgg=()=>LS.get(AGG_KEY)||{};
+const lifetimeAgg=()=>LS.get(_aggKey())||{};
 
-export { ATT_KEY, AGG_KEY, MISC_KEY, MAX_ATTEMPTS, logAttempt, allAttempts, attemptsForNode, lifetimeAgg, miscLexFor, updateMiscLex };
+export { ATT_KEY, AGG_KEY, MISC_KEY, MAX_ATTEMPTS, setActiveStudent, activeStudent, logAttempt, allAttempts, attemptsForNode, lifetimeAgg, miscLexFor, updateMiscLex };

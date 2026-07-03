@@ -3,7 +3,7 @@ import { Cheer, Fb, Prof } from "../ui/common.jsx";
 import { MathText } from "../ui/math.jsx";
 import { PenPad, inkHas, renderInkPNG } from "../ui/pads.jsx";
 import { callAI, uid } from "../core/ai.js";
-import { logAttempt } from "../core/attempts.js";
+import { activeStudent, logAttempt } from "../core/attempts.js";
 import { errTypeById, normErrType, normFactors, normStage } from "../core/knowledgeGraph.js";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
@@ -215,7 +215,7 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
   function saveRecord(gr,total){
     try{
       const id=uid();
-      const rec={id,scope:scopeId,title:examTitle,studentName:student||"",takenAt:Date.now(),score:total,maxScore,
+      const rec={id,scope:scopeId,title:examTitle,studentName:student||"",sid:activeStudent()||undefined,takenAt:Date.now(),score:total,maxScore,
         byUnit:aggUnits(gr),grades:gr.map(g=>({...g}))};
       const key="ng:exam:"+scopeId+":"+id;
       LS.set(key,rec);

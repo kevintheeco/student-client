@@ -1,7 +1,10 @@
 import { CFG, LS, tr } from "../core/platform.js";
 import { Exam } from "./Exam.jsx";
+import { Insight } from "./Insight.jsx";
 import { KeyForm } from "./Settings.jsx";
 import { Prof } from "../ui/common.jsx";
+import { setActiveStudent } from "../core/attempts.js";
+import { uid } from "../core/ai.js";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
 
@@ -22,7 +25,7 @@ const CURRICULUM=[
 ];
 
 function AcademyApp(){
-  const [view,setView]=useState("build");   // build | preview | exam
+  const [view,setView]=useState("build");   // build | preview | exam | insight
   const [topic,setTopic]=useState(null);
   const [student,setStudent]=useState(LS.get("ng:academy:student")||"");
   const [acaName,setAcaName]=useState(LS.get("ng:academy:name")||"");
@@ -33,6 +36,37 @@ function AcademyApp(){
   const DIFFS=[["easy",tr("쉬움","Easy")],["medium",tr("보통","Medium")],["hard",tr("어려움","Hard")]];
   const toPersonal=()=>{location.hash="";location.reload();};
   const saveStudent=(v)=>{setStudent(v);LS.set("ng:academy:student",v);};
+
+  // ── 학생 명단: 한 기기 다중 학생 — 학생별로 시도 로그·숙련도·오개념 사전 분리 ──
+  const [students,setStudents]=useState(LS.get("ng:aca:students")||[]);
+  const [activeSid,setActiveSid]=useState(LS.get("ng:aca:active")||null);
+  const [newStu,setNewStu]=useState("");
+  const saveStudents=(list)=>{setStudents(list);LS.set("ng:aca:students",list);};
+  function selectStudent(s){
+    setActiveSid(s.id);LS.set("ng:aca:active",s.id);
+    setActiveStudent(s.id);           // 이후 모든 시도 로그·집계가 이 학생에게 귀속
+    saveStudent(s.name);
+  }
+  function addStudent(){
+    const name=newStu.trim();if(!name)return;
+    const s={id:uid(),name,createdAt:Date.now()};
+    saveStudents([...students,s]);setNewStu("");selectStudent(s);
+  }
+  function delStudent(s,e){
+    e.stopPropagation();
+    if(!confirm(tr('"'+s.name+'" 학생을 명단에서 뺄까? 시험·성장 기록은 지워지지 않아.','Remove "'+s.name+'"? Records are kept.')))return;
+    saveStudents(students.filter(x=>x.id!==s.id));
+    if(activeSid===s.id){setActiveSid(null);LS.del("ng:aca:active");setActiveStudent(null);saveStudent("");}
+  }
+  useEffect(()=>{
+    // 마이그레이션: 기존 단일 학생명만 있던 기기는 명단으로 승격
+    if(!students.length){
+      const legacy=(LS.get("ng:academy:student")||"").trim();
+      if(legacy){const s={id:uid(),name:legacy,createdAt:Date.now()};saveStudents([s]);selectStudent(s);return;}
+    }
+    if(activeSid)setActiveStudent(activeSid);   // 새로고침 후 활성 학생 복원
+  },[]);
+  const activeStu=students.find(s=>s.id===activeSid)||null;
   const keyOf=(sid,u)=>sid+"::"+u;
   const toggleUnit=(sid,sname,u)=>setPicked(p=>{const k=keyOf(sid,u),n={...p};if(n[k])delete n[k];else n[k]={name:u,subj:sname,count:2,difficulty:"medium"};return n;});
   const setField=(k,f,v)=>setPicked(p=>({...p,[k]:{...p[k],[f]:v}}));
@@ -52,6 +86,7 @@ function AcademyApp(){
   );
   if(!keyReady)return(<><Head/><div className="card panel"><div className="eyebrow" style={{marginBottom:8}}>{tr("API 키 입력","API key")}</div><KeyForm onSaved={()=>setKeyReady(true)} cta={tr("저장하고 시작","Save & start")}/></div></>);
   if(view==="exam"&&topic)return(<Exam topic={topic} student={student} academy academyName={acaName} onExit={()=>setView("build")}/>);
+  if(view==="insight")return(<><Head/><Insight onExit={()=>setView("build")} studentName={activeStu?.name||student}/></>);
 
   // ── 미리보기 ──
   if(view==="preview"&&topic)return(<>
@@ -94,15 +129,36 @@ function AcademyApp(){
           <p>{tr("학생 이름을 적고, 과목을 펼쳐 진단할 단원을 골라줘. 단원별 문항 수·난이도를 정한 뒤 테스트를 만들면 손글씨 풀이까지 AI가 채점해 단원별 약점과 학부모 리포트를 보여줘.","Name the student, expand a subject, pick units, set counts/difficulty.")}</p>
         </div>
       </div>
-      {/* 학원명 · 학생 이름 */}
+      {/* 학원명 · 학생 명단 */}
       <div className="card" style={{padding:"14px 16px",marginBottom:16,display:"flex",gap:14,flexWrap:"wrap"}}>
         <div style={{flex:"1 1 220px"}}>
           <label style={{fontSize:12.5,fontWeight:700,color:"var(--sub)",display:"block",marginBottom:6}}>🏫 {tr("학원명","Academy name")}</label>
           <input className="field" value={acaName} onChange={e=>saveAca(e.target.value)} placeholder={tr("예: 구주이배수학학원","e.g. Acme Math")}/>
         </div>
-        <div style={{flex:"1 1 220px"}}>
-          <label style={{fontSize:12.5,fontWeight:700,color:"var(--sub)",display:"block",marginBottom:6}}>🧑‍🎓 {tr("학생 이름","Student name")}</label>
-          <input className="field" value={student} onChange={e=>saveStudent(e.target.value)} placeholder={tr("예: 김도윤","e.g. Jane")}/>
+        <div style={{flex:"2 1 320px"}}>
+          <label style={{fontSize:12.5,fontWeight:700,color:"var(--sub)",display:"block",marginBottom:6}}>
+            🧑‍🎓 {tr("학생","Student")}
+            <span style={{fontWeight:400,marginLeft:6,fontSize:11.5}}>{tr("— 선택한 학생에게 시험·성장 기록이 귀속돼요","— records attach to the selected student")}</span>
+          </label>
+          <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center"}}>
+            {students.map(s=>{
+              const on=s.id===activeSid;
+              return(
+                <span key={s.id} onClick={()=>selectStudent(s)}
+                  style={{display:"inline-flex",alignItems:"center",gap:5,padding:"7px 11px",borderRadius:11,cursor:"pointer",fontSize:13,fontWeight:on?800:600,
+                    border:"1.5px solid "+(on?"var(--pri)":"var(--line)"),background:on?"var(--pri-s)":"#fff",color:on?"var(--pri-d)":"var(--ink)"}}>
+                  {on?"✓ ":""}{s.name}
+                  <button onClick={e=>delStudent(s,e)} title={tr("명단에서 빼기","Remove")}
+                    style={{background:"none",border:"none",cursor:"pointer",padding:"0 1px",opacity:.5,color:"inherit",fontSize:13,lineHeight:1}}>×</button>
+                </span>);})}
+            <span style={{display:"inline-flex",gap:5}}>
+              <input className="field" value={newStu} onChange={e=>setNewStu(e.target.value)}
+                onKeyDown={e=>{if(e.key==="Enter")addStudent();}}
+                placeholder={tr("+ 학생 이름","+ Student name")} style={{width:130,padding:"7px 10px",fontSize:13}}/>
+              <button className="btn pri xs" onClick={addStudent} disabled={!newStu.trim()}>{tr("추가","Add")}</button>
+            </span>
+            {activeStu&&<button className="btn gho sm" style={{marginLeft:"auto"}} onClick={()=>setView("insight")}>📊 {tr("성장 인사이트","Growth insight")}</button>}
+          </div>
         </div>
       </div>
       {/* 과목·단원 선택 */}
