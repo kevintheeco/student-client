@@ -23,7 +23,7 @@ function errBreakdown(attempts,nodeId){
   const out={n:0,err:{},durSum:0,durN:0};
   for(const a of attempts){
     if(nodeId&&a.nodeId!==nodeId)continue;
-    if(a.src==="followup")continue;
+    if(a.src==="followup"||a.src==="skip")continue;
     out.n++;
     if(a.err&&a.err!=="none")out.err[a.err]=(out.err[a.err]||0)+1;
     if(a.dur){out.durSum+=a.dur;out.durN++;}
@@ -83,6 +83,7 @@ function factorSeries(attempts,weeks=12){
   for(const a of attempts){
     const i=idxOf(a.t);if(i<0)continue;
     const b=buckets[i];
+    if(a.src==="skip")continue;   // 스킵은 습관 지표(habits.js)에서만 다룸
     if(a.factors)for(const f of ["cu","pf","sc","ar"])if(typeof a.factors[f]==="number")b.sums[f].push(a.factors[f]);
     if(a.src!=="followup"){
       b.gradedN++;
@@ -132,7 +133,7 @@ function avgOf(pts){
 /* 노드별 성장 추세: 시도 4회 이상 노드의 점수 vs 시간 회귀 기울기(일당) */
 function nodeTrends(attempts){
   const by={};
-  for(const a of attempts){if(a.nodeId)(by[a.nodeId]=by[a.nodeId]||[]).push(a);}
+  for(const a of attempts){if(a.nodeId&&a.src!=="skip")(by[a.nodeId]=by[a.nodeId]||[]).push(a);}
   const out=[];
   for(const id in by){
     const list=by[id];if(list.length<4)continue;

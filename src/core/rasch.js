@@ -49,7 +49,8 @@ function decayedTheta(st,t){
    반환: {ability:{nodeId:{m,theta,se,ciLow,ciHigh,n,indirect,lastT}},
           calibration:{n,brier,buckets:[{n,p,s}×5]}} */
 function abilityByNode(attempts,now){
-  const sorted=attempts.filter(a=>a.nodeId&&a.src!=="followup").slice().sort((a,b)=>(a.t||0)-(b.t||0));
+  // followup(보충 문답)·skip(넘어가기)은 행동 신호일 뿐 능력 관측이 아님 — 측정에서 제외
+  const sorted=attempts.filter(a=>a.nodeId&&a.src!=="followup"&&a.src!=="skip").slice().sort((a,b)=>(a.t||0)-(b.t||0));
   now=now||(sorted.length?sorted[sorted.length-1].t:Date.now());
   const S={};
   const get=(id)=>S[id]||(S[id]={theta:PRIOR,n:0,direct:0,info:0,lastT:0});

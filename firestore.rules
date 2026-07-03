@@ -35,6 +35,17 @@ service cloud.firestore {
       allow read, write: if signedIn() && request.auth.uid == uid;
     }
 
+    // 니가교수 학원 연동: 학생이 옵트인으로 공유한 학습 신호 (aca_shared/{code}__{uid})
+    // 쓰기: 본인(uid가 문서 id 끝과 일치 + 데이터의 uid 필드도 본인)만.
+    // 읽기: 로그인 사용자 (v1 — 학원 코드는 사실상 접근 토큰. TODO: aca_admins/{code} 관리자 명단으로 조이기)
+    match /aca_shared/{docId} {
+      allow write: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && docId == request.resource.data.code + '__' + request.auth.uid;
+      allow delete: if signedIn() && docId.matches('.*__' + request.auth.uid);
+      allow read: if signedIn();
+    }
+
     // 워크스페이스 컬렉션(ws_*) — 멤버만 읽기/쓰기
     match /{coll}/{id} {
       allow read, write: if isMember() && coll.matches('ws_.*');

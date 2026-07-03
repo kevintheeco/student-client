@@ -158,6 +158,8 @@ function Study({deck:initial,subjects,onExit}){
     // 페널티 없는 스킵: box(레벨)는 그대로 두고 dueAt만 내일로 미뤄 오늘은 다시 안 나오게 함
     const c=concept;let d=deckRef.current;
     if(c){
+      // 행동 신호로만 기록 (숙련도 계산에선 제외) — 넘어가기 빈도는 학습 습관 지표
+      logAttempt({src:"skip",deckId:deck.id,concept:c.name,unit:[c.u1,c.u2].filter(Boolean).join(" "),box:c.box||1,dur:elapsedSec()});
       const uc={...c,dueAt:Date.now()+DAY,lastSeen:Date.now()};
       d={...d,concepts:(d.concepts||[]).map(x=>x.id===c.id?uc:x)};
       persist(d);

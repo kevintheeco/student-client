@@ -85,7 +85,7 @@ function logAttempt(a){
     LS.set(ATT_KEY,list.length>MAX_ATTEMPTS?list.slice(list.length-MAX_ATTEMPTS):list);
     if(rec.nodeId&&rec.misc)updateMiscLex(rec.nodeId,rec.misc);
     // ── 평생 집계: 노드별 누적 카운터 (로그 순환과 무관하게 영구) ──
-    if(rec.nodeId&&rec.src!=="followup"){
+    if(rec.nodeId&&rec.src!=="followup"&&rec.src!=="skip"){
       const agg=LS.get(_aggKey())||{};
       const g=agg[rec.nodeId]||(agg[rec.nodeId]={n:0,sum:0,err:{},durSum:0,durN:0,lastT:0});
       g.n++;g.sum=Math.round((g.sum+scoreOf(rec))*100)/100;

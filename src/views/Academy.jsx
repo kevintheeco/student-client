@@ -1,10 +1,11 @@
-import { CFG, LS, tr } from "../core/platform.js";
+import { CFG, LS, _auth, tr } from "../core/platform.js";
 import { Exam } from "./Exam.jsx";
 import { Insight } from "./Insight.jsx";
 import { KeyForm } from "./Settings.jsx";
 import { Prof } from "../ui/common.jsx";
 import { setActiveStudent } from "../core/attempts.js";
-import { uid } from "../core/ai.js";
+import { fetchShared, importShared } from "../core/link.js";
+import { ACADEMY_CODE, uid } from "../core/ai.js";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
 
@@ -67,6 +68,28 @@ function AcademyApp(){
     if(activeSid)setActiveStudent(activeSid);   // 새로고침 후 활성 학생 복원
   },[]);
   const activeStu=students.find(s=>s.id===activeSid)||null;
+
+  // ── 홈학습 연동: 학생 개인 앱이 공유한 데이터를 명단 학생에게 병합 ──
+  const [linkOpen,setLinkOpen]=useState(false);
+  const [sharedList,setSharedList]=useState(null);
+  const [linkBusy,setLinkBusy]=useState(false);
+  const [linkMsg,setLinkMsg]=useState("");
+  async function loadShared(){
+    setLinkBusy(true);setLinkMsg("");
+    try{
+      if(_auth&&!_auth.currentUser)await _auth.signInWithPopup(new window.firebase.auth.GoogleAuthProvider());
+      setSharedList(await fetchShared(ACADEMY_CODE||"test"));
+    }catch(e){setLinkMsg("⚠️ "+(e.message||e));}
+    setLinkBusy(false);
+  }
+  function doImport(sh){
+    // 명단에 같은 이름이 있으면 그 학생에게, 없으면 새 학생으로
+    let stu=students.find(s=>s.name===(sh.name||"").trim())||activeStu;
+    if(!stu){stu={id:uid(),name:(sh.name||tr("학생","Student")).trim(),createdAt:Date.now()};saveStudents([...students,stu]);}
+    selectStudent(stu);
+    const added=importShared(sh,stu.id);
+    setLinkMsg("✅ "+(sh.name||"학생")+" → "+stu.name+tr(" 명단에 "+added+"건 병합 — 성장 인사이트에서 확인"," merged "+added+" records"));
+  }
   const keyOf=(sid,u)=>sid+"::"+u;
   const toggleUnit=(sid,sname,u)=>setPicked(p=>{const k=keyOf(sid,u),n={...p};if(n[k])delete n[k];else n[k]={name:u,subj:sname,count:2,difficulty:"medium"};return n;});
   const setField=(k,f,v)=>setPicked(p=>({...p,[k]:{...p[k],[f]:v}}));
@@ -157,10 +180,40 @@ function AcademyApp(){
                 placeholder={tr("+ 학생 이름","+ Student name")} style={{width:130,padding:"7px 10px",fontSize:13}}/>
               <button className="btn pri xs" onClick={addStudent} disabled={!newStu.trim()}>{tr("추가","Add")}</button>
             </span>
-            {activeStu&&<button className="btn gho sm" style={{marginLeft:"auto"}} onClick={()=>setView("insight")}>📊 {tr("성장 인사이트","Growth insight")}</button>}
+            <span style={{marginLeft:"auto",display:"inline-flex",gap:6}}>
+              <button className="btn gho sm" onClick={()=>{setLinkOpen(true);if(!sharedList)loadShared();}}>🔗 {tr("홈학습 연동","Home-study link")}</button>
+              {activeStu&&<button className="btn gho sm" onClick={()=>setView("insight")}>📊 {tr("성장 인사이트","Growth insight")}</button>}
+            </span>
           </div>
         </div>
       </div>
+      {/* 홈학습 연동 다이얼로그: 학생 개인 앱이 이 학원 코드로 공유한 데이터 목록 */}
+      {linkOpen&&(
+        <div onClick={()=>setLinkOpen(false)} style={{position:"fixed",inset:0,background:"rgba(26,36,54,.42)",zIndex:60,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div onClick={e=>e.stopPropagation()} className="card" style={{maxWidth:480,width:"100%",padding:22,display:"flex",flexDirection:"column",gap:12}}>
+            <div style={{fontFamily:"'Jua',sans-serif",fontSize:17,color:"var(--ink)"}}>🔗 {tr("홈학습 연동","Home-study link")}</div>
+            <div style={{fontSize:12.5,color:"var(--sub)",lineHeight:1.7}}>
+              {tr("학생이 개인 니가교수 앱(프로필 → 학원 연동)에 학원 코드를 넣으면 여기 나타나요. 가져오면 집에서 공부한 시도·오개념·학습 습관이 그 학생의 성장 인사이트에 합쳐집니다.",
+                 "Students who enter this academy's code in their personal app appear here.")}
+            </div>
+            {linkBusy&&<div style={{color:"var(--sub)",fontSize:13}}><span className="spinner" style={{width:14,height:14,display:"inline-block",verticalAlign:"middle",marginRight:8}}/>{tr("불러오는 중…","Loading…")}</div>}
+            {sharedList&&sharedList.length===0&&!linkBusy&&<div style={{fontSize:13,color:"var(--sub)"}}>{tr("아직 이 학원 코드로 공유한 학생이 없어요.","No shared students yet.")}</div>}
+            {sharedList&&sharedList.map(sh=>(
+              <div key={sh.uid} style={{display:"flex",alignItems:"center",gap:10,border:"1px solid var(--line)",borderRadius:10,padding:"10px 13px"}}>
+                <div style={{minWidth:0,flex:1}}>
+                  <b style={{fontSize:14}}>{sh.name||tr("이름 없음","Unnamed")}</b>
+                  <div style={{fontSize:11.5,color:"var(--sub)"}}>{tr("시도 ","attempts ")}{(sh.attempts||[]).length}{tr("건 · 마지막 공유 "," · last ")}{new Date(sh.t).toLocaleDateString("ko-KR")}</div>
+                </div>
+                <button className="btn pri sm" onClick={()=>doImport(sh)}>{tr("가져오기","Import")}</button>
+              </div>))}
+            {linkMsg&&<div style={{fontSize:12.5,lineHeight:1.6,color:linkMsg.startsWith("✅")?"#166534":"#9B1C1C"}}>{linkMsg}</div>}
+            <div className="row">
+              <button className="btn gho sm" onClick={loadShared} disabled={linkBusy}>{tr("새로고침","Refresh")}</button>
+              <button className="btn gho sm" onClick={()=>setLinkOpen(false)}>{tr("닫기","Close")}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* 과목·단원 선택 */}
       {CURRICULUM.map((lv,li)=>(
         <div key={li} style={{marginBottom:16}}>

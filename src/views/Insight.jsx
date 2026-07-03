@@ -12,6 +12,7 @@ import { allAttempts } from "../core/attempts.js";
 import { COURSES, FACTORS, GRAPH_EDGES, GRAPH_NODES, courseOf, dependentsOf, errTypeById, impactOf, nodeById, prereqsOf, strandOf, traceRootCauses } from "../core/knowledgeGraph.js";
 import { errBreakdown, factorSeries, factorSummary, miscBreakdown, nodeTrends } from "../core/mastery.js";
 import { abilityByNode } from "../core/rasch.js";
+import { habitInsights, habitProfile } from "../core/habits.js";
 import { narrateDiagnosis } from "../core/diagnosis.js";
 import React from "react";
 const { useState, useMemo, useRef } = React;
@@ -47,7 +48,11 @@ function demoAttempts(){
       const t=now-(10-w)*W+Math.floor(rand()*W*.9);
       const f=(c)=>Math.max(0,Math.min(1,c+(rand()-.5)*.3));
       const err=verdict==="correct"?"none":(rand()<(p.base>.6?.6:.3)?"slip":(rand()<.7?"concept":(rand()<.5?"strategy":"interpret")));
+      // 행동 신호: 약한 단원일수록 힌트를 자주 찾는 학생 시나리오 + 간헐적 포기·스킵
+      if(rand()<.05)out.push({t:t-1,src:"dontknow",concept:nodeById(p.node).name,nodeId:p.node,verdict:"incorrect",err:"blank"});
+      if(rand()<.04)out.push({t:t-2,src:"skip",concept:nodeById(p.node).name,nodeId:p.node});
       out.push({t,src:"study",concept:nodeById(p.node).name,nodeId:p.node,verdict,
+        hint:(p.base<.5&&rand()<.4)?1:undefined,
         err,stage:err==="none"?undefined:(err==="slip"?"compute":"setup"),
         misc:err==="none"?undefined:(err==="slip"?"부호 계산 실수":(GAPS[p.node]||"개념 연결 혼동").slice(0,20)),
         dur:60+Math.floor(rand()*180),
@@ -78,6 +83,8 @@ function Insight({onExit,studentName}){
   const fsum=useMemo(()=>factorSummary(attempts),[attempts]);
   const series=useMemo(()=>factorSeries(attempts),[attempts]);
   const trends=useMemo(()=>nodeTrends(attempts),[attempts]);
+  const habits=useMemo(()=>habitProfile(attempts),[attempts]);
+  const hLines=useMemo(()=>habitInsights(habits),[habits]);
   const measuredN=Object.keys(mastery).length;
 
   /* ── 그래프 레이아웃: x=과정(시계열), y=영역 순 정렬 ── */
@@ -358,7 +365,7 @@ function Insight({onExit,studentName}){
             </div>)}
         </>)}
 
-        {tab==="factors"&&(
+        {tab==="factors"&&(<>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:14}}>
             <div className="card" style={{padding:"20px 18px",display:"flex",flexDirection:"column",alignItems:"center"}}>
               <div className="eyebrow" style={{alignSelf:"flex-start",marginBottom:8}}>{tr("수학적 숙련도 5요인 (NRC, Adding It Up)","5 strands of proficiency (NRC)")}</div>
@@ -380,7 +387,37 @@ function Insight({onExit,studentName}){
                     <div className="bar" style={{marginTop:8}}><i style={{width:Math.round((s.cur||0)*100)+"%",background:f.color}}/></div>
                   </div>);})}
             </div>
-          </div>)}
+          </div>
+          {/* 학습 습관 — 손글씨 풀이 '과정'에서만 나오는 행동 신호 */}
+          {habits.n>=5&&(
+            <div className="card" style={{padding:"18px 20px",marginTop:14}}>
+              <div className="eyebrow" style={{marginBottom:4}}>{tr("🧭 학습 습관 — 풀이 과정의 행동 신호","🧭 Study habits — behavioral signals")}</div>
+              <div style={{fontSize:12,color:"var(--sub)",marginBottom:12}}>{tr("점수는 '무엇을 아는가', 습관은 '어떻게 공부하는가' — 손글씨 과외 앱만 볼 수 있는 데이터야.","What you know vs how you study — only a process-level app sees this.")}</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:"10px 16px",marginBottom:12}}>
+                {[
+                  [tr("힌트 의존도","Hint reliance"),habits.hintRate,habits.hintRate!=null&&habits.hintRate>=0.4?"#D9534F":"#4FACFE",habits.hintN+tr("회",""),true],
+                  [tr("포기율(모르겠어)","Give-up rate"),habits.giveupRate,habits.giveupRate!=null&&habits.giveupRate>=0.2?"#D9534F":"#FF8E72",habits.giveupN+tr("회",""),true],
+                  [tr("넘어가기","Skip rate"),habits.skipRate,"#A29BFE",habits.skipN+tr("회",""),true],
+                  [tr("오답 재도전율","Retry after wrong"),habits.retryRate,habits.retryRate!=null&&habits.retryRate>=0.6?"#27C2A0":"#FFC24B",habits.wrongN+tr("회 오답 중"," wrongs"),true],
+                  [tr("혼자 정답률","Solo accuracy"),habits.soloCorrect,"#6C5CE7","",true],
+                  [tr("힌트 후 정답률","With-hint accuracy"),habits.hintCorrect,"#B7B1D6","",true],
+                ].map(([lbl,v,col,sub])=>(
+                  <div key={lbl}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                      <span style={{fontSize:11.5,color:"var(--sub)",fontWeight:600}}>{lbl}</span>
+                      <b style={{color:col,fontSize:15,fontFamily:"'Jua',sans-serif"}}>{v==null?"—":Math.round(v*100)+"%"}</b>
+                    </div>
+                    <div className="bar" style={{height:6,marginTop:3}}><i style={{width:Math.round((v||0)*100)+"%",background:col}}/></div>
+                    {sub&&<div style={{fontSize:10,color:"var(--sub)",marginTop:2}}>{sub}</div>}
+                  </div>))}
+              </div>
+              {habits.avgDur!=null&&<div style={{fontSize:12,color:"var(--sub)",marginBottom:8}}>⏱ {tr("평균 풀이 시간 ","avg solve time ")}{habits.avgDur}{tr("초","s")}{habits.durRecent!=null&&habits.durPrev!=null?tr(" (이전 4주 "+habits.durPrev+"초 → 최근 4주 "+habits.durRecent+"초)",""):""}</div>}
+              {hLines.map((l,i)=>(
+                <div key={i} style={{fontSize:12.5,lineHeight:1.7,fontWeight:600,color:l.tone==="warn"?"#9B1C1C":l.tone==="good"?"#166534":"var(--ink)"}}>
+                  {l.tone==="warn"?"⚠️ ":l.tone==="good"?"👏 ":"· "}{l.text}
+                </div>))}
+            </div>)}
+        </>)}
 
         {tab==="growth"&&(<>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:14}}>
