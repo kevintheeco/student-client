@@ -388,35 +388,69 @@ function Insight({onExit,studentName}){
                   </div>);})}
             </div>
           </div>
-          {/* 학습 습관 — 손글씨 풀이 '과정'에서만 나오는 행동 신호 */}
-          {habits.n>=5&&(
+          {/* 학습 습관 — SRL(자기조절학습) 5차원 + 지식 조합. 풀이 '과정'에서만 나오는 행동 신호 */}
+          {habits.n>=5&&(()=>{
+            const H=habits;
+            const wheelNames=H.wheelNodes.slice(0,2).map(id=>nodeById(id)?.name||id).join(", ");
+            const gapTxt=H.integGap==null?"—":(H.integGap>=0?"−":"+")+Math.abs(Math.round(H.integGap*100))+"p";
+            const DIMS=[
+              {t:tr("① 시작·계획","① Initiation"),rows:[
+                {l:tr("포기(모르겠어)","Give-up"),v:H.giveupRate,col:H.giveupRate!=null&&H.giveupRate>=0.2?"#D9534F":"#FF8E72",sub:H.giveupN+tr("회","")},
+                {l:tr("넘어가기","Skip"),v:H.skipRate,col:"#A29BFE",sub:H.skipN+tr("회","")},
+                {l:tr("식 세우기 오류 비중","Setup-stage errors"),v:H.setupShare,col:H.setupShare!=null&&H.setupShare>=0.6?"#D9534F":"#4FACFE",sub:tr("오류 ","")+(H.stagedN||0)+tr("회 기준","")},
+              ]},
+              {t:tr("② 수행 조절","② Regulation"),rows:[
+                {l:tr("빠른 오답(찍기)","Rapid wrong"),v:H.rapidWrongRate,col:H.rapidWrongRate!=null&&H.rapidWrongRate>=0.2?"#D9534F":"#4FACFE",sub:H.rapidN+"/"+(H.wrongDN||0)+tr("오답","")},
+                {l:tr("덤벙 계산실수","Careless slips"),v:H.fastSlipRate,col:H.fastSlipRate!=null&&H.fastSlipRate>=0.35?"#D9534F":"#FFC24B",sub:tr("실수 ","")+(H.slipN||0)+tr("회 중","")},
+                {l:tr("헛바퀴 단원","Wheel-spinning"),v:H.wheelNodes.length?Math.min(1,H.wheelNodes.length/3):0,txt:H.wheelNodes.length+tr("개",""),col:H.wheelNodes.length?"#D9534F":"#27C2A0",sub:wheelNames},
+              ]},
+              {t:tr("③ 도움 추구","③ Help-seeking"),rows:[
+                {l:tr("힌트 의존도","Hint reliance"),v:H.hintRate,col:H.hintRate!=null&&H.hintRate>=0.4?"#D9534F":"#4FACFE",sub:H.hintN+tr("회","")},
+                {l:tr("혼자 정답률","Solo accuracy"),v:H.soloCorrect,col:"#6C5CE7"},
+                {l:tr("힌트 후 정답률","With-hint accuracy"),v:H.hintCorrect,col:"#B7B1D6"},
+              ]},
+              {t:tr("④ 오답 성찰","④ Reflection"),rows:[
+                {l:tr("오답 재도전율","Retry after wrong"),v:H.retryRate,col:H.retryRate!=null&&H.retryRate>=0.6?"#27C2A0":"#FFC24B",sub:H.wrongN+tr("회 오답 중","")},
+                {l:tr("재도전 성공률","Retry win rate"),v:H.retryWinRate,col:"#27C2A0",sub:(H.retriedN||0)+tr("회 재도전","")},
+                {l:tr("같은 함정 반복","Trap repeats"),v:H.trapRepeatRate,col:H.trapRepeatRate!=null&&H.trapRepeatRate>=0.5?"#D9534F":"#FF8E72",sub:(H.trapKinds||0)+tr("종 오개념","")},
+              ]},
+              {t:tr("⑤ 꾸준함·분산","⑤ Consistency"),rows:[
+                {l:tr("주 활동일","Days/week"),v:H.daysPerWeek==null?null:H.daysPerWeek/7,txt:H.daysPerWeek==null?"—":(Math.round(H.daysPerWeek*10)/10)+tr("일","d"),col:H.daysPerWeek!=null&&H.daysPerWeek>=3?"#27C2A0":"#FFC24B"},
+                {l:tr("단원 재방문 간격","Revisit gap"),v:null,txt:H.medGapDays==null?"—":H.medGapDays+tr("일","d"),col:"#4FACFE"},
+                {l:tr("평균 풀이 시간","Avg solve time"),v:null,txt:H.avgDur==null?"—":H.avgDur+tr("초","s"),col:"#A29BFE",
+                 sub:H.durRecent!=null&&H.durPrev!=null?tr(H.durPrev+"초 → "+H.durRecent+"초",""):""},
+              ]},
+              {t:tr("🧩 지식 조합","🧩 Integration"),rows:[
+                {l:tr("기본 문항 정답률","Basic accuracy"),v:H.basicAcc,col:"#6C5CE7",sub:(H.basicN||0)+tr("문항","")},
+                {l:tr("응용·서술 정답률","Applied accuracy"),v:H.applyAcc,col:"#27C2A0",sub:(H.applyN||0)+tr("문항","")},
+                {l:tr("조합 격차","Integration gap"),v:H.integGap==null?null:Math.min(1,Math.abs(H.integGap)*2),txt:gapTxt,col:H.integGap!=null&&H.integGap>=0.25?"#D9534F":"#27C2A0",
+                 sub:tr("아는 개념을 섞어 쓰는 힘","combining known concepts")},
+              ]},
+            ];
+            return(
             <div className="card" style={{padding:"18px 20px",marginTop:14}}>
-              <div className="eyebrow" style={{marginBottom:4}}>{tr("🧭 학습 습관 — 풀이 과정의 행동 신호","🧭 Study habits — behavioral signals")}</div>
-              <div style={{fontSize:12,color:"var(--sub)",marginBottom:12}}>{tr("점수는 '무엇을 아는가', 습관은 '어떻게 공부하는가' — 손글씨 과외 앱만 볼 수 있는 데이터야.","What you know vs how you study — only a process-level app sees this.")}</div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:"10px 16px",marginBottom:12}}>
-                {[
-                  [tr("힌트 의존도","Hint reliance"),habits.hintRate,habits.hintRate!=null&&habits.hintRate>=0.4?"#D9534F":"#4FACFE",habits.hintN+tr("회",""),true],
-                  [tr("포기율(모르겠어)","Give-up rate"),habits.giveupRate,habits.giveupRate!=null&&habits.giveupRate>=0.2?"#D9534F":"#FF8E72",habits.giveupN+tr("회",""),true],
-                  [tr("넘어가기","Skip rate"),habits.skipRate,"#A29BFE",habits.skipN+tr("회",""),true],
-                  [tr("오답 재도전율","Retry after wrong"),habits.retryRate,habits.retryRate!=null&&habits.retryRate>=0.6?"#27C2A0":"#FFC24B",habits.wrongN+tr("회 오답 중"," wrongs"),true],
-                  [tr("혼자 정답률","Solo accuracy"),habits.soloCorrect,"#6C5CE7","",true],
-                  [tr("힌트 후 정답률","With-hint accuracy"),habits.hintCorrect,"#B7B1D6","",true],
-                ].map(([lbl,v,col,sub])=>(
-                  <div key={lbl}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
-                      <span style={{fontSize:11.5,color:"var(--sub)",fontWeight:600}}>{lbl}</span>
-                      <b style={{color:col,fontSize:15,fontFamily:"'Jua',sans-serif"}}>{v==null?"—":Math.round(v*100)+"%"}</b>
-                    </div>
-                    <div className="bar" style={{height:6,marginTop:3}}><i style={{width:Math.round((v||0)*100)+"%",background:col}}/></div>
-                    {sub&&<div style={{fontSize:10,color:"var(--sub)",marginTop:2}}>{sub}</div>}
+              <div className="eyebrow" style={{marginBottom:4}}>{tr("🧭 학습 습관 — SRL 5차원 프로파일","🧭 Study habits — SRL 5-dimension profile")}</div>
+              <div style={{fontSize:12,color:"var(--sub)",marginBottom:12}}>{tr("자기조절학습(계획→수행→성찰) 틀로 본 '어떻게 공부하는가' — 손글씨 풀이 과정에서만 나오는 신호야.","How you study, framed by self-regulated learning — signals only a process-level app can see.")}</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(205px,1fr))",gap:"14px 20px",marginBottom:12}}>
+                {DIMS.map(d=>(
+                  <div key={d.t}>
+                    <div style={{fontSize:11,fontWeight:800,color:"var(--pri-d)",marginBottom:7,borderBottom:"1px solid var(--line)",paddingBottom:4}}>{d.t}</div>
+                    {d.rows.map((r,i)=>(
+                      <div key={i} style={{marginBottom:7}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                          <span style={{fontSize:11.5,color:"var(--sub)",fontWeight:600}}>{r.l}</span>
+                          <b style={{color:r.col,fontSize:14,fontFamily:"'Jua',sans-serif"}}>{r.txt!==undefined?r.txt:(r.v==null?"—":Math.round(r.v*100)+"%")}</b>
+                        </div>
+                        {r.v!=null&&<div className="bar" style={{height:5,marginTop:2}}><i style={{width:Math.round(Math.max(0,Math.min(1,r.v))*100)+"%",background:r.col}}/></div>}
+                        {r.sub?<div style={{fontSize:10,color:"var(--sub)",marginTop:1}}>{r.sub}</div>:null}
+                      </div>))}
                   </div>))}
               </div>
-              {habits.avgDur!=null&&<div style={{fontSize:12,color:"var(--sub)",marginBottom:8}}>⏱ {tr("평균 풀이 시간 ","avg solve time ")}{habits.avgDur}{tr("초","s")}{habits.durRecent!=null&&habits.durPrev!=null?tr(" (이전 4주 "+habits.durPrev+"초 → 최근 4주 "+habits.durRecent+"초)",""):""}</div>}
               {hLines.map((l,i)=>(
                 <div key={i} style={{fontSize:12.5,lineHeight:1.7,fontWeight:600,color:l.tone==="warn"?"#9B1C1C":l.tone==="good"?"#166534":"var(--ink)"}}>
                   {l.tone==="warn"?"⚠️ ":l.tone==="good"?"👏 ":"· "}{l.text}
                 </div>))}
-            </div>)}
+            </div>);})()}
         </>)}
 
         {tab==="growth"&&(<>

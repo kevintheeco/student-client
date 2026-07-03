@@ -28,42 +28,44 @@ const TRAP={
 };
 
 /* 페르소나: plan=[node,시작 숙련도,주당 성장], beh=행동 파라미터.
-   errW = 오답일 때 오류 유형 가중치. density = 주당 각 단원을 잡을 확률. */
+   errW = 오답일 때 오류 유형 가중치. density = 주당 각 단원을 잡을 확률.
+   integ = 지식 조합 격차(응용·서술 문항에서 깎이는 성공률) — 클수록 "아는 걸 못 섞는" 학생.
+   beh.rush = 오답이 유난히 빠른 풀이에서 나는 찍기/서두름 성향. */
 const PERSONAS=[
-  {id:"demo-kim",name:"김하늘",seed:11,density:.5,
+  {id:"demo-kim",name:"김하늘",seed:11,density:.5,integ:.06,trapStick:.3,
    // 중3 성실 성장형: 인수분해 계열이 약했지만 6개월간 꾸준히 끌어올림 — retry·follow 높음
    plan:[["m2_poly",.40,.021],["m3_factor",.30,.024],["m3_quad",.28,.025],["m3_quadfun",.35,.022],
      ["m3_sqrt",.55,.012],["m1_lineq",.82,.004],["m2_sys",.78,.005],["m2_linfun",.65,.010],
      ["m2_pyth",.55,.012],["m3_trig",.45,.015],["m3_circle",.50,.012],["m3_stat",.80,.002]],
    beh:{hintWeak:.30,hintStrong:.05,giveup:.02,skip:.02,retry:.80,follow:.70,dur:210,durTrend:-3.2},
    errW:{slip:.30,concept:.40,strategy:.15,interpret:.15},fOff:{cu:0,pf:0,sc:-.03,ar:0}},
-  {id:"demo-lee",name:"이준서",seed:23,density:.5,
+  {id:"demo-lee",name:"이준서",seed:23,density:.5,integ:.08,trapStick:.55,
    // 중3 실수형: 개념은 아는데 계산이 빠르고 거칠다 — slip 다수, 재도전은 안 하는 편
    plan:[["m2_poly",.68,.006],["m3_factor",.62,.008],["m3_quad",.60,.008],["m3_quadfun",.58,.008],
      ["m3_sqrt",.70,.005],["m2_sys",.72,.004],["m2_ineq",.65,.005],["m3_trig",.60,.007],
      ["m2_case",.66,.005],["m3_circle",.55,.008],["m3_stat",.72,.003]],
-   beh:{hintWeak:.10,hintStrong:.06,giveup:.01,skip:.06,retry:.40,follow:.30,dur:85,durTrend:-.4},
+   beh:{hintWeak:.10,hintStrong:.06,giveup:.01,skip:.06,retry:.40,follow:.30,dur:85,durTrend:-.4,hasty:true},
    errW:{slip:.72,concept:.08,strategy:.08,interpret:.12},fOff:{cu:.14,pf:-.16,sc:.05,ar:.04}},
-  {id:"demo-park",name:"박서준",seed:37,density:.5,
+  {id:"demo-park",name:"박서준",seed:37,density:.5,integ:.22,trapStick:.7,
    // 개념 결여형: 중1 대수 뿌리(문자식·일차방정식)부터 흔들려 후속이 다 무너짐 — 힌트 의존 높음
    plan:[["m1_int",.50,.004],["m1_expr",.38,.006],["m1_lineq",.42,.008],["m2_poly",.30,.007],
      ["m2_ineq",.35,.006],["m2_sys",.33,.008],["m2_linfun",.30,.006],["m3_factor",.22,.005],
      ["m2_tri",.48,.004],["m2_sim",.40,.005]],
    beh:{hintWeak:.52,hintStrong:.25,giveup:.16,skip:.10,retry:.22,follow:.28,dur:265,durTrend:-.6},
    errW:{slip:.10,concept:.62,strategy:.16,interpret:.12},fOff:{cu:-.10,pf:-.02,sc:-.14,ar:-.08}},
-  {id:"demo-choi",name:"최유나",seed:53,density:.5,
+  {id:"demo-choi",name:"최유나",seed:53,density:.5,integ:.10,trapStick:.4,
    // 고1 공통수학1: 중3 기반은 준수, 나머지정리→고차방정식 사슬이 새 병목 — 자기주도형
    plan:[["cm1_polyop",.55,.012],["cm1_rem",.40,.015],["cm1_complex",.45,.014],["cm1_quadfun",.50,.013],
      ["cm1_eqs",.35,.014],["cm1_ineqs",.50,.012],["cm1_perm",.50,.010],["m3_factor",.62,.008],
      ["m3_quad",.66,.007],["m3_quadfun",.56,.010]],
    beh:{hintWeak:.16,hintStrong:.04,giveup:.04,skip:.03,retry:.65,follow:.50,dur:225,durTrend:-2.1},
    errW:{slip:.25,concept:.35,strategy:.25,interpret:.15},fOff:{cu:.04,pf:.02,sc:0,ar:.06}},
-  {id:"demo-jung",name:"정민재",seed:71,density:.42,
+  {id:"demo-jung",name:"정민재",seed:71,density:.42,integ:.26,trapStick:.8,
    // 회피형: '모르겠어'·스킵이 잦고 오답을 다시 안 잡는다 — 상담 포인트가 가장 많이 뜨는 학생
    plan:[["m2_poly",.36,.004],["m3_factor",.30,.003],["m3_sqrt",.42,.004],["m3_quad",.30,.004],
      ["m2_linfun",.38,.003],["m2_pyth",.40,.004],["m3_trig",.34,.003],["m2_case",.45,.002],
      ["m2_sys",.44,.004]],
-   beh:{hintWeak:.44,hintStrong:.30,giveup:.24,skip:.14,retry:.14,follow:.10,dur:95,durTrend:.3},
+   beh:{hintWeak:.44,hintStrong:.30,giveup:.24,skip:.14,retry:.14,follow:.10,dur:95,durTrend:.3,rush:true},
    errW:{slip:.12,concept:.45,strategy:.15,interpret:.10,blank:.18},fOff:{cu:-.08,pf:-.06,sc:-.12,ar:-.10}},
 ];
 
@@ -83,21 +85,30 @@ function genAttempts(p,now){
   const WEEKS=26;
   const push=(rec)=>{for(const k in rec)if(rec[k]===undefined||rec[k]===null||rec[k]==="")delete rec[k];out.push(rec);};
   const mkStudy=(node,name,t,pr,w,opts)=>{
+    // 문항 유형: 기본(recall·mc) vs 응용·서술 — 응용은 페르소나의 조합 격차(integ)만큼 성공률이 깎인다
+    const qr=rand();
+    const qtype=qr<.3?"recall":qr<.58?"mc":qr<.92?"apply":"essay";
+    const prE=clamp01((qtype==="apply"||qtype==="essay")?pr-(p.integ||0):pr+.04);
     const r=rand();
-    const verdict=r<pr?"correct":(r<pr+(1-pr)*.5?"partial":"incorrect");
+    const verdict=r<prE?"correct":(r<prE+(1-prE)*.5?"partial":"incorrect");
     const wrong=verdict!=="correct";
     const err=wrong?pickErr(rand,p.errW,pr<.45):undefined;
     const hintP=pr<.5?p.beh.hintWeak:p.beh.hintStrong;
     const f=(c)=>clamp01(c+(rand()-.5)*.22);
     const fo=p.fOff;
-    push({v:2,t,sid:p.id,src:"study",concept:name,nodeId:node,verdict,
+    let dur=Math.max(35,Math.min(600,Math.round(p.beh.dur+p.beh.durTrend*w+(rand()-.5)*70)));
+    if(p.beh.rush&&wrong&&rand()<.7)dur=Math.max(15,Math.round(dur*.3));   // 찍기: 오답이 유난히 빠름
+    if(err==="slip"&&rand()<(p.beh.hasty?.7:.2))dur=Math.round(dur*.5);    // 덤벙: 급한 성향일수록 실수가 빠른 풀이에 몰림
+    push({v:2,t,sid:p.id,src:"study",concept:name,nodeId:node,verdict,qtype,
       box:1+Math.floor(rand()*3)+(pr>.6?1:0),
       err,stage:err?(err==="slip"?"compute":"setup"):undefined,
-      misc:err&&err!=="blank"&&rand()<.7?(err==="slip"?"부호 계산 실수":(TRAP[node]||"개념 연결 혼동")):undefined,
+      misc:err&&err!=="blank"&&rand()<.7?(err==="slip"?"부호 계산 실수"
+        :(rand()<(p.trapStick??.5)?(TRAP[node]||"개념 연결 혼동")
+          :["조건 해석 누락","단위 처리 실수","공식 선택 혼동","전개 순서 오류"][Math.floor(rand()*4)])):undefined,
       gap:wrong&&rand()<.4?(TRAP[node]||"핵심 개념 연결 누락"):undefined,
       gapType:wrong&&rand()<.4?"개념누락":undefined,
       hint:rand()<hintP?(rand()<.25?2:1):undefined,
-      dur:Math.max(35,Math.min(600,Math.round(p.beh.dur+p.beh.durTrend*w+(rand()-.5)*70))),
+      dur,
       factors:{cu:f(pr+fo.cu),pf:f(pr+fo.pf),sc:f(pr+fo.sc),ar:f(pr+fo.ar)}});
     if(wrong){
       // 소크라테스 후속 문답 참여
