@@ -5,6 +5,7 @@ import { Insight } from "./Insight.jsx";
 import { KeyForm } from "./Settings.jsx";
 import { Prof } from "../ui/common.jsx";
 import { setActiveStudent } from "../core/attempts.js";
+import { clearDemoStudents, seedDemoStudents } from "../core/demoStudents.js";
 import { fetchShared, importShared } from "../core/link.js";
 import { ACADEMY_CODE, uid } from "../core/ai.js";
 import React from "react";
@@ -69,6 +70,21 @@ function AcademyApp(){
     if(activeSid)setActiveStudent(activeSid);   // 새로고침 후 활성 학생 복원
   },[]);
   const activeStu=students.find(s=>s.id===activeSid)||null;
+
+  // ── 예시 학생: 6개월 학습 시나리오 5명을 시딩해 대시보드·인사이트를 미리 본다 ──
+  const hasDemo=students.some(s=>s.demo);
+  function seedDemo(){
+    seedDemoStudents();
+    setStudents(LS.get("ng:aca:students")||[]);
+    setView("dash");
+  }
+  function clearDemo(){
+    if(!confirm(tr("예시 학생 5명과 6개월치 기록을 모두 지울까? 실제 학생 데이터는 그대로 남아.","Remove the 5 demo students and their records? Real data is kept.")))return;
+    clearDemoStudents();
+    const list=LS.get("ng:aca:students")||[];
+    setStudents(list);
+    if(activeSid&&!list.some(s=>s.id===activeSid)){setActiveSid(null);setActiveStudent(null);saveStudent("");}
+  }
 
   // ── 홈학습 연동: 학생 개인 앱이 공유한 데이터를 명단 학생에게 병합 ──
   const [linkOpen,setLinkOpen]=useState(false);
@@ -188,6 +204,9 @@ function AcademyApp(){
             <span style={{marginLeft:"auto",display:"inline-flex",gap:6}}>
               <button className="btn gho sm" onClick={()=>{setLinkOpen(true);if(!sharedList)loadShared();}}>🔗 {tr("홈학습 연동","Home-study link")}</button>
               {activeStu&&<button className="btn gho sm" onClick={()=>setView("insight")}>📊 {tr("성장 인사이트","Growth insight")}</button>}
+              {hasDemo
+                ?<button className="btn gho sm" onClick={clearDemo}>🧹 {tr("예시 지우기","Clear demo")}</button>
+                :<button className="btn gho sm" onClick={seedDemo} title={tr("6개월 학습 시나리오의 예시 학생 5명을 넣어 대시보드를 미리 봅니다","Seed 5 demo students with 6 months of history")}>✨ {tr("예시 학생 넣기","Demo students")}</button>}
             </span>
           </div>
         </div>

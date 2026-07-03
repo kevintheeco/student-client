@@ -96,10 +96,11 @@ function logAttempt(a){
     }
   }catch(e){console.warn("[attempts] 기록 실패",e);}
 }
-// 활성 학생이 있으면 그 학생의 시도만 (학원 기기에서 학생 간 데이터 섞임 방지)
+// 활성 학생이 있으면 그 학생의 시도만, 개인 모드(_sid 없음)는 sid 없는 기록만 —
+// 같은 기기의 학원 학생(예시 학생 포함) 기록이 개인 인사이트에 섞이지 않게.
 const allAttempts=()=>{
   const list=LS.get(ATT_KEY)||[];
-  return _sid?list.filter(a=>a.sid===_sid):list;
+  return _sid?list.filter(a=>a.sid===_sid):list.filter(a=>!a.sid);
 };
 const attemptsForNode=(nodeId)=>allAttempts().filter(a=>a.nodeId===nodeId);
 // 특정 학생의 시도 (활성 학생과 무관 — 학원 대시보드처럼 여러 학생을 한 번에 볼 때)
