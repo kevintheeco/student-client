@@ -10,7 +10,8 @@ import { tr } from "../core/platform.js";
 import { MathText } from "../ui/math.jsx";
 import { allAttempts } from "../core/attempts.js";
 import { COURSES, FACTORS, GRAPH_EDGES, GRAPH_NODES, courseOf, dependentsOf, errTypeById, impactOf, nodeById, prereqsOf, strandOf, traceRootCauses } from "../core/knowledgeGraph.js";
-import { errBreakdown, factorSeries, factorSummary, masteryByNode, miscBreakdown, nodeTrends } from "../core/mastery.js";
+import { errBreakdown, factorSeries, factorSummary, miscBreakdown, nodeTrends } from "../core/mastery.js";
+import { abilityByNode } from "../core/rasch.js";
 import { narrateDiagnosis } from "../core/diagnosis.js";
 import React from "react";
 const { useState, useMemo, useRef } = React;
@@ -70,7 +71,10 @@ function Insight({onExit}){
   const demoRef=useRef(null);   // 데모 시나리오는 세션당 한 번만 생성 (렌더마다 재생성 방지)
   const attempts=demo?(demoRef.current||(demoRef.current=demoAttempts())):real;
 
-  const mastery=useMemo(()=>masteryByNode(attempts),[attempts]);
+  // 측정 엔진 v2: 온라인 Rasch 재생 — 노드별 능력(신뢰구간 포함) + 모델 자기 검증 통계
+  const engine=useMemo(()=>abilityByNode(attempts),[attempts]);
+  const mastery=engine.ability;
+  const calib=engine.calibration;
   const fsum=useMemo(()=>factorSummary(attempts),[attempts]);
   const series=useMemo(()=>factorSeries(attempts),[attempts]);
   const trends=useMemo(()=>nodeTrends(attempts),[attempts]);
@@ -157,9 +161,9 @@ function Insight({onExit}){
     return(
       <g key={n.id} transform={`translate(${p.x},${p.y})`} style={{cursor:"pointer"}} opacity={dim?0.25:1}
         onClick={()=>pick(n.id)}>
-        <title>{(courseOf(n.id)?.name||"")+" · "+n.name+(m!=null?" — "+tr("숙련도 ","mastery ")+pct(m)+" · "+st.n+tr("회"," attempts"):"")}</title>
+        <title>{(courseOf(n.id)?.name||"")+" · "+n.name+(m!=null?" — "+tr("숙련도 ","mastery ")+pct(m)+(st.indirect?tr(" (간접 추정)"," (inferred)"):" · "+st.n+tr("회"," attempts")):"")}</title>
         {n.id===sel&&<circle r={r+5.5} fill="none" stroke="#6C5CE7" strokeWidth="2.5" opacity=".9"/>}
-        <circle r={r} fill={mColor(m)} stroke={strandOf(n.id)?.color||"#888"} strokeWidth="2"/>
+        <circle r={r} fill={mColor(m)} stroke={strandOf(n.id)?.color||"#888"} strokeWidth="2" strokeDasharray={st&&st.indirect?"3 3":undefined}/>
         {st&&st.n>0&&<text y={4} textAnchor="middle" fontSize="9" fontWeight="800" fill="#fff">{st.n}</text>}
         <text y={r+12} textAnchor="middle" fontSize="9" fill={m==null?"#9A94B8":"#221C39"}>{label}</text>
       </g>);
@@ -267,8 +271,11 @@ function Insight({onExit}){
                 </div>
                 <span className="subj-badge" style={{background:(strandOf(sel)?.color||"#888")+"22",color:strandOf(sel)?.color}}>{strandOf(sel)?.name}</span>
                 <span style={{fontSize:13,fontWeight:800,color:mColor(selSt?.m)}}>
-                  {mLabel(selSt?.m)}{selSt?.m!=null?" · "+pct(selSt.m):""}{selSt?.n?tr(" · "+selSt.n+"회 측정"," · "+selSt.n+" attempts"):""}
+                  {mLabel(selSt?.m)}
+                  {selSt?.m!=null&&" · "+pct(selSt.m)+(selSt.se!=null?" ±"+Math.round((selSt.ciHigh-selSt.ciLow)/2*100)+"p":"")}
+                  {selSt?.n>0&&tr(" · "+selSt.n+"회 측정"," · "+selSt.n+" measured")}
                 </span>
+                {selSt?.indirect&&<span className="subj-badge" style={{background:"#EEF2FF",color:"#3730A3",border:"1px dashed #C7D2FE"}} title={tr("직접 풀어본 적은 없지만 후속 단원 풀이에서 유추한 추정치","Inferred from downstream evidence — not directly tested")}>{tr("간접 추정","inferred")}</span>}
                 <span style={{fontSize:12,color:"var(--sub)"}}>{tr("이 단원이 흔들리면 후속 ","affects ")}{impactOf(sel)}{tr("개 단원에 영향"," later units")}</span>
               </div>
 
@@ -310,7 +317,7 @@ function Insight({onExit}){
                     <div style={{minWidth:0}}>
                       <b style={{fontSize:13.5}}>{courseOf(c.id)?.name} · {c.node.name}</b>
                       <span style={{fontSize:12,color:"var(--sub)",marginLeft:6}}>
-                        {c.measured?tr("숙련도 ","mastery ")+pct(c.mastery)+" · "+c.n+tr("회"," attempts"):tr("아직 미측정 — 확인 필요","not yet measured")}
+                        {c.measured?tr("숙련도 ","mastery ")+pct(c.mastery)+(c.n>0?" · "+c.n+tr("회"," attempts"):tr(" · 간접 추정"," · inferred")):tr("아직 미측정 — 확인 필요","not yet measured")}
                       </span>
                       <div style={{fontSize:12,color:"var(--sub)",marginTop:2}}>{c.chain[c.chain.length-1].why}</div>
                     </div>
@@ -391,6 +398,31 @@ function Insight({onExit}){
                   <div style={{fontSize:11,color:"var(--sub)",marginTop:4}}>{tr("최근 12주 · 주 단위 평균 · 기울기 = 최소제곱 회귀","12 wks · weekly avg · least-squares slope")}</div>
                 </div>);})}
           </div>
+          {calib.n>=20&&(
+            <div className="card" style={{padding:"18px 20px",marginTop:14}}>
+              <div className="eyebrow" style={{marginBottom:4}}>{tr("🧪 측정 엔진 자기 검증","🧪 Engine self-validation")}</div>
+              <div style={{fontSize:12.5,color:"var(--sub)",lineHeight:1.6,marginBottom:10}}>
+                {tr("이 대시보드의 숙련도는 온라인 Rasch(1PL) 추정치야. 엔진은 매 문제 전에 '맞힐 확률'을 예측하고 실제 결과와 비교해 자기 정확도를 공개해.",
+                   "Mastery here is an online Rasch (1PL) estimate. Before every attempt the engine predicts P(correct) and audits itself against reality.")}
+              </div>
+              <div style={{display:"flex",gap:16,flexWrap:"wrap",alignItems:"baseline",marginBottom:10}}>
+                <span style={{fontFamily:"'Jua',sans-serif",fontSize:22,color:"var(--pri)"}}>{calib.brier!=null?calib.brier.toFixed(3):"—"}</span>
+                <span style={{fontSize:12,color:"var(--sub)"}}>{tr("Brier 점수 (0=완벽 예측, 0.25=동전 던지기) · 예측 "+calib.n+"회","Brier score (0=perfect, .25=coin flip) · "+calib.n+" predictions")}</span>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10}}>
+                {calib.buckets.map((b,i)=>b.n<3?null:(
+                  <div key={i} style={{background:"var(--bg)",borderRadius:10,padding:"8px 11px"}}>
+                    <div style={{fontSize:10.5,fontWeight:700,color:"var(--sub)",marginBottom:5}}>{tr("예측 ","pred ")+(i*20)+"~"+((i+1)*20)+"% · "+b.n+tr("회","x")}</div>
+                    {[[tr("예측","pred"),b.p,"#B7B1D6"],[tr("실제","actual"),b.s,"var(--pri)"]].map(([lbl,v,col])=>(
+                      <div key={lbl} style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
+                        <span style={{fontSize:10,color:"var(--sub)",width:26}}>{lbl}</span>
+                        <div className="bar" style={{height:6,flex:1}}><i style={{width:Math.round((v||0)*100)+"%",background:col}}/></div>
+                        <b style={{fontSize:11,width:32,textAlign:"right"}}>{Math.round((v||0)*100)}%</b>
+                      </div>))}
+                  </div>))}
+              </div>
+              <div style={{fontSize:11,color:"var(--sub)",marginTop:8}}>{tr("예측과 실제가 가까울수록 잘 보정된 측정 — 이 지표가 우리가 모델을 개선하는 기준이야.","The closer prediction tracks reality, the better calibrated the measurement.")}</div>
+            </div>)}
           {trends.length>0&&(
             <div className="card" style={{padding:"18px 20px",marginTop:14}}>
               <div className="eyebrow" style={{marginBottom:8}}>{tr("단원별 성장 추세 (시도 4회 이상)","Per-unit trend (≥4 attempts)")}</div>

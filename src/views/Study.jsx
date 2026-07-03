@@ -4,7 +4,8 @@ import { Cheer, DepthGauge, Meter, Prof, RateBar, ratePct } from "../ui/common.j
 import { DAY, deckSummary, diffLong, diffWord, pickConcept, quizFormat, schedule } from "../core/srs.js";
 import { MathText } from "../ui/math.jsx";
 import { callAI, parseDeriveCheck, parseDerivePlan, parseGrading, parseOcrCheck, parseQuestion, uid } from "../core/ai.js";
-import { logAttempt, miscLexFor } from "../core/attempts.js";
+import { allAttempts, logAttempt, miscLexFor } from "../core/attempts.js";
+import { abilityByNode, predictSuccess } from "../core/rasch.js";
 import { matchNode } from "../core/knowledgeGraph.js";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
@@ -97,6 +98,19 @@ function Study({deck:initial,subjects,onExit}){
     if(!traps.length)return"";
     return"\n[이 학습자가 반복해서 밟는 함정 — 끈질긴 과외 모드]: "+traps.map(x=>x.label+"("+x.n+"회)").join(", ")+
       "\n→ 가능하면 이 함정을 그대로 밟으면 틀리게 되는 문제로 설계해. 단, 문제 지문에서 함정을 직접 언급하거나 경고하지는 마.";
+  }
+  // 적응형 난이도 보정: 측정 엔진(온라인 Rasch)이 추정한 성공률을 출제에 주입.
+  // 표적 성공률 70~80% = 학습 효율 최대 지점 (Math Garden의 적응 규칙과 동일 원리)
+  const abilityRef=useRef(null);   // 세션당 1회 계산 (문제마다 재계산 불필요)
+  function calLine(c){
+    try{
+      if(!abilityRef.current)abilityRef.current=abilityByNode(allAttempts()).ability;
+      const nid=matchNode([c.u1,c.u2,c.name].filter(Boolean).join(" "));
+      const p=predictSuccess(abilityRef.current,nid,{box:c.box||1});
+      if(p==null)return"";
+      return"\n[측정 엔진 보정] 이 학습자가 이 개념·난이도에서 맞힐 확률 추정: "+Math.round(p*100)+"%."+
+        " 표적 성공률은 70~80%야 — 추정이 그보다 높으면 한 단계 더 깊고 어렵게, 낮으면 발판이 되는 접근 가능한 문제로 조정해.";
+    }catch(e){return"";}
   }
   // 세션 전체에서 캐시 공유: summary 있으면 우선 사용 (8000자 이하)
   const studyMat=deck.summary||deck.material.slice(0,8000);
@@ -243,7 +257,7 @@ function Study({deck:initial,subjects,onExit}){
         "understand: '외적이 내적과 근본적으로 다른 점은? 기하학적으로 설명해봐', '왜 이 조건에서 해가 유일한가?', '$\\mathbf{a}\\times\\mathbf{a}$가 항상 영벡터인 이유는?', '자료의 반례를 이용해 이 함수가 왜 선형변환이 아닌지 서술하시오 (반례+이유 설명 요구)', '왜 [특정 케이스]에서 [특정 결과]가 나오는가?'\n"+
         "apply: '$\\mathbf{a}=(1,2,3),\\,\\mathbf{b}=(4,0,-1)$일 때 $\\mathbf{a}\\times\\mathbf{b}$를 구하시오', '$T(x,y)=2x+y$가 선형변환인지 두 조건으로 보여라 (정의를 직접 적용해 검증하는 문제)'\n\n"+
         "수식은 LaTeX($...$, $$...$$). 반드시 아래 형식으로만 출력:\nQTYPE: recall 또는 understand 또는 apply\nQUESTION: 질문 내용\nPOINTS: 핵심1 | 핵심2 | 핵심3 (| 구분, 3~5개)\n\n자료:\n"+matFor(c).slice(0,6000),
-        "목표 개념: "+c.name+"\n복습 단계: "+diffLong(c.box)+trapLine(c),
+        "목표 개념: "+c.name+"\n복습 단계: "+diffLong(c.box)+trapLine(c)+calLine(c),
         false,{cache:true,maxTok:800,model:CFG.qmodel,lang:studyLang},ctrl.signal);
       if(genId.current!==myId)return;
       setQ(parseQuestion(raw));setPhase("answering");
@@ -311,6 +325,7 @@ function Study({deck:initial,subjects,onExit}){
     persist({...deckRef.current,concepts:deckRef.current.concepts.map(x=>x.id===concept.id?schedule(x,correct?"correct":"incorrect"):x)});
     logAttempt({src:"quiz",deckId:deck.id,concept:concept.name,unit:[concept.u1,concept.u2].filter(Boolean).join(" "),
       verdict:correct?"correct":"incorrect",qtype:quizItem.format,box:concept.box||1,dur:elapsedSec()});
+    abilityRef.current=null;
     setQuizSel(sel);setQuizCorrect(correct);setQuizGraded(true);setCount(n=>n+1);
     prefetchNext();   // 다음 문제 미리 생성
   }
@@ -395,6 +410,7 @@ function Study({deck:initial,subjects,onExit}){
         err:r.err||(v==="correct"?"none":undefined),stage:r.stage,misc:r.misc,
         dur:elapsedSec(),ink:padRef.current?.strokeStats?.(),
         hint:hintRef.current||undefined,ocr:ocrRef.current||undefined});
+      abilityRef.current=null;   // 새 관측 반영 — 다음 출제 때 능력 추정 재계산
       const enrichConcept=(c)=>({...c,lastAnswer:lastAnswerRef.current.answer,lastGap:lastAnswerRef.current.gap,lastGapType:lastAnswerRef.current.gapType});
       if(v==="correct"){
         const uc=schedule(enrichConcept(concept),v);
