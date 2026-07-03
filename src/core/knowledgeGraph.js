@@ -36,6 +36,45 @@ function normFactors(raw){
   return found?out:null;
 }
 
+/* ── 오류 분류 체계 (통제어휘) ──
+   수천 명 규모 집계의 핵심: 자유 텍스트가 아니라 고정 enum으로 기록한다.
+   가장 가치 있는 구분은 실수(slip) vs 개념 결여(misconception) —
+   BKT(Corbett & Anderson 1994)의 slip 파라미터, 오류 진단 연구(VanLehn)의 표준 구분.
+   처방이 다르다: slip → 절차 훈련·검산 습관, concept → 선수 개념 역추적 보강. */
+const ERR_TYPES=[
+  {id:"none",name:"오류 없음",color:"#27C2A0"},
+  {id:"slip",name:"실수",desc:"개념은 아는데 계산·부호·옮겨쓰기를 틀림",color:"#4FACFE"},
+  {id:"concept",name:"개념 결여",desc:"필요한 개념·성질을 모르거나 잘못 앎",color:"#FF6B8A"},
+  {id:"strategy",name:"전략 오류",desc:"접근·풀이 방법 선택이 틀림",color:"#FFC24B"},
+  {id:"interpret",name:"해석 오류",desc:"문제 조건을 잘못 읽거나 누락",color:"#FF8E72"},
+  {id:"notation",name:"표기 미숙",desc:"과정은 맞는데 수학적 표기·서술이 부정확",color:"#A29BFE"},
+  {id:"blank",name:"미착수",desc:"손을 못 댐",color:"#857FA0"},
+];
+const errTypeById=(id)=>ERR_TYPES.find(e=>e.id===id)||null;
+// AI 응답의 한글 오류명 → enum id ("실수(개념은 아는데...)" 같은 부연이 붙어도 매칭)
+function normErrType(s){
+  if(!s)return null;
+  const t=String(s).trim();
+  if(/^(-|없음|none)/.test(t))return"none";
+  if(t.includes("실수")||/slip/i.test(t))return"slip";
+  if(t.includes("개념")||/concept/i.test(t))return"concept";
+  if(t.includes("전략")||/strateg/i.test(t))return"strategy";
+  if(t.includes("해석")||t.includes("오독")||/interpret/i.test(t))return"interpret";
+  if(t.includes("표기")||t.includes("표현")||/notation/i.test(t))return"notation";
+  if(t.includes("백지")||t.includes("미착수")||/blank/i.test(t))return"blank";
+  return null;
+}
+// 첫 오류 발생 단계: setup(식 세우기) / compute(계산) / interpret(해석·결론)
+function normStage(s){
+  if(!s)return null;
+  const t=String(s).trim();
+  if(/^-/.test(t))return null;
+  if(t.includes("세우")||t.includes("식")||/setup/i.test(t))return"setup";
+  if(t.includes("계산")||/comput/i.test(t))return"compute";
+  if(t.includes("해석")||t.includes("결론")||/interpret/i.test(t))return"interpret";
+  return null;
+}
+
 /* ── 과정(시계열 축) & 영역 ── */
 const COURSES=[
   {id:"m1",name:"중1",order:0},{id:"m2",name:"중2",order:1},{id:"m3",name:"중3",order:2},
@@ -307,5 +346,5 @@ function traceRootCauses(nodeId,mastery,maxDepth=3){
   return Object.values(found).sort((a,b)=>b.suspicion-a.suspicion);
 }
 
-export { FACTORS, FACTOR_KO, normFactors, COURSES, STRANDS, GRAPH_NODES, GRAPH_EDGES,
+export { FACTORS, FACTOR_KO, normFactors, ERR_TYPES, errTypeById, normErrType, normStage, COURSES, STRANDS, GRAPH_NODES, GRAPH_EDGES,
   nodeById, prereqsOf, dependentsOf, courseOf, strandOf, impactOf, matchNode, traceRootCauses };

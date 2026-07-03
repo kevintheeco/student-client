@@ -1,4 +1,5 @@
 import { CFG, ocrModel } from "./platform.js";
+import { normErrType, normStage } from "./knowledgeGraph.js";
 const MODELS=[
   {id:"claude-sonnet-4-6",label:"Sonnet 4.6 · 추천"},
   {id:"claude-haiku-4-5-20251001",label:"Haiku 4.5 · 가장 저렴"},
@@ -234,7 +235,7 @@ function parseFactorsLine(s){
 }
 // Parse gap-analysis grading response
 function parseGrading(txt){
-  const KEYS=['ESSENCE','GOT_IT','GAP','GAP_TYPE','DEPTH','NEXT','FACTORS','VERDICT','ANSWER'];
+  const KEYS=['ESSENCE','GOT_IT','GAP','GAP_TYPE','DEPTH','NEXT','FACTORS','ERROR','STAGE','MISC','VERDICT','ANSWER'];
   const vals={};
   for(let i=0;i<KEYS.length;i++){
     const key=KEYS[i];
@@ -265,6 +266,9 @@ function parseGrading(txt){
     depth,
     next:vals.NEXT||'',
     factors:parseFactorsLine(vals.FACTORS),
+    err:normErrType(vals.ERROR),
+    stage:normStage(vals.STAGE),
+    misc:(vals.MISC&&!/^-/.test(vals.MISC.trim()))?vals.MISC.trim():'',
     model_answer:vals.ANSWER||'',
     feedback:vals.GOT_IT||'',
   };

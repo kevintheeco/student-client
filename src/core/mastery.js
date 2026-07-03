@@ -7,11 +7,29 @@
 
 const DAY=864e5,WEEK=7*DAY;
 const VSCORE={correct:1,partial:0.5,incorrect:0};
-// 시도 1건의 0~1 점수: 시험이면 배점 비율, 아니면 verdict 매핑
+// 시도 1건의 0~1 점수: 시험이면 배점 비율, 아니면 verdict 매핑.
+// 실수(slip)로 분류된 오답은 하한 0.6 — 개념은 아는 상태이므로 숙련도를 덜 깎는다(BKT slip의 근사).
 function scoreOf(a){
+  let s;
   if(typeof a.score==="number"&&typeof a.points==="number"&&a.points>0)
-    return Math.max(0,Math.min(1,a.score/a.points));
-  return VSCORE[a.verdict]??0.5;
+    s=Math.max(0,Math.min(1,a.score/a.points));
+  else s=VSCORE[a.verdict]??0.5;
+  if(a.err==="slip")s=Math.max(s,0.6);
+  return s;
+}
+
+/* 노드(또는 전체)의 오류 유형 분포: {slip:n, concept:n, ...} + 평균 풀이 시간 */
+function errBreakdown(attempts,nodeId){
+  const out={n:0,err:{},durSum:0,durN:0};
+  for(const a of attempts){
+    if(nodeId&&a.nodeId!==nodeId)continue;
+    if(a.src==="followup")continue;
+    out.n++;
+    if(a.err&&a.err!=="none")out.err[a.err]=(out.err[a.err]||0)+1;
+    if(a.dur){out.durSum+=a.dur;out.durN++;}
+  }
+  out.avgDur=out.durN?Math.round(out.durSum/out.durN):null;
+  return out;
 }
 
 /* 노드별 숙련도: {nodeId:{m:EWMA 0~1, n, lastT, recent:[최근점수]}} */
@@ -113,4 +131,4 @@ function nodeTrends(attempts){
   return out.sort((a,b)=>b.slope-a.slope);
 }
 
-export { DAY, WEEK, scoreOf, masteryByNode, linreg, factorSeries, factorSummary, nodeTrends };
+export { DAY, WEEK, scoreOf, errBreakdown, masteryByNode, linreg, factorSeries, factorSummary, nodeTrends };

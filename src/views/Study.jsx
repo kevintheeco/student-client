@@ -73,6 +73,10 @@ function Study({deck:initial,subjects,onExit}){
   const genId=useRef(0);
   const abortRef=useRef(null);
   const lastAnswerRef=useRef({});
+  // 시도 로그용 행동 신호: 문제 노출 시각(풀이 시간), 힌트 요청·OCR 재작성 횟수
+  const qStartRef=useRef(null);
+  const hintRef=useRef(0);
+  const ocrRef=useRef(0);
 
   function persist(d){
     deckRef.current=d;
@@ -296,12 +300,19 @@ function Study({deck:initial,subjects,onExit}){
     }
     persist({...deckRef.current,concepts:deckRef.current.concepts.map(x=>x.id===concept.id?schedule(x,correct?"correct":"incorrect"):x)});
     logAttempt({src:"quiz",deckId:deck.id,concept:concept.name,unit:[concept.u1,concept.u2].filter(Boolean).join(" "),
-      verdict:correct?"correct":"incorrect",qtype:quizItem.format,box:concept.box||1});
+      verdict:correct?"correct":"incorrect",qtype:quizItem.format,box:concept.box||1,dur:elapsedSec()});
     setQuizSel(sel);setQuizCorrect(correct);setQuizGraded(true);setCount(n=>n+1);
     prefetchNext();   // 다음 문제 미리 생성
   }
 
   useEffect(()=>{next(initial);return()=>{abortRef.current?.abort();prefetchAbortRef.current?.abort();};},[]);
+
+  // 풀이 시간 측정: 문제가 화면에 뜬 시점부터. 새 문제 로딩 때 카운터 리셋 (OCR 재작성 복귀는 타이머 유지)
+  useEffect(()=>{
+    if(phase==="loading"){qStartRef.current=null;hintRef.current=0;ocrRef.current=0;}
+    else if((phase==="answering"||phase==="quiz")&&!qStartRef.current)qStartRef.current=Date.now();
+  },[phase]);
+  const elapsedSec=()=>qStartRef.current?Math.round((Date.now()-qStartRef.current)/1000):undefined;
 
   // 채점 가짜 진행률 (0→93 천천히, 끝나면 100% 후 리셋)
   useEffect(()=>{
@@ -340,6 +351,7 @@ function Study({deck:initial,subjects,onExit}){
         if(ocr.unclear.length>0){
           // 별도 화면 대신, 쓰던 노트 그대로 두고 안 읽힌 곳에 빨간 박스 표시 + 지우개 모드
           setOcrImgSize(sz);
+          ocrRef.current++;   // 알아볼 수 없어 다시 쓰게 한 횟수 — 필기 명료성 신호
           setOcrHighlights(ocr.unclear);
           setPhase("answering");
           setTimeout(()=>padRef.current?.setEraser(),50);
@@ -363,13 +375,16 @@ function Study({deck:initial,subjects,onExit}){
       if(img)textParts.push("\n학습자가 위 이미지에 손으로 쓴 답도 포함돼. 이미지 속 내용을 읽고 함께 채점해줘.");
       userBlocks.push({type:"text",text:textParts.join("\n")});
       const gradingRaw=await callAI(
-        "너는 학습 분석 튜터야. "+qtypeCtx+" 학습자 답안을 보고 '이 개념의 본질 대비 내 답의 갭'을 분석해. 수식·행렬·그리스 문자·수학 기호(⊥ ∥ ∈ ∉ ⊆ ℝ ∇ 등)는 반드시 LaTeX로: 인라인 $...$, 블록 $$...$$. 유니코드 기호 직접 사용 금지. 다음 형식으로만 출력 (JSON·코드블록 없이):\nESSENCE: 이 질문이 진짜 요구하는 핵심 요소 1~3가지 (학습자가 반드시 알아야 할 것)\nGOT_IT: 내 답이 제대로 담은 부분 (인정해줄 것, 반말)\nGAP: 본질 대비 빠지거나 얕거나 비껴간 핵심 부분 (없으면 정확히 '없음')\nGAP_TYPE: 개념누락 / 이해얕음 / 핵심비껴감 / 표현부족 / 갭없음 중 정확히 하나\nDEPTH: 암기 수준 / 이해 수준 / 설명가능 수준 / 응용가능 수준 중 정확히 하나\nNEXT: 이 갭을 메우려면 구체적으로 뭘 보강해야 하는지 (반말, 1~2문장)\nFACTORS: 이 답안에서 드러난 능력을 각각 평가 — 개념(개념 이해)·계산(절차·연산 정확성)·전략(문제 해석·식 세우기)·추론(논리 전개·정당화)을 0(부족)/1(보통)/2(좋음)으로, 이 문제에서 드러나지 않는 능력은 - 로. 예: 개념=2 계산=1 전략=- 추론=1\nVERDICT: correct 또는 partial 또는 incorrect (갭없음이면 correct, 핵심 갭이면 partial, 본질 전체 누락이면 incorrect)\nANSWER: 모범답안 3~5문장 (수식 LaTeX, 그래프 필요시 <svg> 태그 직접)"+RICH_FMT+"\n\n자료:\n"+studyMat,
+        "너는 학습 분석 튜터야. "+qtypeCtx+" 학습자 답안을 보고 '이 개념의 본질 대비 내 답의 갭'을 분석해. 수식·행렬·그리스 문자·수학 기호(⊥ ∥ ∈ ∉ ⊆ ℝ ∇ 등)는 반드시 LaTeX로: 인라인 $...$, 블록 $$...$$. 유니코드 기호 직접 사용 금지. 다음 형식으로만 출력 (JSON·코드블록 없이):\nESSENCE: 이 질문이 진짜 요구하는 핵심 요소 1~3가지 (학습자가 반드시 알아야 할 것)\nGOT_IT: 내 답이 제대로 담은 부분 (인정해줄 것, 반말)\nGAP: 본질 대비 빠지거나 얕거나 비껴간 핵심 부분 (없으면 정확히 '없음')\nGAP_TYPE: 개념누락 / 이해얕음 / 핵심비껴감 / 표현부족 / 갭없음 중 정확히 하나\nDEPTH: 암기 수준 / 이해 수준 / 설명가능 수준 / 응용가능 수준 중 정확히 하나\nNEXT: 이 갭을 메우려면 구체적으로 뭘 보강해야 하는지 (반말, 1~2문장)\nFACTORS: 이 답안에서 드러난 능력을 각각 평가 — 개념(개념 이해)·계산(절차·연산 정확성)·전략(문제 해석·식 세우기)·추론(논리 전개·정당화)을 0(부족)/1(보통)/2(좋음)으로, 이 문제에서 드러나지 않는 능력은 - 로. 예: 개념=2 계산=1 전략=- 추론=1\nERROR: 오답의 성격을 정확히 하나로 — 없음 / 실수(개념은 아는데 계산·부호·옮겨쓰기 실수) / 개념(필요한 개념 자체를 모르거나 잘못 앎) / 전략(접근·풀이 방법 선택이 틀림) / 해석(문제 조건을 오독·누락) / 표기(과정은 맞는데 표현이 부정확) / 백지(손을 못 댐). '실수'와 '개념'의 구분이 가장 중요하니 풀이 과정을 근거로 신중히 판단해.\nSTAGE: 첫 오류가 난 단계 — 식세우기 / 계산 / 해석 중 하나 (오류 없으면 -)\nMISC: 드러난 오개념·실수 패턴을 12자 이내 라벨로 (예: 부호 분배 실수, 판별식 조건 혼동 — 없으면 -)\nVERDICT: correct 또는 partial 또는 incorrect (갭없음이면 correct, 핵심 갭이면 partial, 본질 전체 누락이면 incorrect)\nANSWER: 모범답안 3~5문장 (수식 LaTeX, 그래프 필요시 <svg> 태그 직접)"+RICH_FMT+"\n\n자료:\n"+studyMat,
         userBlocks,false,{cache:true,maxTok:3500,lang:studyLang},abortRef.current?.signal);
       const r=parseGrading(gradingRaw);setEv(r);
       const v=["correct","partial","incorrect"].includes(r.verdict)?r.verdict:"partial";
       lastAnswerRef.current={answer:hasTxt?answer.trim():"[손글씨]",gap:r.gap||"",gapType:r.gap_type||""};
       logAttempt({src:"study",deckId:deck.id,concept:concept.name,unit:[concept.u1,concept.u2].filter(Boolean).join(" "),
-        verdict:v,gapType:r.gap_type||"",gap:r.gap&&r.gap!=="없음"?r.gap:"",qtype,box:concept.box||1,factors:r.factors});
+        verdict:v,gapType:r.gap_type||"",gap:r.gap&&r.gap!=="없음"?r.gap:"",qtype,box:concept.box||1,factors:r.factors,
+        err:r.err||(v==="correct"?"none":undefined),stage:r.stage,misc:r.misc,
+        dur:elapsedSec(),ink:padRef.current?.strokeStats?.(),
+        hint:hintRef.current||undefined,ocr:ocrRef.current||undefined});
       const enrichConcept=(c)=>({...c,lastAnswer:lastAnswerRef.current.answer,lastGap:lastAnswerRef.current.gap,lastGapType:lastAnswerRef.current.gapType});
       if(v==="correct"){
         const uc=schedule(enrichConcept(concept),v);
@@ -530,6 +545,7 @@ function Study({deck:initial,subjects,onExit}){
   // AI가 막힌 정도를 보고 살짝이면 유도질문, 많이면 힌트를 줌(정답은 안 알려줌). 레벨 영향 없음.
   async function handleLimit(){
     if(limitBusy||phase!=="answering")return;
+    hintRef.current++;   // 힌트 요청 — 이 문제를 혼자 못 푼다는 신호(시도 로그에 포함)
     const hasInk=padRef.current?.hasStrokes();
     const hasTxt=answer.trim().length>0;
     const img=hasInk?padRef.current.getImageBase64():null;
@@ -570,6 +586,9 @@ function Study({deck:initial,subjects,onExit}){
     arc.unshift({id:uid(),deckId:deck.id,conceptId:concept.id,
       conceptName:concept.name,question:q?.question||"",ts:Date.now()});
     if(!LS.set("ng:dontknow",arc.slice(0,200)))console.warn("[handleDontKnow] dontknow 로그 저장 실패");
+    // '모르겠어'는 가장 강한 비숙련 신호 — 백지 오답으로 시도 로그에 기록 (재도전하면 끈기로 회복)
+    logAttempt({src:"dontknow",deckId:deck.id,concept:concept.name,unit:[concept.u1,concept.u2].filter(Boolean).join(" "),
+      verdict:"incorrect",err:"blank",qtype:q?.qtype,box:concept.box||1,dur:elapsedSec()});
     const uc={...concept,box:1,dueAt:0};
     persist({...deckRef.current,concepts:deckRef.current.concepts.map(c=>c.id===concept.id?uc:c)});
     setConcept(uc);

@@ -1,33 +1,61 @@
 /* ── 시도(attempt) 로그 — 진단 인텔리전스의 원천 데이터 ──
-   기존에는 개념당 '마지막 시도'만 남아 시계열 분석이 불가능했다.
-   여기서는 모든 채점 이벤트(학습·후속질문·퀴즈·시험)를 append-only로 축적한다.
-   레코드는 텍스트만(손글씨 이미지 제외)이라 가볍고, 클라우드 동기화에 포함되어
-   기기·학원 어디서든 같은 성장 데이터를 본다. */
+   설계 원칙 (수천 명 규모에서도 안정·효율·집계 가능한 데이터):
+   ① 원문이 아니라 '부호화된 신호'를 저장 — 오류 유형·단계는 고정 enum,
+      자유 텍스트(gap·misc)는 길이 상한. 손글씨 이미지는 절대 로그에 넣지 않음.
+   ② 레코드는 고정 스키마 + 버전(v) — 스키마 진화에도 과거 데이터 해석 가능.
+   ③ 이중 구조: 원시 로그는 최근 2,000건 순환(ng:attempts),
+      노드별 '평생 집계'는 영구 누적(ng:attagg) — 로그가 밀려나도 이력은 안 잃음.
+   모든 채점 이벤트(학습·후속질문·퀴즈·시험·모르겠어)를 append-only로 기록하고
+   클라우드 동기화에 포함되어 기기·학원 어디서든 같은 성장 데이터를 본다.
+
+   레코드 v2 필드:
+   t 시각 | src study|followup|quiz|exam|dontknow | deckId | concept | unit | nodeId
+   qtype | box | verdict correct|partial|incorrect | score/points(시험)
+   err  오류 유형 enum (knowledgeGraph.ERR_TYPES: slip/concept/strategy/interpret/notation/blank)
+   stage 첫 오류 단계 setup|compute|interpret | misc 오개념 라벨(≤48자)
+   gap 갭 서술(≤140자) | gapType | factors {cu,pf,sc,ar} 0~1
+   dur 풀이 시간(초) | ink {st:획수,pg:페이지} | hint 힌트 요청 수 | ocr OCR 재작성 수 */
 import { LS } from "./platform.js";
 import { matchNode, normFactors } from "./knowledgeGraph.js";
+import { scoreOf } from "./mastery.js";
 
 const ATT_KEY="ng:attempts";
+const AGG_KEY="ng:attagg";
 const MAX_ATTEMPTS=2000;   // ~400KB 상한 (Firestore 문서 1MB 대비 여유)
+const clip=(s,n)=>s==null?undefined:String(s).slice(0,n);
 
-/* a: {src:'study'|'followup'|'quiz'|'exam', deckId?, concept, unit?, course?,
-      verdict:'correct'|'partial'|'incorrect', gapType?, gap?, qtype?, box?,
-      score?, points?, factors?:{cu,pf,sc,ar} 0~1} */
 function logAttempt(a){
   try{
-    const rec={t:Date.now(),...a};
+    const rec={v:2,t:Date.now(),...a};
+    rec.concept=clip(rec.concept,60);
+    rec.unit=clip(rec.unit,60);
+    rec.gap=clip(rec.gap,140);
+    rec.misc=clip(rec.misc,48);
+    if(rec.dur!=null)rec.dur=Math.max(0,Math.min(3600,Math.round(rec.dur)));
     if(rec.factors)rec.factors=normFactors(rec.factors);
-    if(!rec.factors)delete rec.factors;
     // 개념·단원 텍스트 → 지식 그래프 노드 매핑 (수학 외 과목이면 null로 남음)
     if(!rec.nodeId){
       const nid=matchNode([rec.unit,rec.concept].filter(Boolean).join(" "),rec.course);
       if(nid)rec.nodeId=nid;
     }
+    for(const k in rec)if(rec[k]===undefined||rec[k]===null||rec[k]==="")delete rec[k];
     const list=LS.get(ATT_KEY)||[];
     list.push(rec);
     LS.set(ATT_KEY,list.length>MAX_ATTEMPTS?list.slice(list.length-MAX_ATTEMPTS):list);
+    // ── 평생 집계: 노드별 누적 카운터 (로그 순환과 무관하게 영구) ──
+    if(rec.nodeId&&rec.src!=="followup"){
+      const agg=LS.get(AGG_KEY)||{};
+      const g=agg[rec.nodeId]||(agg[rec.nodeId]={n:0,sum:0,err:{},durSum:0,durN:0,lastT:0});
+      g.n++;g.sum=Math.round((g.sum+scoreOf(rec))*100)/100;
+      if(rec.err&&rec.err!=="none")g.err[rec.err]=(g.err[rec.err]||0)+1;
+      if(rec.dur){g.durSum+=rec.dur;g.durN++;}
+      g.lastT=rec.t;
+      LS.set(AGG_KEY,agg);
+    }
   }catch(e){console.warn("[attempts] 기록 실패",e);}
 }
 const allAttempts=()=>LS.get(ATT_KEY)||[];
 const attemptsForNode=(nodeId)=>allAttempts().filter(a=>a.nodeId===nodeId);
+const lifetimeAgg=()=>LS.get(AGG_KEY)||{};
 
-export { ATT_KEY, MAX_ATTEMPTS, logAttempt, allAttempts, attemptsForNode };
+export { ATT_KEY, AGG_KEY, MAX_ATTEMPTS, logAttempt, allAttempts, attemptsForNode, lifetimeAgg };

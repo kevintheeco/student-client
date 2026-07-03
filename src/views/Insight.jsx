@@ -9,8 +9,8 @@
 import { tr } from "../core/platform.js";
 import { MathText } from "../ui/math.jsx";
 import { allAttempts } from "../core/attempts.js";
-import { COURSES, FACTORS, GRAPH_EDGES, GRAPH_NODES, courseOf, dependentsOf, impactOf, nodeById, prereqsOf, strandOf, traceRootCauses } from "../core/knowledgeGraph.js";
-import { factorSeries, factorSummary, masteryByNode, nodeTrends } from "../core/mastery.js";
+import { COURSES, FACTORS, GRAPH_EDGES, GRAPH_NODES, courseOf, dependentsOf, errTypeById, impactOf, nodeById, prereqsOf, strandOf, traceRootCauses } from "../core/knowledgeGraph.js";
+import { errBreakdown, factorSeries, factorSummary, masteryByNode, nodeTrends } from "../core/mastery.js";
 import { narrateDiagnosis } from "../core/diagnosis.js";
 import React from "react";
 const { useState, useMemo, useRef } = React;
@@ -45,7 +45,10 @@ function demoAttempts(){
       const verdict=r<pr?"correct":(r<pr+(1-pr)*.55?"partial":"incorrect");
       const t=now-(10-w)*W+Math.floor(rand()*W*.9);
       const f=(c)=>Math.max(0,Math.min(1,c+(rand()-.5)*.3));
+      const err=verdict==="correct"?"none":(rand()<(p.base>.6?.6:.3)?"slip":(rand()<.7?"concept":(rand()<.5?"strategy":"interpret")));
       out.push({t,src:"study",concept:nodeById(p.node).name,nodeId:p.node,verdict,
+        err,stage:err==="none"?undefined:(err==="slip"?"compute":"setup"),
+        dur:60+Math.floor(rand()*180),
         gapType:verdict==="correct"?"":"개념누락",gap:verdict==="correct"?"":(GAPS[p.node]||"핵심 개념 연결 누락"),
         factors:{cu:f(pr),pf:f(Math.min(1,pr+.12)),sc:f(Math.max(0,pr-.1)),ar:f(Math.max(0,pr-.05))}});
       if(verdict!=="correct"&&rand()<.6)
@@ -98,6 +101,7 @@ function Insight({onExit}){
   },[sel]);
 
   const causes=useMemo(()=>sel?traceRootCauses(sel,mastery).slice(0,5):[],[sel,mastery]);
+  const selErr=useMemo(()=>sel?errBreakdown(attempts,sel):null,[sel,attempts]);
 
   const weakList=useMemo(()=>Object.keys(mastery)
     .map(id=>({id,st:mastery[id],impact:impactOf(id)}))
@@ -265,6 +269,24 @@ function Insight({onExit}){
                 </span>
                 <span style={{fontSize:12,color:"var(--sub)"}}>{tr("이 단원이 흔들리면 후속 ","affects ")}{impactOf(sel)}{tr("개 단원에 영향"," later units")}</span>
               </div>
+
+              {selErr&&Object.keys(selErr.err).length>0&&(()=>{
+                const entries=Object.entries(selErr.err).sort((a,b)=>b[1]-a[1]);
+                const slip=selErr.err.slip||0,concept2=selErr.err.concept||0;
+                const insight=slip>=2&&slip>=concept2
+                  ?tr("오답의 다수가 '실수' — 개념은 잡혀 있으니 검산·절차 훈련이 처방이야.","Most misses are slips — concept is there; drill procedure & checking.")
+                  :concept2>=2?tr("'개념 결여'형 오답 — 아래 선수 개념 역추적부터 보강하는 게 맞아.","Concept-gap errors — remediate prerequisites below first.")
+                  :null;
+                return(
+                  <div style={{marginTop:10}}>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+                      <span className="eyebrow">{tr("오류 유형","Error types")}</span>
+                      {entries.map(([id,n])=>{const et=errTypeById(id);return(
+                        <span key={id} className="subj-badge" title={et?.desc||""} style={{background:(et?.color||"#888")+"22",color:et?.color||"var(--sub)"}}>{(et?.name||id)+" "+n}</span>);})}
+                      {selErr.avgDur!=null&&<span style={{fontSize:11.5,color:"var(--sub)"}}>{tr("평균 풀이 ","avg ")}{selErr.avgDur}{tr("초","s")}</span>}
+                    </div>
+                    {insight&&<div style={{fontSize:12.5,color:"var(--pri-d)",fontWeight:700,marginTop:6}}>💡 {insight}</div>}
+                  </div>);})()}
 
               <div style={{marginTop:12}}>
                 <div className="eyebrow" style={{marginBottom:6}}>{tr("근본 원인 후보 — 선수 개념 역추적","Root-cause candidates — prerequisite trace")}</div>
