@@ -238,6 +238,8 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
     setEraser:()=>setTool("eraser"),
     setPen:()=>setTool("pen"),
     getSize:()=>exportSize(),
+    // 풀이 통계(시도 로그용): 총 획수·페이지 수 — 이미지 없이 풀이 분량을 수치로 남긴다
+    strokeStats:()=>({st:pages.current.reduce((s,p)=>s+p.length,0),pg:pages.current.length}),
     // 시험 모드: 문항 넘겨도 손글씨를 보존·재편집하려고 획 데이터를 통째로 빼고/싣는다
     dump:()=>{const c=canvasRef.current,dpr=getDpr();return{pages:pages.current.map(pg=>pg.map(s=>({pts:s.pts.slice(),col:s.col,sz:s.sz}))),w:c?c.width/dpr:800,h:c?c.height/dpr:340};},
     load:(data)=>{const pgs=(data&&Array.isArray(data.pages)&&data.pages.length)?data.pages:[[]];pages.current=pgs.map(pg=>pg.map(s=>({pts:(s.pts||[]).slice(),col:s.col,sz:s.sz})));curRef.current=0;strokes.current=pages.current[0];redraw();setHasInk(pages.current.some(p=>p.length>0));setPgUI({i:0,n:pages.current.length});},

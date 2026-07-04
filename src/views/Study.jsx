@@ -4,6 +4,9 @@ import { Cheer, DepthGauge, Meter, Prof, RateBar, ratePct } from "../ui/common.j
 import { DAY, deckSummary, diffLong, diffWord, pickConcept, quizFormat, schedule } from "../core/srs.js";
 import { MathText } from "../ui/math.jsx";
 import { callAI, parseDeriveCheck, parseDerivePlan, parseGrading, parseOcrCheck, parseQuestion, uid } from "../core/ai.js";
+import { allAttempts, logAttempt, miscLexFor } from "../core/attempts.js";
+import { abilityByNode, predictSuccess } from "../core/rasch.js";
+import { matchNode } from "../core/knowledgeGraph.js";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
 
@@ -72,6 +75,10 @@ function Study({deck:initial,subjects,onExit}){
   const genId=useRef(0);
   const abortRef=useRef(null);
   const lastAnswerRef=useRef({});
+  // 시도 로그용 행동 신호: 문제 노출 시각(풀이 시간), 힌트 요청·OCR 재작성 횟수
+  const qStartRef=useRef(null);
+  const hintRef=useRef(0);
+  const ocrRef=useRef(0);
 
   function persist(d){
     deckRef.current=d;
@@ -83,6 +90,28 @@ function Study({deck:initial,subjects,onExit}){
   }
 
   const quizMode=deck.studyType==="quiz";
+  // 끈질긴 과외의 피드포워드: 이 개념(그래프 노드)에서 학생이 2회 이상 반복한 함정을
+  // 출제 프롬프트에 주입 — 그 실수를 하면 틀리는 문제를 정조준해서 낸다.
+  function trapLine(c){
+    const nid=matchNode([c.u1,c.u2,c.name].filter(Boolean).join(" "));
+    const traps=miscLexFor(nid,2).slice(0,3);
+    if(!traps.length)return"";
+    return"\n[이 학습자가 반복해서 밟는 함정 — 끈질긴 과외 모드]: "+traps.map(x=>x.label+"("+x.n+"회)").join(", ")+
+      "\n→ 가능하면 이 함정을 그대로 밟으면 틀리게 되는 문제로 설계해. 단, 문제 지문에서 함정을 직접 언급하거나 경고하지는 마.";
+  }
+  // 적응형 난이도 보정: 측정 엔진(온라인 Rasch)이 추정한 성공률을 출제에 주입.
+  // 표적 성공률 70~80% = 학습 효율 최대 지점 (Math Garden의 적응 규칙과 동일 원리)
+  const abilityRef=useRef(null);   // 세션당 1회 계산 (문제마다 재계산 불필요)
+  function calLine(c){
+    try{
+      if(!abilityRef.current)abilityRef.current=abilityByNode(allAttempts()).ability;
+      const nid=matchNode([c.u1,c.u2,c.name].filter(Boolean).join(" "));
+      const p=predictSuccess(abilityRef.current,nid,{box:c.box||1});
+      if(p==null)return"";
+      return"\n[측정 엔진 보정] 이 학습자가 이 개념·난이도에서 맞힐 확률 추정: "+Math.round(p*100)+"%."+
+        " 표적 성공률은 70~80%야 — 추정이 그보다 높으면 한 단계 더 깊고 어렵게, 낮으면 발판이 되는 접근 가능한 문제로 조정해.";
+    }catch(e){return"";}
+  }
   // 세션 전체에서 캐시 공유: summary 있으면 우선 사용 (8000자 이하)
   const studyMat=deck.summary||deck.material.slice(0,8000);
   const matFor=(c)=>(c&&c.src)?(""+c.src):studyMat;   // 책 개념이면 그 섹션(src)을 자료로 — 소주제별 정확한 출제·채점
@@ -109,7 +138,7 @@ function Study({deck:initial,subjects,onExit}){
     try{
       const raw=await callAI(
         "너는 문제 변형 출제 전문가야. 아래 [원래 문제]와 똑같은 개념·유형을 묻되, 숫자·상황·예시·표현만 살짝 바꾼 변형문제 하나를 만들어. 방금 본 모범답안을 그대로 베껴 쓸 수 없고 새로 풀어야 하도록. 난이도는 원래와 비슷하게. 수식은 LaTeX($...$). 반드시 아래 형식으로만 출력 (코드블록 없이):\nQTYPE: recall 또는 understand 또는 apply\nQUESTION: 질문 내용\nPOINTS: 핵심1 | 핵심2 | 핵심3\n\n자료:\n"+studyMat.slice(0,4000),
-        "개념: "+c.name+"\n원래 문제 유형: "+(baseQ?.qtype||"understand")+"\n[원래 문제]:\n"+(baseQ?.question||""),
+        "개념: "+c.name+"\n원래 문제 유형: "+(baseQ?.qtype||"understand")+"\n[원래 문제]:\n"+(baseQ?.question||"")+trapLine(c),
         false,{maxTok:800,model:CFG.qmodel,lang:studyLang},ctrl.signal);
       if(genId.current!==myId)return;
       const pq=parseQuestion(raw);
@@ -129,6 +158,8 @@ function Study({deck:initial,subjects,onExit}){
     // 페널티 없는 스킵: box(레벨)는 그대로 두고 dueAt만 내일로 미뤄 오늘은 다시 안 나오게 함
     const c=concept;let d=deckRef.current;
     if(c){
+      // 행동 신호로만 기록 (숙련도 계산에선 제외) — 넘어가기 빈도는 학습 습관 지표
+      logAttempt({src:"skip",deckId:deck.id,concept:c.name,unit:[c.u1,c.u2].filter(Boolean).join(" "),box:c.box||1,dur:elapsedSec()});
       const uc={...c,dueAt:Date.now()+DAY,lastSeen:Date.now()};
       d={...d,concepts:(d.concepts||[]).map(x=>x.id===c.id?uc:x)};
       persist(d);
@@ -182,7 +213,7 @@ function Study({deck:initial,subjects,onExit}){
           :"너는 기출문제 변형 출제 전문가야. 아래 [원본 기출문제]와 같은 개념·유형을 묻되 숫자·상황·예시만 바꾼 변형문제 하나를 만들어."+(box>=4?" 난이도는 원본보다 살짝 높여 응용을 더해.":" 난이도는 원본과 비슷하게.")+" 수식은 LaTeX($...$). 반드시 형식으로만 출력:\nQTYPE: recall 또는 understand 또는 apply\nQUESTION: 질문 내용\nPOINTS: 핵심1 | 핵심2 | 핵심3";
         try{
           const raw=await callAI(sys+"\n\n자료:\n"+matFor(c).slice(0,4000),
-            "개념: "+c.name+"\n[원본 기출문제]:\n"+picked.question,
+            "개념: "+c.name+"\n[원본 기출문제]:\n"+picked.question+trapLine(c),
             false,{maxTok:800,model:CFG.qmodel,lang:studyLang},ctrl.signal);
           if(genId.current!==myId)return;
           const pq=parseQuestion(raw);pq.source=deep?"심화":"변형";
@@ -228,7 +259,7 @@ function Study({deck:initial,subjects,onExit}){
         "understand: '외적이 내적과 근본적으로 다른 점은? 기하학적으로 설명해봐', '왜 이 조건에서 해가 유일한가?', '$\\mathbf{a}\\times\\mathbf{a}$가 항상 영벡터인 이유는?', '자료의 반례를 이용해 이 함수가 왜 선형변환이 아닌지 서술하시오 (반례+이유 설명 요구)', '왜 [특정 케이스]에서 [특정 결과]가 나오는가?'\n"+
         "apply: '$\\mathbf{a}=(1,2,3),\\,\\mathbf{b}=(4,0,-1)$일 때 $\\mathbf{a}\\times\\mathbf{b}$를 구하시오', '$T(x,y)=2x+y$가 선형변환인지 두 조건으로 보여라 (정의를 직접 적용해 검증하는 문제)'\n\n"+
         "수식은 LaTeX($...$, $$...$$). 반드시 아래 형식으로만 출력:\nQTYPE: recall 또는 understand 또는 apply\nQUESTION: 질문 내용\nPOINTS: 핵심1 | 핵심2 | 핵심3 (| 구분, 3~5개)\n\n자료:\n"+matFor(c).slice(0,6000),
-        "목표 개념: "+c.name+"\n복습 단계: "+diffLong(c.box),
+        "목표 개념: "+c.name+"\n복습 단계: "+diffLong(c.box)+trapLine(c)+calLine(c),
         false,{cache:true,maxTok:800,model:CFG.qmodel,lang:studyLang},ctrl.signal);
       if(genId.current!==myId)return;
       setQ(parseQuestion(raw));setPhase("answering");
@@ -294,11 +325,21 @@ function Study({deck:initial,subjects,onExit}){
       }
     }
     persist({...deckRef.current,concepts:deckRef.current.concepts.map(x=>x.id===concept.id?schedule(x,correct?"correct":"incorrect"):x)});
+    logAttempt({src:"quiz",deckId:deck.id,concept:concept.name,unit:[concept.u1,concept.u2].filter(Boolean).join(" "),
+      verdict:correct?"correct":"incorrect",qtype:quizItem.format,box:concept.box||1,dur:elapsedSec()});
+    abilityRef.current=null;
     setQuizSel(sel);setQuizCorrect(correct);setQuizGraded(true);setCount(n=>n+1);
     prefetchNext();   // 다음 문제 미리 생성
   }
 
   useEffect(()=>{next(initial);return()=>{abortRef.current?.abort();prefetchAbortRef.current?.abort();};},[]);
+
+  // 풀이 시간 측정: 문제가 화면에 뜬 시점부터. 새 문제 로딩 때 카운터 리셋 (OCR 재작성 복귀는 타이머 유지)
+  useEffect(()=>{
+    if(phase==="loading"){qStartRef.current=null;hintRef.current=0;ocrRef.current=0;}
+    else if((phase==="answering"||phase==="quiz")&&!qStartRef.current)qStartRef.current=Date.now();
+  },[phase]);
+  const elapsedSec=()=>qStartRef.current?Math.round((Date.now()-qStartRef.current)/1000):undefined;
 
   // 채점 가짜 진행률 (0→93 천천히, 끝나면 100% 후 리셋)
   useEffect(()=>{
@@ -337,6 +378,7 @@ function Study({deck:initial,subjects,onExit}){
         if(ocr.unclear.length>0){
           // 별도 화면 대신, 쓰던 노트 그대로 두고 안 읽힌 곳에 빨간 박스 표시 + 지우개 모드
           setOcrImgSize(sz);
+          ocrRef.current++;   // 알아볼 수 없어 다시 쓰게 한 횟수 — 필기 명료성 신호
           setOcrHighlights(ocr.unclear);
           setPhase("answering");
           setTimeout(()=>padRef.current?.setEraser(),50);
@@ -360,11 +402,17 @@ function Study({deck:initial,subjects,onExit}){
       if(img)textParts.push("\n학습자가 위 이미지에 손으로 쓴 답도 포함돼. 이미지 속 내용을 읽고 함께 채점해줘.");
       userBlocks.push({type:"text",text:textParts.join("\n")});
       const gradingRaw=await callAI(
-        "너는 학습 분석 튜터야. "+qtypeCtx+" 학습자 답안을 보고 '이 개념의 본질 대비 내 답의 갭'을 분석해. 수식·행렬·그리스 문자·수학 기호(⊥ ∥ ∈ ∉ ⊆ ℝ ∇ 등)는 반드시 LaTeX로: 인라인 $...$, 블록 $$...$$. 유니코드 기호 직접 사용 금지. 다음 형식으로만 출력 (JSON·코드블록 없이):\nESSENCE: 이 질문이 진짜 요구하는 핵심 요소 1~3가지 (학습자가 반드시 알아야 할 것)\nGOT_IT: 내 답이 제대로 담은 부분 (인정해줄 것, 반말)\nGAP: 본질 대비 빠지거나 얕거나 비껴간 핵심 부분 (없으면 정확히 '없음')\nGAP_TYPE: 개념누락 / 이해얕음 / 핵심비껴감 / 표현부족 / 갭없음 중 정확히 하나\nDEPTH: 암기 수준 / 이해 수준 / 설명가능 수준 / 응용가능 수준 중 정확히 하나\nNEXT: 이 갭을 메우려면 구체적으로 뭘 보강해야 하는지 (반말, 1~2문장)\nVERDICT: correct 또는 partial 또는 incorrect (갭없음이면 correct, 핵심 갭이면 partial, 본질 전체 누락이면 incorrect)\nANSWER: 모범답안 3~5문장 (수식 LaTeX, 그래프 필요시 <svg> 태그 직접)"+RICH_FMT+"\n\n자료:\n"+studyMat,
+        "너는 학습 분석 튜터야. "+qtypeCtx+" 학습자 답안을 보고 '이 개념의 본질 대비 내 답의 갭'을 분석해. 수식·행렬·그리스 문자·수학 기호(⊥ ∥ ∈ ∉ ⊆ ℝ ∇ 등)는 반드시 LaTeX로: 인라인 $...$, 블록 $$...$$. 유니코드 기호 직접 사용 금지. 다음 형식으로만 출력 (JSON·코드블록 없이):\nESSENCE: 이 질문이 진짜 요구하는 핵심 요소 1~3가지 (학습자가 반드시 알아야 할 것)\nGOT_IT: 내 답이 제대로 담은 부분 (인정해줄 것, 반말)\nGAP: 본질 대비 빠지거나 얕거나 비껴간 핵심 부분 (없으면 정확히 '없음')\nGAP_TYPE: 개념누락 / 이해얕음 / 핵심비껴감 / 표현부족 / 갭없음 중 정확히 하나\nDEPTH: 암기 수준 / 이해 수준 / 설명가능 수준 / 응용가능 수준 중 정확히 하나\nNEXT: 이 갭을 메우려면 구체적으로 뭘 보강해야 하는지 (반말, 1~2문장)\nFACTORS: 이 답안에서 드러난 능력을 각각 평가 — 개념(개념 이해)·계산(절차·연산 정확성)·전략(문제 해석·식 세우기)·추론(논리 전개·정당화)을 0(부족)/1(보통)/2(좋음)으로, 이 문제에서 드러나지 않는 능력은 - 로. 예: 개념=2 계산=1 전략=- 추론=1\nERROR: 오답의 성격을 정확히 하나로 — 없음 / 실수(개념은 아는데 계산·부호·옮겨쓰기 실수) / 개념(필요한 개념 자체를 모르거나 잘못 앎) / 전략(접근·풀이 방법 선택이 틀림) / 해석(문제 조건을 오독·누락) / 표기(과정은 맞는데 표현이 부정확) / 백지(손을 못 댐). '실수'와 '개념'의 구분이 가장 중요하니 풀이 과정을 근거로 신중히 판단해.\nSTAGE: 첫 오류가 난 단계 — 식세우기 / 계산 / 해석 중 하나 (오류 없으면 -)\nMISC: 드러난 오개념·실수 패턴을 12자 이내 라벨로 (예: 부호 분배 실수, 판별식 조건 혼동 — 없으면 -)\nVERDICT: correct 또는 partial 또는 incorrect (갭없음이면 correct, 핵심 갭이면 partial, 본질 전체 누락이면 incorrect)\nANSWER: 모범답안 3~5문장 (수식 LaTeX, 그래프 필요시 <svg> 태그 직접)"+RICH_FMT+"\n\n자료:\n"+studyMat,
         userBlocks,false,{cache:true,maxTok:3500,lang:studyLang},abortRef.current?.signal);
       const r=parseGrading(gradingRaw);setEv(r);
       const v=["correct","partial","incorrect"].includes(r.verdict)?r.verdict:"partial";
       lastAnswerRef.current={answer:hasTxt?answer.trim():"[손글씨]",gap:r.gap||"",gapType:r.gap_type||""};
+      logAttempt({src:"study",deckId:deck.id,concept:concept.name,unit:[concept.u1,concept.u2].filter(Boolean).join(" "),
+        verdict:v,gapType:r.gap_type||"",gap:r.gap&&r.gap!=="없음"?r.gap:"",qtype,box:concept.box||1,factors:r.factors,
+        err:r.err||(v==="correct"?"none":undefined),stage:r.stage,misc:r.misc,
+        dur:elapsedSec(),ink:padRef.current?.strokeStats?.(),
+        hint:hintRef.current||undefined,ocr:ocrRef.current||undefined});
+      abilityRef.current=null;   // 새 관측 반영 — 다음 출제 때 능력 추정 재계산
       const enrichConcept=(c)=>({...c,lastAnswer:lastAnswerRef.current.answer,lastGap:lastAnswerRef.current.gap,lastGapType:lastAnswerRef.current.gapType});
       if(v==="correct"){
         const uc=schedule(enrichConcept(concept),v);
@@ -445,6 +493,8 @@ function Study({deck:initial,subjects,onExit}){
       );
       const r=parseGrading(raw);
       setFollowupEv(r);
+      logAttempt({src:"followup",deckId:deck.id,concept:concept.name,unit:[concept.u1,concept.u2].filter(Boolean).join(" "),
+        verdict:r.verdict,gapType:r.gap_type||"",box:concept.box||1});
       const newHistory=[...followupHistory,{answer:answer.trim()||(img?"|손글씨|":""),verdict:r.verdict}];
       setFollowupHistory(newHistory);
       const newCount=followupCount+1;
@@ -523,6 +573,7 @@ function Study({deck:initial,subjects,onExit}){
   // AI가 막힌 정도를 보고 살짝이면 유도질문, 많이면 힌트를 줌(정답은 안 알려줌). 레벨 영향 없음.
   async function handleLimit(){
     if(limitBusy||phase!=="answering")return;
+    hintRef.current++;   // 힌트 요청 — 이 문제를 혼자 못 푼다는 신호(시도 로그에 포함)
     const hasInk=padRef.current?.hasStrokes();
     const hasTxt=answer.trim().length>0;
     const img=hasInk?padRef.current.getImageBase64():null;
@@ -563,6 +614,9 @@ function Study({deck:initial,subjects,onExit}){
     arc.unshift({id:uid(),deckId:deck.id,conceptId:concept.id,
       conceptName:concept.name,question:q?.question||"",ts:Date.now()});
     if(!LS.set("ng:dontknow",arc.slice(0,200)))console.warn("[handleDontKnow] dontknow 로그 저장 실패");
+    // '모르겠어'는 가장 강한 비숙련 신호 — 백지 오답으로 시도 로그에 기록 (재도전하면 끈기로 회복)
+    logAttempt({src:"dontknow",deckId:deck.id,concept:concept.name,unit:[concept.u1,concept.u2].filter(Boolean).join(" "),
+      verdict:"incorrect",err:"blank",qtype:q?.qtype,box:concept.box||1,dur:elapsedSec()});
     const uc={...concept,box:1,dueAt:0};
     persist({...deckRef.current,concepts:deckRef.current.concepts.map(c=>c.id===concept.id?uc:c)});
     setConcept(uc);

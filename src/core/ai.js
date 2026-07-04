@@ -1,4 +1,5 @@
 import { CFG, ocrModel } from "./platform.js";
+import { normErrType, normStage } from "./knowledgeGraph.js";
 const MODELS=[
   {id:"claude-sonnet-4-6",label:"Sonnet 4.6 · 추천"},
   {id:"claude-haiku-4-5-20251001",label:"Haiku 4.5 · 가장 저렴"},
@@ -224,17 +225,29 @@ function parseJsonLoose(slice){
   try{return JSON.parse(fixJson(slice));}
   catch(_){return JSON.parse(fixJson(repairJson(slice)));}
 }
+// FACTORS 줄 파싱: "개념=2 계산=1 전략=- 추론=0" → {개념:2,...} (- 는 미평가로 제외)
+function parseFactorsLine(s){
+  if(!s)return null;
+  const out={};let found=false;
+  const re=/(개념|계산|전략|추론|식|논리)\s*[=:]\s*([0-2])/g;let m;
+  while((m=re.exec(s)))if(out[m[1]]===undefined){out[m[1]]=Number(m[2]);found=true;}
+  return found?out:null;
+}
 // Parse gap-analysis grading response
 function parseGrading(txt){
-  const KEYS=['ESSENCE','GOT_IT','GAP','GAP_TYPE','DEPTH','NEXT','VERDICT','ANSWER'];
+  const KEYS=['ESSENCE','GOT_IT','GAP','GAP_TYPE','DEPTH','NEXT','FACTORS','ERROR','STAGE','MISC','VERDICT','ANSWER'];
   const vals={};
   for(let i=0;i<KEYS.length;i++){
-    const key=KEYS[i],next=KEYS[i+1];
+    const key=KEYS[i];
     const sm=new RegExp('(?:^|\\n)'+key+'\\s*:[\\t ]*','i').exec(txt);
     if(!sm)continue;
     const from=sm.index+sm[0].length;
     let to=txt.length;
-    if(next){const em=new RegExp('\\n'+next+'\\s*:','i').exec(txt.slice(from));if(em)to=from+em.index;}
+    // 경계: 뒤에 오는 '아무' 키든 가장 가까운 것 (모델이 일부 키를 빼먹어도 값이 안 섞임)
+    if(i<KEYS.length-1){
+      const em=new RegExp('\\n(?:'+KEYS.slice(i+1).join('|')+')\\s*:','i').exec(txt.slice(from));
+      if(em)to=from+em.index;
+    }
     vals[key]=txt.slice(from,to).trim();
   }
   const v=(vals.VERDICT||'').toLowerCase().replace(/[^a-z]/g,'');
@@ -252,6 +265,10 @@ function parseGrading(txt){
     gap_type,
     depth,
     next:vals.NEXT||'',
+    factors:parseFactorsLine(vals.FACTORS),
+    err:normErrType(vals.ERROR),
+    stage:normStage(vals.STAGE),
+    misc:(vals.MISC&&!/^-/.test(vals.MISC.trim()))?vals.MISC.trim():'',
     model_answer:vals.ANSWER||'',
     feedback:vals.GOT_IT||'',
   };
@@ -444,4 +461,4 @@ const toB64=(file)=>new Promise((res,rej)=>{
 let _uidSeq=0;
 const uid=()=>Date.now().toString(36)+(_uidSeq++).toString(36).padStart(3,'0')+Math.random().toString(36).slice(2,5);
 
-export { MODELS, QMODELS, callGemini, PROXY_URL, COMPANY_MODE, ACADEMY_CODE, _sleep, _aiRetriable, _geminiFallbackModel, _fbToastT, _notifyFallback, callProxy, _readClaudeSSE, callProxyClaude, callAI, fixJson, repairJson, parseJsonLoose, parseGrading, parseDerivePlan, parseDeriveCheck, parseOcrCheck, parseQuestion, callClaude, transcribeFile, processPdf, extractExamQuestions, splitPdfPages, analyzeBookChunk, ingestBook, toB64, _uidSeq, uid };
+export { MODELS, QMODELS, callGemini, PROXY_URL, COMPANY_MODE, ACADEMY_CODE, _sleep, _aiRetriable, _geminiFallbackModel, _fbToastT, _notifyFallback, callProxy, _readClaudeSSE, callProxyClaude, callAI, fixJson, repairJson, parseJsonLoose, parseFactorsLine, parseGrading, parseDerivePlan, parseDeriveCheck, parseOcrCheck, parseQuestion, callClaude, transcribeFile, processPdf, extractExamQuestions, splitPdfPages, analyzeBookChunk, ingestBook, toB64, _uidSeq, uid };

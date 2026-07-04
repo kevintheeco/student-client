@@ -4,7 +4,7 @@ import { deckSummary } from "../core/srs.js";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
 
-function Home({decks,subjects,onAdd,onOpen,onNotes,onChanged,nick}){
+function Home({decks,subjects,onAdd,onOpen,onNotes,onChanged,nick,onInsight}){
   const [det,setDet]=useState({});
   const [pickFor,setPickFor]=useState(null);   // 공부 시작 시 모드 선택 시트 {id,def}
   useEffect(()=>{
@@ -43,6 +43,7 @@ function Home({decks,subjects,onAdd,onOpen,onNotes,onChanged,nick}){
       </div>
       <div className="row" style={{marginBottom:18}}>
         <button className="btn pri" onClick={onAdd}>{tr("+ 공부한 거 추가","+ Add material")}</button>
+        {onInsight&&<button className="btn gho" onClick={onInsight}>{tr("📊 성장 인사이트","📊 Growth insight")}</button>}
       </div>
       {decks.length===0?(
         <div className="empty">{tr("아직 자료가 없네! 공부한 거 던져주면 문제 낼게 📚","No materials yet! Drop in what you studied and I'll quiz you 📚")}</div>

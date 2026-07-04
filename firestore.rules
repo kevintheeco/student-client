@@ -35,6 +35,57 @@ service cloud.firestore {
       allow read, write: if signedIn() && request.auth.uid == uid;
     }
 
+    // MEUS 무로그인 그룹방(수련회 등): meus_rooms/{방}/members/{이름} = {name, code, ts}
+    // 링크 소지자 누구나 읽기/제출(로그인 불필요). 필드·크기 엄격 제한, 삭제는 운영자 계정만.
+    match /meus_rooms/{room}/members/{member} {
+      allow read: if true;
+      allow create, update: if
+        request.resource.data.keys().hasOnly(['name', 'code', 'ts'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 40
+        && request.resource.data.code is string
+        && request.resource.data.code.size() >= 2
+        && request.resource.data.code.size() <= 4000
+        && request.resource.data.ts is number
+        && member.size() <= 60;
+      allow delete: if signedIn() && request.auth.token.email == 'soomin020114@gmail.com';
+    }
+
+    // MEUS 그룹방 이름표(meta/info {title}) — 누구나 읽기, 쓰기·삭제는 운영자 계정만
+    match /meus_rooms/{room}/meta/{doc} {
+      allow read: if true;
+      allow create, update: if signedIn()
+        && request.auth.token.email == 'soomin020114@gmail.com'
+        && request.resource.data.keys().hasOnly(['title'])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 1
+        && request.resource.data.title.size() <= 60;
+      allow delete: if signedIn() && request.auth.token.email == 'soomin020114@gmail.com';
+    }
+
+    // MEUS 그룹방 등록부(부모 문서 {title, ts}) — 운영자 대시보드의 방 목록·생성·삭제용
+    match /meus_rooms/{room} {
+      allow read, write: if signedIn() && request.auth.token.email == 'soomin020114@gmail.com';
+    }
+
+    // MEUS 운영자: 모든 방의 제출을 한 번에 조회 (collectionGroup 'members') — 운영자 계정만.
+    // 현재 'members' 서브컬렉션은 meus_rooms에서만 사용.
+    match /{path=**}/members/{member} {
+      allow read: if signedIn() && request.auth.token.email == 'soomin020114@gmail.com';
+    }
+
+    // 니가교수 학원 연동: 학생이 옵트인으로 공유한 학습 신호 (aca_shared/{code}__{uid})
+    // 쓰기: 본인(uid가 문서 id 끝과 일치 + 데이터의 uid 필드도 본인)만.
+    // 읽기: 로그인 사용자 (v1 — 학원 코드는 사실상 접근 토큰. TODO: aca_admins/{code} 관리자 명단으로 조이기)
+    match /aca_shared/{docId} {
+      allow write: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && docId == request.resource.data.code + '__' + request.auth.uid;
+      allow delete: if signedIn() && docId.matches('.*__' + request.auth.uid);
+      allow read: if signedIn();
+    }
+
     // 워크스페이스 컬렉션(ws_*) — 멤버만 읽기/쓰기
     match /{coll}/{id} {
       allow read, write: if isMember() && coll.matches('ws_.*');

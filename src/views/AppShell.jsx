@@ -1,8 +1,10 @@
 import { AddMaterial } from "./AddMaterial.jsx";
 import { CFG, DECKS_KEY, LS, SUBJS_KEY, SUBJ_COLORS, _auth, _db, cloudSyncOnLogin, defaultSubjects, dk, fmtClock, nickKey, setSyncListener, setUid, tr } from "../core/platform.js";
 import { COMPANY_MODE, MODELS, uid } from "../core/ai.js";
+import { getLink, maybeShare, setLink, shareNow } from "../core/link.js";
 import { Exam } from "./Exam.jsx";
 import { Home } from "./Home.jsx";
+import { Insight } from "./Insight.jsx";
 import { Onboard, Settings } from "./Settings.jsx";
 import { Prof } from "../ui/common.jsx";
 import { Study } from "./Study.jsx";
@@ -28,6 +30,19 @@ function App(){
   // 환영 화면: 앱 들어올 때 닉네임 부르며 잠깐 인사 (기존 사용자만 — 온보딩 중엔 X)
   const [welcomed,setWelcomed]=useState(!CFG.key);
   const [wHide,setWHide]=useState(false);
+  // 학원 연동(옵트인): 학원 코드 + on/off — 켜면 학습 신호가 학원 분석에 연결됨
+  const [acaLink,setAcaLink]=useState(getLink()||{code:"",on:false});
+  const [shareMsg,setShareMsg]=useState("");
+  const userRef=useRef(null);
+  function saveAcaLink(next){setAcaLink(next);setLink(next);setShareMsg("");}
+  async function shareNowClick(){
+    setShareMsg(tr("공유 중…","Sharing…"));
+    try{
+      const u=userRef.current;
+      const n=await shareNow(u?.uid,u?(LS.get(nickKey(u.uid))||u.displayName||""):"");
+      setShareMsg(tr("✅ "+n+"건 공유됨 — 학원에서 볼 수 있어","✅ Shared "+n+" records"));
+    }catch(e){setShareMsg("⚠️ "+(e.message||e));}
+  }
   const dismissWelcome=()=>{setWHide(true);setTimeout(()=>setWelcomed(true),360);};
   useEffect(()=>{if(!CFG.key)return;const t=setTimeout(dismissWelcome,2800);return ()=>clearTimeout(t);},[]);
 
@@ -37,6 +52,9 @@ function App(){
       if(s.busy!==undefined)setSyncBusy(s.busy);
       if(s.ok!==undefined)setCloudStatus(s.ok?"ok":"error");
       if(s.at)setLastSyncAt(s.at);
+      // 동기화 성공 시 학원 자동 공유 (연동 켜진 경우만, 내부 디바운스)
+      const u=userRef.current;
+      if(s.ok&&u)maybeShare(u.uid,LS.get(nickKey(u.uid))||u.displayName||"");
     });
     return ()=>setSyncListener(null);
   },[]);
@@ -48,7 +66,7 @@ function App(){
   useEffect(()=>{
     if(!_auth)return;
     return _auth.onAuthStateChanged(async u=>{
-      setUser(u);
+      setUser(u);userRef.current=u;
       if(!u){setUid(null);setNick("");return;}
       setUid(u.uid);
       if(_db){
@@ -146,6 +164,27 @@ function App(){
               <label>{tr("닉네임","Nickname")}</label>
               <input className="field" value={nick} maxLength={20} onChange={e=>{const v=e.target.value;setNick(v);if(v.trim()&&user)LS.set(nickKey(user.uid),v.trim());}} onBlur={e=>saveNick(e.target.value)}/>
             </div>
+            {/* 학원 연동 — 집 공부 신호(시도·오개념·습관, 손글씨 이미지 제외)를 학원 분석에 연결 */}
+            <div style={{borderTop:"1px solid var(--line)",paddingTop:12}}>
+              <div style={{fontSize:12.5,fontWeight:800,color:"var(--ink)",marginBottom:4}}>🏫 {tr("학원 연동","Academy link")}</div>
+              <div style={{fontSize:11.5,color:"var(--sub)",lineHeight:1.6,marginBottom:8}}>
+                {tr("학원 코드를 넣고 켜면, 집에서 공부한 성장 기록(시도·오개념·학습 습관)이 학원 선생님의 분석 화면에 연결돼. 손글씨 이미지·API 키는 절대 안 올라가.",
+                   "Enter your academy code to share your growth signals (no handwriting images, no keys).")}
+              </div>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <input className="field" placeholder={tr("학원 코드","Academy code")} value={acaLink.code}
+                  onChange={e=>saveAcaLink({...acaLink,code:e.target.value.trim()})} style={{flex:1}}/>
+                <button className={"btn sm "+(acaLink.on?"pri":"gho")} disabled={!acaLink.code}
+                  onClick={()=>saveAcaLink({...acaLink,on:!acaLink.on})}>
+                  {acaLink.on?tr("연동 중 ✓","Linked ✓"):tr("연동 켜기","Link")}
+                </button>
+              </div>
+              {acaLink.on&&(
+                <div style={{display:"flex",gap:8,alignItems:"center",marginTop:8}}>
+                  <button className="btn gho xs" onClick={shareNowClick}>{tr("지금 공유","Share now")}</button>
+                  <span style={{fontSize:11.5,color:"var(--sub)"}}>{shareMsg||tr("동기화될 때마다 자동 공유돼","Auto-shares on every sync")}</span>
+                </div>)}
+            </div>
             <div className="row">
               <button className="btn pri" onClick={()=>{saveNick(nick);setShowProfile(false);}}>{tr("저장","Save")}</button>
               <button className="btn gho" onClick={logout}>{tr("로그아웃","Sign out")}</button>
@@ -159,9 +198,10 @@ function App(){
       {view==="home"&&(
         <>
           <SubjectTabs subjects={subjects} active={filterSubj} onChange={setFilterSubj} onSave={saveSubjects}/>
-          <Home decks={filteredDecks} subjects={subjects} onAdd={()=>setView("add")} onOpen={openStudy} onNotes={openNotes} onChanged={refresh} nick={nick}/>
+          <Home decks={filteredDecks} subjects={subjects} onAdd={()=>setView("add")} onOpen={openStudy} onNotes={openNotes} onChanged={refresh} nick={nick} onInsight={()=>setView("insight")}/>
         </>
       )}
+      {view==="insight"&&<Insight onExit={()=>{refresh();setView("home");}}/>}
       {view==="add"&&<AddMaterial subjects={subjects} onSave={saveSubjects} onDone={()=>{refresh();setView("home");}} onCancel={()=>setView("home")}/>}
       {view==="study"&&activeDeck&&<Study deck={activeDeck} subjects={subjects} onExit={()=>{refresh();setView("home");}}/>}
       {view==="exam"&&(activeDeck||examTopic)&&<Exam deck={examTopic?null:activeDeck} topic={examTopic} onExit={()=>{setExamTopic(null);refresh();setView("home");}}/>}
