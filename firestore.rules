@@ -35,6 +35,23 @@ service cloud.firestore {
       allow read, write: if signedIn() && request.auth.uid == uid;
     }
 
+    // MEUS 무로그인 그룹방(수련회 등): meus_rooms/{방}/members/{이름} = {name, code, ts}
+    // 링크 소지자 누구나 읽기/제출(로그인 불필요). 필드·크기 엄격 제한, 삭제는 운영자 계정만.
+    match /meus_rooms/{room}/members/{member} {
+      allow read: if true;
+      allow create, update: if
+        request.resource.data.keys().hasOnly(['name', 'code', 'ts'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 40
+        && request.resource.data.code is string
+        && request.resource.data.code.size() >= 2
+        && request.resource.data.code.size() <= 4000
+        && request.resource.data.ts is number
+        && member.size() <= 60;
+      allow delete: if signedIn() && request.auth.token.email == 'soomin020114@gmail.com';
+    }
+
     // 니가교수 학원 연동: 학생이 옵트인으로 공유한 학습 신호 (aca_shared/{code}__{uid})
     // 쓰기: 본인(uid가 문서 id 끝과 일치 + 데이터의 uid 필드도 본인)만.
     // 읽기: 로그인 사용자 (v1 — 학원 코드는 사실상 접근 토큰. TODO: aca_admins/{code} 관리자 명단으로 조이기)
