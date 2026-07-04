@@ -52,6 +52,17 @@ service cloud.firestore {
       allow delete: if signedIn() && request.auth.token.email == 'soomin020114@gmail.com';
     }
 
+    // MEUS 그룹방 이름표(meta/info {title}) — 누구나 읽기, 쓰기는 운영자 계정만
+    match /meus_rooms/{room}/meta/{doc} {
+      allow read: if true;
+      allow write: if signedIn()
+        && request.auth.token.email == 'soomin020114@gmail.com'
+        && request.resource.data.keys().hasOnly(['title'])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 1
+        && request.resource.data.title.size() <= 60;
+    }
+
     // 니가교수 학원 연동: 학생이 옵트인으로 공유한 학습 신호 (aca_shared/{code}__{uid})
     // 쓰기: 본인(uid가 문서 id 끝과 일치 + 데이터의 uid 필드도 본인)만.
     // 읽기: 로그인 사용자 (v1 — 학원 코드는 사실상 접근 토큰. TODO: aca_admins/{code} 관리자 명단으로 조이기)
