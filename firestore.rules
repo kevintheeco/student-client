@@ -52,15 +52,21 @@ service cloud.firestore {
       allow delete: if signedIn() && request.auth.token.email == 'soomin020114@gmail.com';
     }
 
-    // MEUS 그룹방 이름표(meta/info {title}) — 누구나 읽기, 쓰기는 운영자 계정만
+    // MEUS 그룹방 이름표(meta/info {title}) — 누구나 읽기, 쓰기·삭제는 운영자 계정만
     match /meus_rooms/{room}/meta/{doc} {
       allow read: if true;
-      allow write: if signedIn()
+      allow create, update: if signedIn()
         && request.auth.token.email == 'soomin020114@gmail.com'
         && request.resource.data.keys().hasOnly(['title'])
         && request.resource.data.title is string
         && request.resource.data.title.size() >= 1
         && request.resource.data.title.size() <= 60;
+      allow delete: if signedIn() && request.auth.token.email == 'soomin020114@gmail.com';
+    }
+
+    // MEUS 그룹방 등록부(부모 문서 {title, ts}) — 운영자 대시보드의 방 목록·생성·삭제용
+    match /meus_rooms/{room} {
+      allow read, write: if signedIn() && request.auth.token.email == 'soomin020114@gmail.com';
     }
 
     // 니가교수 학원 연동: 학생이 옵트인으로 공유한 학습 신호 (aca_shared/{code}__{uid})
