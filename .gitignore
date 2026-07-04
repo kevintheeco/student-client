@@ -1,3 +1,18 @@
 node_modules/
 dist/
 *.log
+
+# 환경변수/키 — 값은 절대 커밋하지 않는다 (코드에서는 변수 이름으로만 접근)
+.env
+.env.*
+!.env.example
+.dev.vars
+*.pem
+*.p12
+*.pfx
+
+# 로컬 설정/캐시
+.claude/settings.local.json
+.pytest_cache/
+__pycache__/
+.DS_Store
