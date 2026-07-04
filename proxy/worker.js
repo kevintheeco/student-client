@@ -16,8 +16,9 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     if (request.method !== "POST") return json({ error: "POST only" }, 405, cors);
 
+    // Origin 필수 — 없으면(curl/봇 등 비브라우저) 거부. 정상 트래픽은 전부 크로스 오리진이라 항상 Origin이 붙는다.
     const origin = request.headers.get("Origin");
-    if (origin && !originAllowed(origin, env)) return json({ error: "forbidden origin" }, 403, cors);
+    if (!originAllowed(origin, env)) return json({ error: "forbidden origin" }, 403, cors);
 
     let body;
     try { body = await request.json(); }
@@ -29,6 +30,8 @@ export default {
   },
 };
 
+const ALLOWED_CLAUDE_MODELS = new Set(["claude-sonnet-4-6", "claude-haiku-4-5-20251001"]);
+
 // 회사키(학원) 경로: 클로드(학원 워크스페이스 키) → 실패 시 Gemini → OpenAI. 스트리밍 passthrough.
 async function handleClaude(body, env, cors) {
   const { academyCode = "", system = "", messages = [], wantJson = false, maxTok, model, stream = false } = body;
@@ -36,7 +39,8 @@ async function handleClaude(body, env, cors) {
   const key = academyCode && keys[academyCode];
   if (!key) return json({ error: "unknown academy code" }, 403, cors);
   const tokens = clampInt(maxTok, 16, 8192, wantJson ? 2048 : 1024);
-  const useModel = model || "claude-sonnet-4-6";
+  // 모델은 서버에서 고정 — 학원 키로 비싼/임의 모델 호출 차단 (보안점검 2026-07-04 §2). 목록 밖 요청은 Sonnet으로 강제.
+  const useModel = ALLOWED_CLAUDE_MODELS.has(model) ? model : "claude-sonnet-4-6";
   try {
     const upstream = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
