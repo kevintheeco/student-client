@@ -48,6 +48,7 @@ const ERR_TYPES=[
   {id:"strategy",name:"전략 오류",desc:"접근·풀이 방법 선택이 틀림",color:"#FFC24B"},
   {id:"interpret",name:"해석 오류",desc:"문제 조건을 잘못 읽거나 누락",color:"#FF8E72"},
   {id:"notation",name:"표기 미숙",desc:"과정은 맞는데 수학적 표기·서술이 부정확",color:"#A29BFE"},
+  {id:"geometry",name:"기하 구성",desc:"보조선·도형 요소 구성을 못 함 (높이·수선·접선 누락 등)",color:"#E7B36A"},
   {id:"blank",name:"미착수",desc:"손을 못 댐",color:"#857FA0"},
 ];
 const errTypeById=(id)=>ERR_TYPES.find(e=>e.id===id)||null;
@@ -61,6 +62,7 @@ function normErrType(s){
   if(t.includes("전략")||/strateg/i.test(t))return"strategy";
   if(t.includes("해석")||t.includes("오독")||/interpret/i.test(t))return"interpret";
   if(t.includes("표기")||t.includes("표현")||/notation/i.test(t))return"notation";
+  if(t.includes("기하")||t.includes("보조선")||t.includes("작도")||/geometr/i.test(t))return"geometry";
   if(t.includes("백지")||t.includes("미착수")||/blank/i.test(t))return"blank";
   return null;
 }

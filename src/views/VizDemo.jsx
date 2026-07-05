@@ -3,6 +3,7 @@
 // 특이점 좌표는 스크립트에 없다 — intercepts/intersections/extrema 스텝이 전부 자동 계산.
 import React from "react";
 import { MathViz } from "../ui/mathviz/MathViz.jsx";
+import { GeoFeedback } from "../ui/GeoFeedback.jsx";
 
 const { useState, useEffect } = React;
 
@@ -87,29 +88,38 @@ function VizDemo(){
       </p>
       <div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
         {DEMOS.map(d=>(
-          <button key={d.key} className="btn" onClick={()=>{setTab(d.key);setRunId(r=>r+1);}}
+          <button key={d.key} className="btn gho" onClick={()=>{setTab(d.key);setRunId(r=>r+1);}}
             style={{fontSize:13,padding:"8px 14px",
               opacity:tab===d.key?1:.55,fontWeight:tab===d.key?700:400}}>
             {d.name}
           </button>
         ))}
-      </div>
-      <div style={{display:"flex",gap:8,justifyContent:"center"}}>
-        <button className="btn" style={{fontSize:12,padding:"6px 12px"}}
-          onClick={()=>setTheme(t=>t==="dark"?"light":"dark")}>
-          테마: {theme==="dark"?"🌙 다크 칠판":"☀️ 라이트"}
-        </button>
-        <button className="btn" style={{fontSize:12,padding:"6px 12px"}}
-          onClick={()=>setRunId(r=>r+1)}>
-          ⟲ 처음부터
+        <button className="btn gho" onClick={()=>setTab("geo")}
+          style={{fontSize:13,padding:"8px 14px",
+            opacity:tab==="geo"?1:.55,fontWeight:tab==="geo"?700:400}}>
+          ④ 기하 채점
         </button>
       </div>
-      {demo&&(
-        <div style={{display:"flex",justifyContent:"center"}}>
-          <MathViz key={demo.key+theme+runId} script={demo.script} theme={theme}
-            controls autoplay/>
+      {tab!=="geo"&&(
+        <div style={{display:"flex",gap:8,justifyContent:"center"}}>
+          <button className="btn gho" style={{fontSize:12,padding:"6px 12px"}}
+            onClick={()=>setTheme(t=>t==="dark"?"light":"dark")}>
+            테마: {theme==="dark"?"🌙 다크 칠판":"☀️ 라이트"}
+          </button>
+          <button className="btn gho" style={{fontSize:12,padding:"6px 12px"}}
+            onClick={()=>setRunId(r=>r+1)}>
+            ⟲ 처음부터
+          </button>
         </div>
       )}
+      {tab==="geo"
+        ?<GeoFeedback/>
+        :demo&&(
+          <div style={{display:"flex",justifyContent:"center"}}>
+            <MathViz key={demo.key+theme+runId} script={demo.script} theme={theme}
+              controls autoplay/>
+          </div>
+        )}
     </div>
   );
 }
