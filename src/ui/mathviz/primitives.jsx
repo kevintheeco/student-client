@@ -51,12 +51,12 @@ const animStyle=(anim, name)=> anim && anim.animate
   : null;
 
 /* ── 곡선·직선 (실선 draw-on) ── */
-function Curve({pts, color, width=2.6, anim}){
+function Curve({pts, color, width=2.3, anim}){
   const d=pathFrom(pts);
   if(!d) return null;
   const on=anim && anim.animate;
   return (
-    <path d={d} fill="none" stroke={color} strokeWidth={width}
+    <path d={d} className="viz-stroke" fill="none" stroke={color} strokeWidth={width}
       strokeLinecap="round" strokeLinejoin="round"
       pathLength={on?1:undefined}
       style={on?{strokeDasharray:1,strokeDashoffset:1,...animStyle(anim,"viz-draw")}:null}/>
@@ -70,7 +70,7 @@ function DashedLine({pts, color, width=1.8, dash="8 8", anim}){
   if(!d) return null;
   const on=anim && anim.animate;
   const line=(
-    <path d={d} fill="none" stroke={color} strokeWidth={width}
+    <path d={d} className="viz-stroke" fill="none" stroke={color} strokeWidth={width}
       strokeLinecap="round" strokeDasharray={dash}
       mask={on?`url(#${id})`:undefined}/>
   );
@@ -142,7 +142,7 @@ function Vector({from, to, color, width=3, anim}){
   return (
     <g>
       <Curve pts={[from,b]} color={color} width={width} anim={anim}/>
-      <polygon points={`${to} ${p1} ${p2}`} fill={color} className="viz-dot"
+      <polygon points={`${to} ${p1} ${p2}`} fill={color} className="viz-dot viz-stroke"
         style={on?{opacity:0,animation:`viz-pop 250ms ease forwards ${(anim.delay||0)+(anim.dur||0)}ms`}:null}/>
     </g>
   );
@@ -159,7 +159,7 @@ function AngleArc({at, from, to, radius=22, color, width=1.8, anim}){
   const p1=[at[0]+radius*Math.cos(a0+d), at[1]+radius*Math.sin(a0+d)];
   const path=`M${p0[0].toFixed(2)} ${p0[1].toFixed(2)} A${radius} ${radius} 0 0 ${d>0?1:0} ${p1[0].toFixed(2)} ${p1[1].toFixed(2)}`;
   const on=anim&&anim.animate;
-  return <path d={path} fill="none" stroke={color} strokeWidth={width} strokeLinecap="round"
+  return <path d={path} className="viz-stroke" fill="none" stroke={color} strokeWidth={width} strokeLinecap="round"
     pathLength={on?1:undefined}
     style={on?{strokeDasharray:1,strokeDashoffset:1,...animStyle(anim,"viz-draw")}:null}/>;
 }

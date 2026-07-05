@@ -111,7 +111,7 @@ function compileScript(script, theme){
         addObstacles(pts);
         const L=polyLength(pts);
         dur=L>LONG_CURVE_PX?TIMING.drawOnLong:TIMING.drawOn;
-        items.push({step:i,zone:"svg",kind:"curve",pts,color:color(s.color),width:2.8,dur});
+        items.push({step:i,zone:"svg",kind:"curve",pts,color:color(s.color),width:2.5,dur});
         break;
       }
       case "asymptote":{
@@ -161,7 +161,7 @@ function compileScript(script, theme){
         const P=needPlot(s.of);if(!P)break;
         const f=safeFn(P.f),x0=s.at??0,half=s.halfLen??1.4,mm=d1(f,x0);
         const pts=toPxPts([[x0-half,f(x0)-mm*half],[x0+half,f(x0)+mm*half]]);
-        items.push({step:i,zone:"svg",kind:"curve",pts,color:t.chalk,width:2.4,dur:TIMING.drawOn});
+        items.push({step:i,zone:"svg",kind:"curve",pts,color:t.chalk,width:2.2,dur:TIMING.drawOn});
         addPoint(i,[x0,f(x0)],null,t.point);
         dur=TIMING.drawOn;break;
       }
@@ -193,7 +193,7 @@ function compileScript(script, theme){
         if(!Array.isArray(s.from)||!Array.isArray(s.to))break;
         const pts=[m.toPx(s.from[0],s.from[1]),m.toPx(s.to[0],s.to[1])];
         if(s.dash)items.push({step:i,zone:"svg",kind:"dash",pts,color:color(s.color),width:s.width??2,dash:"8 9"});
-        else items.push({step:i,zone:"svg",kind:"curve",pts,color:color(s.color),width:s.width??2.8,dur:TIMING.drawOn});
+        else items.push({step:i,zone:"svg",kind:"curve",pts,color:color(s.color),width:s.width??2.5,dur:TIMING.drawOn});
         addSegObstacles(pts[0],pts[1]);
         if(s.label)addLabelNear(i,[(pts[0][0]+pts[1][0])/2,(pts[0][1]+pts[1][1])/2],s.label,color(s.color));
         dur=TIMING.drawOn;break;
@@ -201,7 +201,7 @@ function compileScript(script, theme){
       case "vector":{    // 벡터 화살표 — 조합문자 없이 도형으로 그린다 (투영·내적 다이어그램)
         if(!Array.isArray(s.from)||!Array.isArray(s.to))break;
         const from=m.toPx(s.from[0],s.from[1]), to=m.toPx(s.to[0],s.to[1]);
-        items.push({step:i,zone:"svg",kind:"vector",from,to,color:color(s.color)||accent,width:s.width??3,dur:TIMING.drawOn});
+        items.push({step:i,zone:"svg",kind:"vector",from,to,color:color(s.color)||accent,width:s.width??2.7,dur:TIMING.drawOn});
         addSegObstacles(from,to);
         if(s.label)addLabelNear(i,to,s.label,color(s.color)||accent,14.5);
         dur=TIMING.drawOn;break;
@@ -236,7 +236,7 @@ function compileScript(script, theme){
         for(const br of branches){
           const pts=toPxPts(br);addObstacles(pts);
           maxL=Math.max(maxL,polyLength(pts));
-          items.push({step:i,zone:"svg",kind:"curve",pts,color:accent,width:2.8,dur:TIMING.drawOn});
+          items.push({step:i,zone:"svg",kind:"curve",pts,color:accent,width:2.5,dur:TIMING.drawOn});
         }
         dur=maxL>LONG_CURVE_PX?TIMING.drawOnLong:TIMING.drawOn;
         const show=s.show||[];

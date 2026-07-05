@@ -267,6 +267,11 @@ a{color:var(--pri-d)}
 @keyframes viz-linein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .mathviz .viz-dot{transform-box:fill-box;transform-origin:center}
 .viz-dot{transform-box:fill-box;transform-origin:center}
+/* 유광 스트로크: 라이트=은은한 그림자 광택 / 다크=분필 글로우 (대표 지시 — 세련된 유광 느낌) */
+.mathviz.theme-light .viz-stroke{filter:drop-shadow(0 1px 1.4px rgba(34,28,57,.22))}
+.mathviz.theme-light .viz-dot{filter:drop-shadow(0 1px 1.2px rgba(34,28,57,.25))}
+.mathviz.theme-dark .viz-stroke{filter:drop-shadow(0 0 2.5px rgba(242,240,235,.30))}
+.geo-overlay .viz-stroke,.geo-overlay .viz-dot{filter:drop-shadow(0 1px 1.4px rgba(34,28,57,.24))}
 .mathviz-block{margin:14px 0;display:flex;justify-content:center}
 .mathviz-block .mathviz{width:100%}
 /* GeoFeedback — 기하 상호작용 채점 */

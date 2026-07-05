@@ -151,7 +151,7 @@ function GeoFeedback({
   const renderItem=(it,i)=>{
     const anim={animate:true,dur:700,delay:it.delay||0};
     switch(it.kind){
-      case "line": return <Curve key={i} pts={it.pts} color={it.color} width={4} anim={anim}/>;
+      case "line": return <Curve key={i} pts={it.pts} color={it.color} width={3.6} anim={anim}/>;
       case "dash": return <DashedLine key={i} pts={it.pts} color={it.color} width={it.width||3} dash="10 11" anim={anim}/>;
       case "dot":  return <PointDot key={i} at={it.at} color={it.color} r={6} anim={{...anim,dur:400}}/>;
       case "label":return <SvgLabel key={i} at={it.at} text={it.text} color={it.color} fontSize={it.fontSize||19} anim={{...anim,dur:400}}/>;
@@ -166,7 +166,7 @@ function GeoFeedback({
       <div ref={wrapRef} style={{position:"relative"}}>
         <PenPad ref={padRef} kind="geo" hideOcr penOnlyDefault={penOnly} disabled={locked}/>
         {box&&(
-          <svg viewBox={`0 0 ${box.w} ${box.h}`} aria-hidden="true"
+          <svg viewBox={`0 0 ${box.w} ${box.h}`} aria-hidden="true" className="geo-overlay"
             style={{position:"absolute",left:box.left,top:box.top,width:box.width,height:box.height,
               pointerEvents:"none",overflow:"visible"}}>
             {items.map(renderItem)}

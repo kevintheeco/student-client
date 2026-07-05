@@ -86,7 +86,7 @@ const DEMO_HYPERBOLA={
 
 /* ④ 벡터 내적(투영) — 깨진 유니코드·엇나간 각도 호를 vector/angle 스텝으로 정확히 재현 */
 const DEMO_DOT={
-  version:1, theme:"algebra",
+  version:1, theme:"sequence",   // 시그니처 연보라 계열 accent
   view:{ x:[-0.6,6.4], y:[-1.2,3.6] },
   steps:[
     { type:"vector", from:[0,0], to:[5,0],     label:"\\vec{a}", color:"accent" },
