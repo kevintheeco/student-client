@@ -158,7 +158,7 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
       for(const t of list){
         if(ctrl.signal.aborted)return;
         try{out[t.i]=await gradeOne(t,ctrl.signal);}
-        catch(e){if(e.name==="AbortError")return;out[t.i]={error:true,points:t.q.points,score:0,model:t.q.model_answer||t.q.solution||"",type:t.q.type,mcAnswer:t.q.answer,choice:t.ans.choice,text:t.ans.text,concept:t.q.concept,unit:t.q.unit||t.q.concept||"",origin:t.q.origin,srcLabel:t.q.srcLabel,inkImg:inkHas(t.ink)?renderInkPNG(t.ink):null,gap:T("채점 오류 — 다시 시도해줘","Grading error")};}
+        catch(e){if(e.name==="AbortError")return;out[t.i]={error:true,points:t.q.points,score:0,model:t.q.model_answer||t.q.solution||"",type:t.q.type,mcAnswer:t.q.answer,choice:t.ans.choice,text:t.ans.text,concept:t.q.concept,unit:t.q.unit||t.q.concept||"",origin:t.q.origin,srcLabel:t.q.srcLabel,figure:t.q.figure||null,inkImg:inkHas(t.ink)?renderInkPNG(t.ink):null,gap:T("채점 오류 — 다시 시도해줘","Grading error")};}
         done++;setGradeProg(done);
       }
     }
@@ -195,8 +195,12 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
   async function gradeOne({q,ans,ink},signal){
     const inkImg=inkHas(ink)?renderInkPNG(ink):null;
     const blocks=[];
+    // 문제 그림(기하·그래프)이 있으면 첫 번째 이미지로 채점 AI에 전달 — 그림 없이는 채점 근거가 불완전
+    const figM=q.figure?String(q.figure).match(/^data:(image\/[\w+.-]+);base64,(.+)$/):null;
+    if(figM)blocks.push({type:"image",source:{type:"base64",media_type:figM[1],data:figM[2]}});
     if(inkImg)blocks.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:inkImg}});
     const parts=["[문항 유형] "+TYPE_LABEL(q.type),"[배점] "+q.points+"점","[문제]\n"+q.question];
+    if(figM)parts.push(inkImg?"※ 이미지 순서: 첫 번째=[문제 그림], 두 번째=학생의 손글씨(연습장/답안).":"※ 첫 번째 이미지는 [문제 그림]이야.");
     if(q.type==="mc"){
       parts.push("[보기]\n"+q.choices.map((c,i)=>LET[i]+". "+c).join("\n"));
       parts.push("[정답] "+LET[q.answer]);
@@ -229,7 +233,7 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
     return {score:sc,points:pts,verdict:r&&r.verdict,essence:r&&r.essence,gotIt:r&&r.gotIt,gap:r&&r.gap,known:r&&r.known,unknown:r&&r.unknown,next:r&&r.next,
       factors:(r&&r.factors)||null,error:(r&&r.error)||null,
       model:(r&&r.model)||q.model_answer||q.solution||"",type:q.type,mcAnswer:q.answer,choices:q.choices,choice:ans.choice,text:ans.text,question:q.question,concept:q.concept,unit:q.unit||q.concept||"",
-      origin:q.origin,srcLabel:q.srcLabel,inkImg};
+      origin:q.origin,srcLabel:q.srcLabel,figure:q.figure||null,inkImg};
   }
 
   // 단원별 집계: 단원→{정답률·약점·보강}. 결과 요약·학부모 리포트·저장에 공용 사용
@@ -390,7 +394,8 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
               <span className="chip gho">{q.points}{T("점","pt")}</span>
               <span style={{marginLeft:"auto",fontSize:11,color:"var(--sub)"}}>{idx+1} / {items.length}</span>
             </div>
-            <MathText text={q.question} tag="div" style={{fontSize:17,fontWeight:600,lineHeight:1.7,marginBottom:14}}/>
+            <MathText text={q.question} tag="div" style={{fontSize:17,fontWeight:600,lineHeight:1.7,marginBottom:q.figure?10:14}}/>
+            {q.figure&&<img src={q.figure} alt={T("문제 그림","Figure")} style={{maxWidth:"100%",maxHeight:360,display:"block",margin:"0 auto 14px",border:"1px solid var(--line)",borderRadius:10,background:"#fff"}}/>}
 
             {q.type==="mc"&&(
               <div style={{display:"flex",flexDirection:"column",gap:9,marginBottom:14}}>
@@ -480,6 +485,7 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
               <span className="chip" style={{background:"var(--pri-s)",color:"var(--pri-d)"}}>{TYPE_LABEL(g.type)}</span>
               {originChip(g.origin,g.srcLabel)}
               <MathText text={g.question} tag="div" style={{fontSize:15.5,fontWeight:600,lineHeight:1.6,margin:"10px 0 12px"}}/>
+              {g.figure&&<img src={g.figure} alt="" style={{maxWidth:"100%",maxHeight:300,display:"block",margin:"0 auto 12px",border:"1px solid var(--line)",borderRadius:10,background:"#fff"}}/>}
               {/* 내 답 */}
               {g.type==="mc"&&g.choices&&(
                 <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:12}}>

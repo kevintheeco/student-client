@@ -26,9 +26,11 @@ function bankUpdate(id,patch){const list=bankAll().map(it=>it.id===id?{...it,...
 function bankDel(id){const list=bankAll().filter(it=>it.id!==id);bankSet(list);return list;}
 
 // 검색 1단계: 태그 필터링(단원·과목·유형·검수여부). 건수가 커지면 임베딩 검색을 이 뒤에 얹는다.
+// 그림 필수(hasFigure)인데 그림이 첨부되지 않은 문항은 출제 후보에서 제외 — 그림 없이 나가면 못 푸는 문제가 되므로.
 function bankSearch({subject,unit,qtype,verifiedOnly=true,limit=8}={}){
   let list=bankAll();
   if(verifiedOnly)list=list.filter(it=>it.verified);
+  list=list.filter(it=>!it.hasFigure||it.figure);
   if(subject)list=list.filter(it=>it.subject===subject);
   if(unit)list=list.filter(it=>it.unit===unit);
   if(qtype)list=list.filter(it=>it.qtype===qtype);
@@ -48,7 +50,7 @@ const CIRC="①②③④⑤";
 function toExamItem(it,uidFn){
   const srcLabel=[it.src?.year,it.src?.school,it.src?.exam].filter(Boolean).join(" ")+(it.src?.number?" · "+it.src.number+"번":"");
   const base={id:uidFn(),origin:"기출",bankId:it.id,srcLabel:srcLabel.trim(),
-    unit:it.unit||"",concept:it.unit||"",question:it.question||"",
+    unit:it.unit||"",concept:it.unit||"",question:it.question||"",figure:it.figure||null,
     points:Number(it.points)>0?Number(it.points):(it.qtype==="essay"?15:5)};
   if(it.qtype==="mc"&&Array.isArray(it.choices)&&it.choices.length>=2){
     const m=(it.answer||"").match(/[①②③④⑤]/);

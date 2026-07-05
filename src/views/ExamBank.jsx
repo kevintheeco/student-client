@@ -8,7 +8,7 @@ import { FileDropZone, Prof, Stat } from "../ui/common.jsx";
 import { MathText } from "../ui/math.jsx";
 import { CURRICULUM } from "../core/curriculum.js";
 import React from "react";
-const { useState, useMemo } = React;
+const { useState, useMemo, useRef, useEffect } = React;
 
 const QTYPES=[["mc",tr("객관식","MC")],["short",tr("단답형","Short")],["essay",tr("서술형","Essay")]];
 const DIFFS=[["easy",tr("쉬움","Easy")],["medium",tr("보통","Medium")],["hard",tr("어려움","Hard")]];
@@ -20,11 +20,80 @@ const SUBJECTS=CURRICULUM.flatMap(lv=>lv.subjects.map(s=>({id:s.id,name:s.name,l
 const ALL_UNITS=[...new Set(SUBJECTS.flatMap(s=>s.units))];
 const UNIT_SUBJECT={};SUBJECTS.forEach(s=>s.units.forEach(u=>{if(!(u in UNIT_SUBJECT))UNIT_SUBJECT[u]=s.name;}));
 
+/* ── 그림 크롭 도구: 시험지 사진에서 도형·그래프 영역만 드래그로 잘라 문항에 첨부 ── */
+function _cropToDataURL(img,sel,sc){
+  // sel(캔버스 좌표)·sc(축소비율)로 원본에서 잘라 최대 900px 폭 JPEG로 압축
+  const sx=sel?sel.x/sc:0, sy=sel?sel.y/sc:0;
+  const sw=sel?sel.w/sc:img.width, sh=sel?sel.h/sc:img.height;
+  const os=Math.min(1,900/sw);
+  const c=document.createElement("canvas");
+  c.width=Math.max(1,Math.round(sw*os));c.height=Math.max(1,Math.round(sh*os));
+  const ctx=c.getContext("2d");
+  ctx.fillStyle="#fff";ctx.fillRect(0,0,c.width,c.height);
+  ctx.drawImage(img,sx,sy,sw,sh,0,0,c.width,c.height);
+  return c.toDataURL("image/jpeg",0.85);
+}
+function FigureCropper({src,onDone,onCancel}){
+  const cvRef=useRef(null);const imgRef=useRef(null);const scRef=useRef(1);
+  const [sel,setSel]=useState(null);const dragRef=useRef(null);
+  useEffect(()=>{
+    const img=new Image();
+    img.onload=()=>{
+      imgRef.current=img;const cv=cvRef.current;if(!cv)return;
+      const maxW=Math.min(860,window.innerWidth-72);
+      const sc=Math.min(1,maxW/img.width);scRef.current=sc;
+      cv.width=Math.round(img.width*sc);cv.height=Math.round(img.height*sc);
+      draw(null);
+    };
+    img.src=src;
+  },[src]);
+  function draw(rect){
+    const cv=cvRef.current,img=imgRef.current;if(!cv||!img)return;
+    const ctx=cv.getContext("2d");
+    ctx.drawImage(img,0,0,cv.width,cv.height);
+    if(rect&&rect.w>2&&rect.h>2){
+      ctx.fillStyle="rgba(20,26,48,.42)";
+      ctx.fillRect(0,0,cv.width,rect.y);
+      ctx.fillRect(0,rect.y,rect.x,rect.h);
+      ctx.fillRect(rect.x+rect.w,rect.y,cv.width-rect.x-rect.w,rect.h);
+      ctx.fillRect(0,rect.y+rect.h,cv.width,cv.height-rect.y-rect.h);
+      ctx.strokeStyle="#6C5CE7";ctx.lineWidth=2;
+      ctx.strokeRect(rect.x,rect.y,rect.w,rect.h);
+    }
+  }
+  const pos=(e)=>{const r=cvRef.current.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};};
+  const norm=(a,b)=>({x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),w:Math.abs(a.x-b.x),h:Math.abs(a.y-b.y)});
+  return(
+    <div onClick={onCancel} style={{position:"fixed",inset:0,background:"rgba(20,26,48,.55)",zIndex:80,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={e=>e.stopPropagation()} className="card" style={{padding:16,maxWidth:920,maxHeight:"92vh",overflow:"auto"}}>
+        <div style={{fontSize:13.5,fontWeight:700,color:"var(--ink)",marginBottom:8}}>
+          🖼 {tr("그림으로 쓸 영역을 드래그로 선택하세요 (도형·그래프만 깔끔하게)","Drag to select the figure region")}
+        </div>
+        <canvas ref={cvRef} style={{maxWidth:"100%",cursor:"crosshair",touchAction:"none",borderRadius:8,border:"1px solid var(--line)"}}
+          onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);dragRef.current=pos(e);}}
+          onPointerMove={e=>{if(!dragRef.current)return;const r=norm(dragRef.current,pos(e));setSel(r);draw(r);}}
+          onPointerUp={()=>{dragRef.current=null;}}/>
+        <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
+          <button className="btn pri" disabled={!(sel&&sel.w>6&&sel.h>6)}
+            onClick={()=>onDone(_cropToDataURL(imgRef.current,sel,scRef.current))}>✂️ {tr("선택 영역 잘라서 첨부","Crop & attach")}</button>
+          <button className="btn gho" onClick={()=>onDone(_cropToDataURL(imgRef.current,null,1))}>{tr("전체 이미지 사용","Use whole image")}</button>
+          <button className="btn gho" onClick={onCancel} style={{marginLeft:"auto"}}>{tr("취소","Cancel")}</button>
+        </div>
+      </div>
+    </div>);
+}
+
 /* ── 문제 1건 편집 카드 (검수·수정 공용) ── */
 function ItemEditor({item,units,onChange,onRemove}){
   const set=(f,v)=>onChange({...item,[f]:v});
   const setSrc=(f,v)=>onChange({...item,src:{...(item.src||{}),[f]:v}});
   const [preview,setPreview]=useState(true);
+  const [cropSrc,setCropSrc]=useState(null);   // 그림 첨부용 원본 이미지 (크롭 대기)
+  function pickFigure(file){
+    const rd=new FileReader();
+    rd.onload=()=>setCropSrc(rd.result);
+    rd.readAsDataURL(file);
+  }
   return(
     <div className="card" style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:10,
       borderLeft:"4px solid "+(item.verified?"#16A34A":"#F59E0B")}}>
@@ -47,10 +116,25 @@ function ItemEditor({item,units,onChange,onRemove}){
           <input type="checkbox" checked={!!item.hasFigure} onChange={e=>set("hasFigure",e.target.checked)}/>{tr("그림 필수","Figure")}
         </label>
         <span style={{marginLeft:"auto",display:"inline-flex",gap:6}}>
+          <label className="btn gho xs" style={{cursor:"pointer"}} title={tr("시험지 사진에서 도형·그래프 영역을 잘라 첨부","Attach & crop a figure")}>
+            📷 {item.figure?tr("그림 교체","Replace"):tr("그림 첨부","Figure")}
+            <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{if(e.target.files[0])pickFigure(e.target.files[0]);e.target.value="";}}/>
+          </label>
           <button className="btn gho xs" onClick={()=>setPreview(v=>!v)}>{preview?tr("✏️ 편집","✏️ Edit"):tr("👁 미리보기","👁 Preview")}</button>
           <button className="btn gho xs" onClick={onRemove} style={{color:"#B91C1C"}}>{tr("삭제","Delete")}</button>
         </span>
       </div>
+      {cropSrc&&<FigureCropper src={cropSrc} onCancel={()=>setCropSrc(null)}
+        onDone={(dataUrl)=>{onChange({...item,figure:dataUrl,hasFigure:true});setCropSrc(null);}}/>}
+      {item.figure?(
+        <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+          <img src={item.figure} alt="" style={{maxWidth:280,maxHeight:200,border:"1px solid var(--line)",borderRadius:8,background:"#fff"}}/>
+          <button className="btn gho xs" onClick={()=>set("figure",null)} style={{color:"#B91C1C"}}>✕ {tr("그림 제거","Remove figure")}</button>
+        </div>
+      ):(item.hasFigure&&
+        <div style={{padding:"8px 12px",background:"#FEF2F2",borderRadius:9,fontSize:12.5,color:"#991B1B"}}>
+          ⚠️ {tr("그림 필수 문항인데 그림이 없어요 — 첨부 전까지는 출제 후보에서 제외됩니다.","Figure required but missing — excluded from exams until attached.")}
+        </div>)}
       {preview?(
         <div style={{fontSize:14,lineHeight:1.75}}>
           <MathText text={item.question||""} tag="div"/>
@@ -391,6 +475,8 @@ function ExamBank({onExit}){
                 <span className="chip" style={{background:it.corpus==="기출"?"#FFF7E0":"#FEF2F2",color:it.corpus==="기출"?"#946200":"#991B1B"}}>{it.corpus==="기출"?"📜":"📗"} {it.corpus}</span>
                 {it.unit&&<span className="chip gho">{it.unit}</span>}
                 <span className="chip gho">{qtypeLabel(it.qtype)}</span>
+                {it.figure&&<span className="chip" style={{background:"#EFF6FF",color:"#1E40AF"}}>🖼 {tr("그림","Fig")}</span>}
+                {it.hasFigure&&!it.figure&&<span className="chip" style={{background:"#FEF2F2",color:"#991B1B",fontWeight:800}}>⚠️ {tr("그림 필요 — 출제 제외","Needs figure")}</span>}
                 {[it.src?.year,it.src?.school,it.src?.exam].filter(Boolean).length>0&&
                   <span style={{color:"var(--sub)",alignSelf:"center"}}>{[it.src?.year,it.src?.school,it.src?.exam].filter(Boolean).join(" ")}{it.src?.number?" · "+it.src.number+tr("번",""):""}</span>}
               </div>
