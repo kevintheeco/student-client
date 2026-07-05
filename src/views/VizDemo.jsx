@@ -69,7 +69,7 @@ const DEMOS=[
 function VizDemo(){
   const geoHash=()=>/geodemo/i.test(location.hash);
   const [tab,setTab]=useState(geoHash()?"geo":"tri");
-  const [theme,setTheme]=useState("dark");
+  const [theme,setTheme]=useState("light");   // 기본 = 앱 브랜드 라이트 (대표 결정)
   const [runId,setRunId]=useState(0);          // key 갈아끼워 처음부터 재생
   useEffect(()=>{
     const f=()=>{ if(geoHash())setTab("geo"); };

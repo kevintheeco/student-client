@@ -332,7 +332,7 @@ function renderHtmlItem(it, idx, cur, reduced, compiled){
 /* ── 메인 컴포넌트 ──
    script: §2-1 장면 스크립트 JSON / theme: "dark"|"light" / controls: 스텝 제어 UI
    autoplay: 마운트 시 자동 재생 / staticOnly: 최종 상태만(검수 미리보기용) */
-function MathViz({script, theme="dark", controls=true, autoplay=true, staticOnly=false, className}){
+function MathViz({script, theme="light", controls=true, autoplay=true, staticOnly=false, className}){
   const reduced=usePrefersReducedMotion()||staticOnly;
   const compiled=useMemo(()=>{
     try{return compileScript(script||{},theme);}

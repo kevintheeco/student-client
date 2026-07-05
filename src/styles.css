@@ -269,8 +269,8 @@ a{color:var(--pri-d)}
 .geo-steps{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 .geo-step{font-size:12.5px;padding:5px 12px;border-radius:999px;
   border:1px solid var(--line);color:var(--sub);transition:all .3s}
-.geo-step.on{border-color:#0E7A93;color:#0E7A93}
-.geo-step.done{border-color:#2E7D32;color:#2E7D32}
+.geo-step.on{border-color:#5A48E0;color:#5A48E0}
+.geo-step.done{border-color:#147A5C;color:#147A5C}
 .geo-result{border:1px solid var(--line);border-radius:14px;padding:14px 16px;
   background:var(--card);font-size:13.5px;line-height:1.7;display:flex;flex-direction:column;gap:6px}
 .geo-tag{display:inline-block;font-size:12px;padding:3px 10px;border-radius:999px;
