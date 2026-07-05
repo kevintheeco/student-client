@@ -1,0 +1,1864 @@
+{
+ "nodes": [
+  {
+   "id": "g0",
+   "type": "group",
+   "x": -34,
+   "y": -575,
+   "width": 368,
+   "height": 1106,
+   "label": "중1 수학"
+  },
+  {
+   "id": "u0_0",
+   "type": "file",
+   "file": "단원/소인수분해.md",
+   "x": 0,
+   "y": -497,
+   "width": 300,
+   "height": 76,
+   "color": "3"
+  },
+  {
+   "id": "u0_1",
+   "type": "file",
+   "file": "단원/정수와 유리수.md",
+   "x": 0,
+   "y": -395,
+   "width": 300,
+   "height": 76,
+   "color": "3"
+  },
+  {
+   "id": "u0_2",
+   "type": "file",
+   "file": "단원/문자의 사용과 식의 계산.md",
+   "x": 0,
+   "y": -293,
+   "width": 300,
+   "height": 76,
+   "color": "6"
+  },
+  {
+   "id": "u0_3",
+   "type": "file",
+   "file": "단원/일차방정식.md",
+   "x": 0,
+   "y": -191,
+   "width": 300,
+   "height": 76,
+   "color": "6"
+  },
+  {
+   "id": "u0_4",
+   "type": "file",
+   "file": "단원/좌표평면과 그래프(정비례·반비례).md",
+   "x": 0,
+   "y": -89,
+   "width": 300,
+   "height": 76,
+   "color": "5"
+  },
+  {
+   "id": "u0_5",
+   "type": "file",
+   "file": "단원/기본 도형.md",
+   "x": 0,
+   "y": 13,
+   "width": 300,
+   "height": 76,
+   "color": "4"
+  },
+  {
+   "id": "u0_6",
+   "type": "file",
+   "file": "단원/작도와 합동.md",
+   "x": 0,
+   "y": 115,
+   "width": 300,
+   "height": 76,
+   "color": "4"
+  },
+  {
+   "id": "u0_7",
+   "type": "file",
+   "file": "단원/평면도형의 성질.md",
+   "x": 0,
+   "y": 217,
+   "width": 300,
+   "height": 76,
+   "color": "4"
+  },
+  {
+   "id": "u0_8",
+   "type": "file",
+   "file": "단원/입체도형의 성질.md",
+   "x": 0,
+   "y": 319,
+   "width": 300,
+   "height": 76,
+   "color": "4"
+  },
+  {
+   "id": "u0_9",
+   "type": "file",
+   "file": "단원/자료의 정리와 해석.md",
+   "x": 0,
+   "y": 421,
+   "width": 300,
+   "height": 76,
+   "color": "2"
+  },
+  {
+   "id": "g1",
+   "type": "group",
+   "x": 484,
+   "y": -626,
+   "width": 368,
+   "height": 1208,
+   "label": "중2 수학"
+  },
+  {
+   "id": "u1_0",
+   "type": "file",
+   "file": "단원/유리수와 순환소수.md",
+   "x": 518,
+   "y": -548,
+   "width": 300,
+   "height": 76,
+   "color": "3"
+  },
+  {
+   "id": "u1_1",
+   "type": "file",
+   "file": "단원/단항식과 다항식의 계산.md",
+   "x": 518,
+   "y": -446,
+   "width": 300,
+   "height": 76,
+   "color": "6"
+  },
+  {
+   "id": "u1_2",
+   "type": "file",
+   "file": "단원/일차부등식.md",
+   "x": 518,
+   "y": -344,
+   "width": 300,
+   "height": 76,
+   "color": "6"
+  },
+  {
+   "id": "u1_3",
+   "type": "file",
+   "file": "단원/연립일차방정식.md",
+   "x": 518,
+   "y": -242,
+   "width": 300,
+   "height": 76,
+   "color": "6"
+  },
+  {
+   "id": "u1_4",
+   "type": "file",
+   "file": "단원/일차함수와 그래프.md",
+   "x": 518,
+   "y": -140,
+   "width": 300,
+   "height": 76,
+   "color": "5"
+  },
+  {
+   "id": "u1_5",
+   "type": "file",
+   "file": "단원/일차함수와 일차방정식.md",
+   "x": 518,
+   "y": -38,
+   "width": 300,
+   "height": 76,
+   "color": "5"
+  },
+  {
+   "id": "u1_6",
+   "type": "file",
+   "file": "단원/삼각형의 성질.md",
+   "x": 518,
+   "y": 64,
+   "width": 300,
+   "height": 76,
+   "color": "4"
+  },
+  {
+   "id": "u1_7",
+   "type": "file",
+   "file": "단원/사각형의 성질.md",
+   "x": 518,
+   "y": 166,
+   "width": 300,
+   "height": 76,
+   "color": "4"
+  },
+  {
+   "id": "u1_8",
+   "type": "file",
+   "file": "단원/도형의 닮음.md",
+   "x": 518,
+   "y": 268,
+   "width": 300,
+   "height": 76,
+   "color": "4"
+  },
+  {
+   "id": "u1_9",
+   "type": "file",
+   "file": "단원/피타고라스 정리.md",
+   "x": 518,
+   "y": 370,
+   "width": 300,
+   "height": 76,
+   "color": "4"
+  },
+  {
+   "id": "u1_10",
+   "type": "file",
+   "file": "단원/경우의 수와 확률.md",
+   "x": 518,
+   "y": 472,
+   "width": 300,
+   "height": 76,
+   "color": "2"
+  },
+  {
+   "id": "g2",
+   "type": "group",
+   "x": 1002,
+   "y": -422,
+   "width": 368,
+   "height": 800,
+   "label": "중3 수학"
+  },
+  {
+   "id": "u2_0",
+   "type": "file",
+   "file": "단원/제곱근과 실수.md",
+   "x": 1036,
+   "y": -344,
+   "width": 300,
+   "height": 76,
+   "color": "3"
+  },
+  {
+   "id": "u2_1",
+   "type": "file",
+   "file": "단원/다항식의 곱셈과 인수분해.md",
+   "x": 1036,
+   "y": -242,
+   "width": 300,
+   "height": 76,
+   "color": "6"
+  },
+  {
+   "id": "u2_2",
+   "type": "file",
+   "file": "단원/이차방정식.md",
+   "x": 1036,
+   "y": -140,
+   "width": 300,
+   "height": 76,
+   "color": "6"
+  },
+  {
+   "id": "u2_3",
+   "type": "file",
+   "file": "단원/이차함수.md",
+   "x": 1036,
+   "y": -38,
+   "width": 300,
+   "height": 76,
+   "color": "5"
+  },
+  {
+   "id": "u2_4",
+   "type": "file",
+   "file": "단원/삼각비.md",
+   "x": 1036,
+   "y": 64,
+   "width": 300,
+   "height": 76,
+   "color": "4"
+  },
+  {
+   "id": "u2_5",
+   "type": "file",
+   "file": "단원/원의 성질.md",
+   "x": 1036,
+   "y": 166,
+   "width": 300,
+   "height": 76,
+   "color": "4"
+  },
+  {
+   "id": "u2_6",
+   "type": "file",
+   "file": "단원/대푯값과 산포도.md",
+   "x": 1036,
+   "y": 268,
+   "width": 300,
+   "height": 76,
+   "color": "2"
+  },
+  {
+   "id": "g3",
+   "type": "group",
+   "x": 1520,
+   "y": -473,
+   "width": 368,
+   "height": 902,
+   "label": "공통수학1"
+  },
+  {
+   "id": "u3_0",
+   "type": "file",
+   "file": "단원/다항식의 연산.md",
+   "x": 1554,
+   "y": -395,
+   "width": 300,
+   "height": 76,
+   "color": "6"
+  },
+  {
+   "id": "u3_1",
+   "type": "file",
+   "file": "단원/나머지정리와 인수분해.md",
+   "x": 1554,
+   "y": -293,
+   "width": 300,
+   "height": 76,
+   "color": "6"
+  },
+  {
+   "id": "u3_2",
+   "type": "file",
+   "file": "단원/복소수와 이차방정식.md",
+   "x": 1554,
+   "y": -191,
+   "width": 300,
+   "height": 76,
+   "color": "6"
+  },
+  {
+   "id": "u3_3",
+   "type": "file",
+   "file": "단원/이차방정식과 이차함수.md",
+   "x": 1554,
+   "y": -89,
+   "width": 300,
+   "height": 76,
+   "color": "5"
+  },
+  {
+   "id": "u3_4",
+   "type": "file",
+   "file": "단원/여러 가지 방정식.md",
+   "x": 1554,
+   "y": 13,
+   "width": 300,
+   "height": 76,
+   "color": "6"
+  },
+  {
+   "id": "u3_5",
+   "type": "file",
+   "file": "단원/여러 가지 부등식.md",
+   "x": 1554,
+   "y": 115,
+   "width": 300,
+   "height": 76,
+   "color": "6"
+  },
+  {
+   "id": "u3_6",
+   "type": "file",
+   "file": "단원/순열과 조합.md",
+   "x": 1554,
+   "y": 217,
+   "width": 300,
+   "height": 76,
+   "color": "2"
+  },
+  {
+   "id": "u3_7",
+   "type": "file",
+   "file": "단원/행렬과 그 연산.md",
+   "x": 1554,
+   "y": 319,
+   "width": 300,
+   "height": 76,
+   "color": "6"
+  },
+  {
+   "id": "g4",
+   "type": "group",
+   "x": 2038,
+   "y": -422,
+   "width": 368,
+   "height": 800,
+   "label": "공통수학2"
+  },
+  {
+   "id": "u4_0",
+   "type": "file",
+   "file": "단원/평면좌표와 직선의 방정식.md",
+   "x": 2072,
+   "y": -344,
+   "width": 300,
+   "height": 76,
+   "color": "4"
+  },
+  {
+   "id": "u4_1",
+   "type": "file",
+   "file": "단원/원의 방정식.md",
+   "x": 2072,
+   "y": -242,
+   "width": 300,
+   "height": 76,
+   "color": "4"
+  },
+  {
+   "id": "u4_2",
+   "type": "file",
+   "file": "단원/도형의 이동.md",
+   "x": 2072,
+   "y": -140,
+   "width": 300,
+   "height": 76,
+   "color": "4"
+  },
+  {
+   "id": "u4_3",
+   "type": "file",
+   "file": "단원/집합.md",
+   "x": 2072,
+   "y": -38,
+   "width": 300,
+   "height": 76,
+   "color": "6"
+  },
+  {
+   "id": "u4_4",
+   "type": "file",
+   "file": "단원/명제.md",
+   "x": 2072,
+   "y": 64,
+   "width": 300,
+   "height": 76,
+   "color": "6"
+  },
+  {
+   "id": "u4_5",
+   "type": "file",
+   "file": "단원/함수.md",
+   "x": 2072,
+   "y": 166,
+   "width": 300,
+   "height": 76,
+   "color": "5"
+  },
+  {
+   "id": "u4_6",
+   "type": "file",
+   "file": "단원/유리함수와 무리함수.md",
+   "x": 2072,
+   "y": 268,
+   "width": 300,
+   "height": 76,
+   "color": "5"
+  },
+  {
+   "id": "g5",
+   "type": "group",
+   "x": 2556,
+   "y": -422,
+   "width": 368,
+   "height": 800,
+   "label": "대수"
+  },
+  {
+   "id": "u5_0",
+   "type": "file",
+   "file": "단원/지수와 로그.md",
+   "x": 2590,
+   "y": -344,
+   "width": 300,
+   "height": 76,
+   "color": "6"
+  },
+  {
+   "id": "u5_1",
+   "type": "file",
+   "file": "단원/지수함수와 로그함수.md",
+   "x": 2590,
+   "y": -242,
+   "width": 300,
+   "height": 76,
+   "color": "5"
+  },
+  {
+   "id": "u5_2",
+   "type": "file",
+   "file": "단원/삼각함수.md",
+   "x": 2590,
+   "y": -140,
+   "width": 300,
+   "height": 76,
+   "color": "5"
+  },
+  {
+   "id": "u5_3",
+   "type": "file",
+   "file": "단원/사인법칙과 코사인법칙.md",
+   "x": 2590,
+   "y": -38,
+   "width": 300,
+   "height": 76,
+   "color": "4"
+  },
+  {
+   "id": "u5_4",
+   "type": "file",
+   "file": "단원/등차수열과 등비수열.md",
+   "x": 2590,
+   "y": 64,
+   "width": 300,
+   "height": 76,
+   "color": "6"
+  },
+  {
+   "id": "u5_5",
+   "type": "file",
+   "file": "단원/수열의 합.md",
+   "x": 2590,
+   "y": 166,
+   "width": 300,
+   "height": 76,
+   "color": "6"
+  },
+  {
+   "id": "u5_6",
+   "type": "file",
+   "file": "단원/수학적 귀납법.md",
+   "x": 2590,
+   "y": 268,
+   "width": 300,
+   "height": 76,
+   "color": "6"
+  },
+  {
+   "id": "g6",
+   "type": "group",
+   "x": 3074,
+   "y": -422,
+   "width": 368,
+   "height": 800,
+   "label": "미적분Ⅰ"
+  },
+  {
+   "id": "u6_0",
+   "type": "file",
+   "file": "단원/함수의 극한.md",
+   "x": 3108,
+   "y": -344,
+   "width": 300,
+   "height": 76,
+   "color": "1"
+  },
+  {
+   "id": "u6_1",
+   "type": "file",
+   "file": "단원/함수의 연속.md",
+   "x": 3108,
+   "y": -242,
+   "width": 300,
+   "height": 76,
+   "color": "1"
+  },
+  {
+   "id": "u6_2",
+   "type": "file",
+   "file": "단원/미분계수와 도함수.md",
+   "x": 3108,
+   "y": -140,
+   "width": 300,
+   "height": 76,
+   "color": "1"
+  },
+  {
+   "id": "u6_3",
+   "type": "file",
+   "file": "단원/도함수의 활용.md",
+   "x": 3108,
+   "y": -38,
+   "width": 300,
+   "height": 76,
+   "color": "1"
+  },
+  {
+   "id": "u6_4",
+   "type": "file",
+   "file": "단원/부정적분.md",
+   "x": 3108,
+   "y": 64,
+   "width": 300,
+   "height": 76,
+   "color": "1"
+  },
+  {
+   "id": "u6_5",
+   "type": "file",
+   "file": "단원/정적분.md",
+   "x": 3108,
+   "y": 166,
+   "width": 300,
+   "height": 76,
+   "color": "1"
+  },
+  {
+   "id": "u6_6",
+   "type": "file",
+   "file": "단원/정적분의 활용.md",
+   "x": 3108,
+   "y": 268,
+   "width": 300,
+   "height": 76,
+   "color": "1"
+  },
+  {
+   "id": "g7",
+   "type": "group",
+   "x": 3592,
+   "y": -422,
+   "width": 368,
+   "height": 800,
+   "label": "확률과 통계"
+  },
+  {
+   "id": "u7_0",
+   "type": "file",
+   "file": "단원/여러 가지 순열.md",
+   "x": 3626,
+   "y": -344,
+   "width": 300,
+   "height": 76,
+   "color": "2"
+  },
+  {
+   "id": "u7_1",
+   "type": "file",
+   "file": "단원/중복조합과 이항정리.md",
+   "x": 3626,
+   "y": -242,
+   "width": 300,
+   "height": 76,
+   "color": "2"
+  },
+  {
+   "id": "u7_2",
+   "type": "file",
+   "file": "단원/확률의 뜻과 활용.md",
+   "x": 3626,
+   "y": -140,
+   "width": 300,
+   "height": 76,
+   "color": "2"
+  },
+  {
+   "id": "u7_3",
+   "type": "file",
+   "file": "단원/조건부확률.md",
+   "x": 3626,
+   "y": -38,
+   "width": 300,
+   "height": 76,
+   "color": "2"
+  },
+  {
+   "id": "u7_4",
+   "type": "file",
+   "file": "단원/이산확률변수의 확률분포.md",
+   "x": 3626,
+   "y": 64,
+   "width": 300,
+   "height": 76,
+   "color": "2"
+  },
+  {
+   "id": "u7_5",
+   "type": "file",
+   "file": "단원/연속확률변수와 정규분포.md",
+   "x": 3626,
+   "y": 166,
+   "width": 300,
+   "height": 76,
+   "color": "2"
+  },
+  {
+   "id": "u7_6",
+   "type": "file",
+   "file": "단원/통계적 추정.md",
+   "x": 3626,
+   "y": 268,
+   "width": 300,
+   "height": 76,
+   "color": "2"
+  },
+  {
+   "id": "g8",
+   "type": "group",
+   "x": 4110,
+   "y": -422,
+   "width": 368,
+   "height": 800,
+   "label": "미적분Ⅱ"
+  },
+  {
+   "id": "u8_0",
+   "type": "file",
+   "file": "단원/수열의 극한.md",
+   "x": 4144,
+   "y": -344,
+   "width": 300,
+   "height": 76,
+   "color": "1"
+  },
+  {
+   "id": "u8_1",
+   "type": "file",
+   "file": "단원/급수.md",
+   "x": 4144,
+   "y": -242,
+   "width": 300,
+   "height": 76,
+   "color": "1"
+  },
+  {
+   "id": "u8_2",
+   "type": "file",
+   "file": "단원/여러 가지 함수의 미분.md",
+   "x": 4144,
+   "y": -140,
+   "width": 300,
+   "height": 76,
+   "color": "1"
+  },
+  {
+   "id": "u8_3",
+   "type": "file",
+   "file": "단원/여러 가지 미분법.md",
+   "x": 4144,
+   "y": -38,
+   "width": 300,
+   "height": 76,
+   "color": "1"
+  },
+  {
+   "id": "u8_4",
+   "type": "file",
+   "file": "단원/도함수의 활용(미적분).md",
+   "x": 4144,
+   "y": 64,
+   "width": 300,
+   "height": 76,
+   "color": "1"
+  },
+  {
+   "id": "u8_5",
+   "type": "file",
+   "file": "단원/여러 가지 적분법.md",
+   "x": 4144,
+   "y": 166,
+   "width": 300,
+   "height": 76,
+   "color": "1"
+  },
+  {
+   "id": "u8_6",
+   "type": "file",
+   "file": "단원/정적분의 활용(미적분).md",
+   "x": 4144,
+   "y": 268,
+   "width": 300,
+   "height": 76,
+   "color": "1"
+  },
+  {
+   "id": "g9",
+   "type": "group",
+   "x": 4628,
+   "y": -320,
+   "width": 368,
+   "height": 596,
+   "label": "기하"
+  },
+  {
+   "id": "u9_0",
+   "type": "file",
+   "file": "단원/이차곡선.md",
+   "x": 4662,
+   "y": -242,
+   "width": 300,
+   "height": 76,
+   "color": "4"
+  },
+  {
+   "id": "u9_1",
+   "type": "file",
+   "file": "단원/평면벡터.md",
+   "x": 4662,
+   "y": -140,
+   "width": 300,
+   "height": 76,
+   "color": "4"
+  },
+  {
+   "id": "u9_2",
+   "type": "file",
+   "file": "단원/공간도형.md",
+   "x": 4662,
+   "y": -38,
+   "width": 300,
+   "height": 76,
+   "color": "4"
+  },
+  {
+   "id": "u9_3",
+   "type": "file",
+   "file": "단원/공간좌표.md",
+   "x": 4662,
+   "y": 64,
+   "width": 300,
+   "height": 76,
+   "color": "4"
+  },
+  {
+   "id": "u9_4",
+   "type": "file",
+   "file": "단원/공간벡터(2022).md",
+   "x": 4662,
+   "y": 166,
+   "width": 300,
+   "height": 76,
+   "color": "4"
+  }
+ ],
+ "edges": [
+  {
+   "id": "e0",
+   "fromNode": "u0_1",
+   "fromSide": "bottom",
+   "toNode": "u0_2",
+   "toSide": "top",
+   "color": "0"
+  },
+  {
+   "id": "e1",
+   "fromNode": "u0_1",
+   "fromSide": "bottom",
+   "toNode": "u0_3",
+   "toSide": "top",
+   "color": "0"
+  },
+  {
+   "id": "e2",
+   "fromNode": "u0_2",
+   "fromSide": "bottom",
+   "toNode": "u0_3",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e3",
+   "fromNode": "u0_0",
+   "fromSide": "right",
+   "toNode": "u1_0",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e4",
+   "fromNode": "u0_0",
+   "fromSide": "right",
+   "toNode": "u2_0",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e5",
+   "fromNode": "u0_2",
+   "fromSide": "right",
+   "toNode": "u1_1",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e6",
+   "fromNode": "u0_3",
+   "fromSide": "right",
+   "toNode": "u1_2",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e7",
+   "fromNode": "u0_3",
+   "fromSide": "right",
+   "toNode": "u1_3",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e8",
+   "fromNode": "u1_1",
+   "fromSide": "right",
+   "toNode": "u2_1",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e9",
+   "fromNode": "u2_1",
+   "fromSide": "bottom",
+   "toNode": "u2_2",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e10",
+   "fromNode": "u2_0",
+   "fromSide": "bottom",
+   "toNode": "u2_2",
+   "toSide": "top",
+   "color": "0"
+  },
+  {
+   "id": "e11",
+   "fromNode": "u2_2",
+   "fromSide": "right",
+   "toNode": "u3_2",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e12",
+   "fromNode": "u2_0",
+   "fromSide": "right",
+   "toNode": "u3_2",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e13",
+   "fromNode": "u1_1",
+   "fromSide": "right",
+   "toNode": "u3_0",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e14",
+   "fromNode": "u2_1",
+   "fromSide": "right",
+   "toNode": "u3_1",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e15",
+   "fromNode": "u3_0",
+   "fromSide": "bottom",
+   "toNode": "u3_1",
+   "toSide": "top",
+   "color": "0"
+  },
+  {
+   "id": "e16",
+   "fromNode": "u3_1",
+   "fromSide": "bottom",
+   "toNode": "u3_4",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e17",
+   "fromNode": "u3_2",
+   "fromSide": "bottom",
+   "toNode": "u3_4",
+   "toSide": "top",
+   "color": "0"
+  },
+  {
+   "id": "e18",
+   "fromNode": "u1_2",
+   "fromSide": "right",
+   "toNode": "u3_5",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e19",
+   "fromNode": "u3_3",
+   "fromSide": "bottom",
+   "toNode": "u3_5",
+   "toSide": "top",
+   "color": "0"
+  },
+  {
+   "id": "e20",
+   "fromNode": "u1_3",
+   "fromSide": "right",
+   "toNode": "u3_7",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e21",
+   "fromNode": "u0_4",
+   "fromSide": "right",
+   "toNode": "u1_4",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e22",
+   "fromNode": "u1_4",
+   "fromSide": "bottom",
+   "toNode": "u1_5",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e23",
+   "fromNode": "u1_3",
+   "fromSide": "bottom",
+   "toNode": "u1_5",
+   "toSide": "top",
+   "color": "0"
+  },
+  {
+   "id": "e24",
+   "fromNode": "u2_2",
+   "fromSide": "bottom",
+   "toNode": "u2_3",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e25",
+   "fromNode": "u1_4",
+   "fromSide": "right",
+   "toNode": "u2_3",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e26",
+   "fromNode": "u2_3",
+   "fromSide": "right",
+   "toNode": "u3_3",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e27",
+   "fromNode": "u3_2",
+   "fromSide": "bottom",
+   "toNode": "u3_3",
+   "toSide": "top",
+   "color": "0"
+  },
+  {
+   "id": "e28",
+   "fromNode": "u2_3",
+   "fromSide": "right",
+   "toNode": "u4_5",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e29",
+   "fromNode": "u4_3",
+   "fromSide": "bottom",
+   "toNode": "u4_5",
+   "toSide": "top",
+   "color": "0"
+  },
+  {
+   "id": "e30",
+   "fromNode": "u4_5",
+   "fromSide": "bottom",
+   "toNode": "u4_6",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e31",
+   "fromNode": "u4_5",
+   "fromSide": "right",
+   "toNode": "u5_1",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e32",
+   "fromNode": "u5_0",
+   "fromSide": "bottom",
+   "toNode": "u5_1",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e33",
+   "fromNode": "u2_0",
+   "fromSide": "right",
+   "toNode": "u5_0",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e34",
+   "fromNode": "u1_1",
+   "fromSide": "right",
+   "toNode": "u5_0",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e35",
+   "fromNode": "u2_4",
+   "fromSide": "right",
+   "toNode": "u5_2",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e36",
+   "fromNode": "u4_5",
+   "fromSide": "right",
+   "toNode": "u5_2",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e37",
+   "fromNode": "u0_5",
+   "fromSide": "bottom",
+   "toNode": "u0_6",
+   "toSide": "top",
+   "color": "0"
+  },
+  {
+   "id": "e38",
+   "fromNode": "u0_5",
+   "fromSide": "bottom",
+   "toNode": "u0_7",
+   "toSide": "top",
+   "color": "0"
+  },
+  {
+   "id": "e39",
+   "fromNode": "u0_6",
+   "fromSide": "right",
+   "toNode": "u1_6",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e40",
+   "fromNode": "u1_6",
+   "fromSide": "bottom",
+   "toNode": "u1_7",
+   "toSide": "top",
+   "color": "0"
+  },
+  {
+   "id": "e41",
+   "fromNode": "u1_6",
+   "fromSide": "bottom",
+   "toNode": "u1_8",
+   "toSide": "top",
+   "color": "0"
+  },
+  {
+   "id": "e42",
+   "fromNode": "u1_8",
+   "fromSide": "bottom",
+   "toNode": "u1_9",
+   "toSide": "top",
+   "color": "0"
+  },
+  {
+   "id": "e43",
+   "fromNode": "u1_8",
+   "fromSide": "right",
+   "toNode": "u2_4",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e44",
+   "fromNode": "u1_9",
+   "fromSide": "right",
+   "toNode": "u2_4",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e45",
+   "fromNode": "u1_8",
+   "fromSide": "right",
+   "toNode": "u2_5",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e46",
+   "fromNode": "u0_7",
+   "fromSide": "right",
+   "toNode": "u2_5",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e47",
+   "fromNode": "u1_9",
+   "fromSide": "right",
+   "toNode": "u4_0",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e48",
+   "fromNode": "u1_5",
+   "fromSide": "right",
+   "toNode": "u4_0",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e49",
+   "fromNode": "u4_0",
+   "fromSide": "bottom",
+   "toNode": "u4_1",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e50",
+   "fromNode": "u2_5",
+   "fromSide": "right",
+   "toNode": "u4_1",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e51",
+   "fromNode": "u4_0",
+   "fromSide": "bottom",
+   "toNode": "u4_2",
+   "toSide": "top",
+   "color": "0"
+  },
+  {
+   "id": "e52",
+   "fromNode": "u4_1",
+   "fromSide": "bottom",
+   "toNode": "u4_2",
+   "toSide": "top",
+   "color": "0"
+  },
+  {
+   "id": "e53",
+   "fromNode": "u2_4",
+   "fromSide": "right",
+   "toNode": "u5_3",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e54",
+   "fromNode": "u5_2",
+   "fromSide": "bottom",
+   "toNode": "u5_3",
+   "toSide": "top",
+   "color": "0"
+  },
+  {
+   "id": "e55",
+   "fromNode": "u0_2",
+   "fromSide": "right",
+   "toNode": "u5_4",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e56",
+   "fromNode": "u5_4",
+   "fromSide": "bottom",
+   "toNode": "u5_5",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e57",
+   "fromNode": "u5_5",
+   "fromSide": "bottom",
+   "toNode": "u5_6",
+   "toSide": "top",
+   "color": "0"
+  },
+  {
+   "id": "e58",
+   "fromNode": "u4_4",
+   "fromSide": "right",
+   "toNode": "u5_6",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e59",
+   "fromNode": "u4_5",
+   "fromSide": "right",
+   "toNode": "u6_0",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e60",
+   "fromNode": "u4_6",
+   "fromSide": "right",
+   "toNode": "u6_0",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e61",
+   "fromNode": "u6_0",
+   "fromSide": "bottom",
+   "toNode": "u6_1",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e62",
+   "fromNode": "u6_0",
+   "fromSide": "bottom",
+   "toNode": "u6_2",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e63",
+   "fromNode": "u1_4",
+   "fromSide": "right",
+   "toNode": "u6_2",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e64",
+   "fromNode": "u6_2",
+   "fromSide": "bottom",
+   "toNode": "u6_3",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e65",
+   "fromNode": "u3_3",
+   "fromSide": "right",
+   "toNode": "u6_3",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e66",
+   "fromNode": "u3_5",
+   "fromSide": "right",
+   "toNode": "u6_3",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e67",
+   "fromNode": "u6_2",
+   "fromSide": "bottom",
+   "toNode": "u6_4",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e68",
+   "fromNode": "u6_4",
+   "fromSide": "bottom",
+   "toNode": "u6_5",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e69",
+   "fromNode": "u6_5",
+   "fromSide": "bottom",
+   "toNode": "u6_6",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e70",
+   "fromNode": "u2_3",
+   "fromSide": "right",
+   "toNode": "u6_6",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e71",
+   "fromNode": "u5_4",
+   "fromSide": "right",
+   "toNode": "u8_0",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e72",
+   "fromNode": "u6_0",
+   "fromSide": "right",
+   "toNode": "u8_0",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e73",
+   "fromNode": "u8_0",
+   "fromSide": "bottom",
+   "toNode": "u8_1",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e74",
+   "fromNode": "u5_5",
+   "fromSide": "right",
+   "toNode": "u8_1",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e75",
+   "fromNode": "u4_5",
+   "fromSide": "right",
+   "toNode": "u8_3",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e76",
+   "fromNode": "u8_3",
+   "fromSide": "left",
+   "toNode": "u6_3",
+   "toSide": "right",
+   "color": "1"
+  },
+  {
+   "id": "e77",
+   "fromNode": "u6_3",
+   "fromSide": "top",
+   "toNode": "u6_3",
+   "toSide": "bottom",
+   "color": "0"
+  },
+  {
+   "id": "e78",
+   "fromNode": "u8_3",
+   "fromSide": "bottom",
+   "toNode": "u8_5",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e79",
+   "fromNode": "u6_5",
+   "fromSide": "right",
+   "toNode": "u8_5",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e80",
+   "fromNode": "u8_5",
+   "fromSide": "left",
+   "toNode": "u6_6",
+   "toSide": "right",
+   "color": "1"
+  },
+  {
+   "id": "e81",
+   "fromNode": "u6_6",
+   "fromSide": "top",
+   "toNode": "u6_6",
+   "toSide": "bottom",
+   "color": "0"
+  },
+  {
+   "id": "e82",
+   "fromNode": "u0_9",
+   "fromSide": "right",
+   "toNode": "u2_6",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e83",
+   "fromNode": "u1_10",
+   "fromSide": "right",
+   "toNode": "u3_6",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e84",
+   "fromNode": "u3_6",
+   "fromSide": "top",
+   "toNode": "u3_6",
+   "toSide": "bottom",
+   "color": "1"
+  },
+  {
+   "id": "e85",
+   "fromNode": "u3_6",
+   "fromSide": "right",
+   "toNode": "u7_2",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e86",
+   "fromNode": "u1_10",
+   "fromSide": "right",
+   "toNode": "u7_2",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e87",
+   "fromNode": "u7_2",
+   "fromSide": "bottom",
+   "toNode": "u7_3",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e88",
+   "fromNode": "u3_6",
+   "fromSide": "right",
+   "toNode": "u7_0",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e89",
+   "fromNode": "u3_6",
+   "fromSide": "right",
+   "toNode": "u7_1",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e90",
+   "fromNode": "u3_0",
+   "fromSide": "right",
+   "toNode": "u7_1",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e91",
+   "fromNode": "u1_10",
+   "fromSide": "right",
+   "toNode": "u7_2",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e92",
+   "fromNode": "u3_6",
+   "fromSide": "right",
+   "toNode": "u7_2",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e93",
+   "fromNode": "u4_3",
+   "fromSide": "right",
+   "toNode": "u7_2",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e94",
+   "fromNode": "u7_2",
+   "fromSide": "bottom",
+   "toNode": "u7_3",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e95",
+   "fromNode": "u7_3",
+   "fromSide": "bottom",
+   "toNode": "u7_4",
+   "toSide": "top",
+   "color": "0"
+  },
+  {
+   "id": "e96",
+   "fromNode": "u2_6",
+   "fromSide": "right",
+   "toNode": "u7_4",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e97",
+   "fromNode": "u7_4",
+   "fromSide": "bottom",
+   "toNode": "u7_5",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e98",
+   "fromNode": "u7_5",
+   "fromSide": "bottom",
+   "toNode": "u7_6",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e99",
+   "fromNode": "u5_4",
+   "fromSide": "right",
+   "toNode": "u8_0",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e100",
+   "fromNode": "u6_0",
+   "fromSide": "right",
+   "toNode": "u8_0",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e101",
+   "fromNode": "u8_0",
+   "fromSide": "bottom",
+   "toNode": "u8_1",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e102",
+   "fromNode": "u5_5",
+   "fromSide": "right",
+   "toNode": "u8_1",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e103",
+   "fromNode": "u5_1",
+   "fromSide": "right",
+   "toNode": "u8_2",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e104",
+   "fromNode": "u5_2",
+   "fromSide": "right",
+   "toNode": "u8_2",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e105",
+   "fromNode": "u6_2",
+   "fromSide": "right",
+   "toNode": "u8_2",
+   "toSide": "left",
+   "color": "1"
+  },
+  {
+   "id": "e106",
+   "fromNode": "u8_2",
+   "fromSide": "bottom",
+   "toNode": "u8_3",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e107",
+   "fromNode": "u8_3",
+   "fromSide": "bottom",
+   "toNode": "u8_4",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e108",
+   "fromNode": "u6_3",
+   "fromSide": "right",
+   "toNode": "u8_4",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e109",
+   "fromNode": "u8_3",
+   "fromSide": "bottom",
+   "toNode": "u8_5",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e110",
+   "fromNode": "u6_5",
+   "fromSide": "right",
+   "toNode": "u8_5",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e111",
+   "fromNode": "u8_5",
+   "fromSide": "bottom",
+   "toNode": "u8_6",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e112",
+   "fromNode": "u6_6",
+   "fromSide": "right",
+   "toNode": "u8_6",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e113",
+   "fromNode": "u3_3",
+   "fromSide": "right",
+   "toNode": "u9_0",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e114",
+   "fromNode": "u4_1",
+   "fromSide": "right",
+   "toNode": "u9_0",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e115",
+   "fromNode": "u4_0",
+   "fromSide": "right",
+   "toNode": "u9_1",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e116",
+   "fromNode": "u5_3",
+   "fromSide": "right",
+   "toNode": "u9_1",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e117",
+   "fromNode": "u0_7",
+   "fromSide": "bottom",
+   "toNode": "u0_8",
+   "toSide": "top",
+   "color": "0"
+  },
+  {
+   "id": "e118",
+   "fromNode": "u0_8",
+   "fromSide": "right",
+   "toNode": "u9_2",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e119",
+   "fromNode": "u0_5",
+   "fromSide": "right",
+   "toNode": "u9_2",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e120",
+   "fromNode": "u1_9",
+   "fromSide": "right",
+   "toNode": "u9_2",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e121",
+   "fromNode": "u4_0",
+   "fromSide": "right",
+   "toNode": "u9_3",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e122",
+   "fromNode": "u9_2",
+   "fromSide": "bottom",
+   "toNode": "u9_3",
+   "toSide": "top",
+   "color": "0"
+  },
+  {
+   "id": "e123",
+   "fromNode": "u4_1",
+   "fromSide": "right",
+   "toNode": "u9_3",
+   "toSide": "left",
+   "color": "0"
+  },
+  {
+   "id": "e124",
+   "fromNode": "u9_1",
+   "fromSide": "bottom",
+   "toNode": "u9_4",
+   "toSide": "top",
+   "color": "1"
+  },
+  {
+   "id": "e125",
+   "fromNode": "u9_3",
+   "fromSide": "bottom",
+   "toNode": "u9_4",
+   "toSide": "top",
+   "color": "0"
+  }
+ ]
+}

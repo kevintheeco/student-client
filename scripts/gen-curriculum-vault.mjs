@@ -226,11 +226,12 @@ for (const s of subjectsAll) {
   }
   L.push("## 이 볼트 100% 활용법");
   L.push("");
-  L.push("> [!tip] 그래프 뷰가 본체다");
-  L.push("> 1. **그래프 뷰**(Ctrl+G)를 열고 Groups에 `tag:#영역/함수`, `tag:#영역/기하`, `tag:#영역/확률통계`, `tag:#영역/문자와식`, `tag:#영역/수와연산`, `tag:#영역/해석미적분` 색을 넣으면 영역별 커뮤니티가 보인다.");
-  L.push("> 2. **약점 역추적**: 학생이 막힌 단원 노트를 열고 ⬅ 선수 단원을 의존도 순으로 거슬러 올라간다 — 앱의 오답 근본원인 추적과 같은 경로.");
-  L.push("> 3. **로컬 그래프**(단원 노트에서 Ctrl+Shift+G): 그 단원의 앞뒤 생태계만 본다.");
-  L.push("> 4. 소단원 체크박스는 검수·진도 표시용.");
+  L.push("> [!tip] 지도가 본체다");
+  L.push("> 1. **[[🗺️ 전체 지도.canvas|🗺️ 전체 지도]]** 를 열어라 — 과목이 학습 순서대로 늘어서고 단원 카드 사이에 선수관계 화살표가 흐른다. **카드를 클릭하고 Ctrl+스크롤로 확대하면 그 단원의 소단원·선수관계 표가 카드 안에 그대로 펼쳐진다.** 빨간 화살표 = 의존도 80% 이상의 핵심 경로.");
+  L.push("> 2. **그래프 뷰**(Ctrl+G) Groups에 `tag:#영역/함수`, `tag:#영역/기하`, `tag:#영역/확률통계`, `tag:#영역/문자와식`, `tag:#영역/수와연산`, `tag:#영역/해석미적분` 색을 넣으면 영역별 커뮤니티가 보인다.");
+  L.push("> 3. **약점 역추적**: 학생이 막힌 단원 노트를 열고 ⬅ 선수 단원을 의존도 순으로 거슬러 올라간다 — 앱의 오답 근본원인 추적과 같은 경로.");
+  L.push("> 4. **로컬 그래프**(단원 노트에서 Ctrl+Shift+G): 그 단원의 앞뒤 생태계만 본다.");
+  L.push("> 5. 소단원 체크박스는 검수·진도 표시용.");
   L.push("");
   L.push(`전체 목록은 [[INDEX]] · 허브 단원 랭킹은 [[GRAPH_REPORT]] · 유지보수 규약은 [[SCHEMA]]`);
   write("🏠 HOME.md", L);
@@ -281,6 +282,7 @@ for (const s of subjectsAll) {
   L.push("# INDEX — 볼트의 모든 페이지");
   L.push("");
   L.push(`- [[🏠 HOME]] — 대시보드, 과정 지도, 활용법`);
+  L.push(`- [[🗺️ 전체 지도.canvas|🗺️ 전체 지도]] — 캔버스: 전 과정 단원 카드 + 선수관계 화살표, 클릭·확대 탐색`);
   L.push(`- [[GRAPH_REPORT]] — 허브 단원 랭킹, 영역 구성, lint 결과`);
   L.push(`- [[SCHEMA]] — 이 볼트의 규약과 유지보수 방법`);
   L.push(`- [[LOG]] — 생성·수정 기록`);
@@ -333,12 +335,42 @@ write("SCHEMA.md", [
     "# LOG (append-only)",
     "",
     "- 2026-07-05 v1 — 과목 단위 15노트 초판 생성 (curriculum.js 신설과 함께)",
-    `- ${TODAY} v2 — 지식그래프 통합 재설계: 단원 엔티티 노트 ${units.size}개, 선수관계 엣지 ${edges.length}개(앱 그래프 ${GRAPH_EDGES.length - (GRAPH_EDGES.length - edges.length + SUPPLEMENT.length)} + 보강 ${SUPPLEMENT.length}), HOME/INDEX/SCHEMA/GRAPH_REPORT 도입 (Karpathy LLM-wiki + Graphify 방식)`,
+    `- ${TODAY} v2 — 지식그래프 통합 재설계: 단원 엔티티 노트 ${units.size}개, 선수관계 엣지 ${edges.length}개(앱 그래프 ${edges.length - SUPPLEMENT.length} + 보강 ${SUPPLEMENT.length}), HOME/INDEX/SCHEMA/GRAPH_REPORT 도입 (Karpathy LLM-wiki + Graphify 방식)`,
+    `- ${TODAY} v3 — 🗺️ 전체 지도.canvas 추가: 과목 그룹 × 단원 카드 × 선수관계 화살표, 클릭·확대 탐색 (Graphify graph.canvas 방식)`,
   ]);
 }
 
-/* ── 12. lint: 깨진 링크·고아 검사 ── */
-const allNotes = new Set([...units.keys(), ...subjectsAll.map(s => s.name), "🏠 HOME", "INDEX", "SCHEMA", "LOG", "GRAPH_REPORT"]);
+/* ── 12. 🗺️ 전체 지도.canvas (Graphify graph.canvas 방식) ──
+   과목 = 그룹 상자(학습 순서대로 왼→오), 단원 = 파일 카드(노트가 카드 안에 렌더됨),
+   선수관계 = 화살표. 카드 클릭·확대(Ctrl+스크롤)하면 소단원·선수표가 그대로 보인다. */
+{
+  const STRAND_COLOR = { num: "3", alg: "6", fun: "5", geo: "4", sta: "2", cal: "1" }; // canvas 팔레트
+  const FLOW = subjectsAll.filter(s => s.levelId !== "high15"); // 고3(2015)은 대수·미적분Ⅰ과 동일 단원이라 지도에선 생략
+  const CARD_W = 300, CARD_H = 76, GAP_Y = 26, COL_GAP = 150, PAD = 34;
+  const nodes = [], cEdges = [], pos = new Map(); // 단원명 → {id,x,y,col}
+  let x = 0;
+  FLOW.forEach((s, si) => {
+    const colH = s.chapters.length * (CARD_H + GAP_Y) - GAP_Y;
+    const y0 = -Math.round(colH / 2); // 세로 중앙 정렬
+    nodes.push({ id: `g${si}`, type: "group", x: x - PAD, y: y0 - PAD - 44, width: CARD_W + PAD * 2, height: colH + PAD * 2 + 44, label: `${s.name}` });
+    s.chapters.forEach((ch, ci) => {
+      const id = `u${si}_${ci}`, y = y0 + ci * (CARD_H + GAP_Y);
+      nodes.push({ id, type: "file", file: `단원/${ch.name}.md`, x, y, width: CARD_W, height: CARD_H, color: STRAND_COLOR[units.get(ch.name).strand] || "6" });
+      if (!pos.has(ch.name)) pos.set(ch.name, { id, x, y, col: si });
+    });
+    x += CARD_W + PAD * 2 + COL_GAP;
+  });
+  edges.forEach((e, i) => {
+    const f = pos.get(e.from), t = pos.get(e.to);
+    if (!f || !t) return;
+    const sides = f.col < t.col ? ["right", "left"] : f.col > t.col ? ["left", "right"] : (f.y < t.y ? ["bottom", "top"] : ["top", "bottom"]);
+    cEdges.push({ id: `e${i}`, fromNode: f.id, fromSide: sides[0], toNode: t.id, toSide: sides[1], color: e.w >= 0.8 ? "1" : "0" });
+  });
+  fs.writeFileSync(path.join(OUT, "🗺️ 전체 지도.canvas"), JSON.stringify({ nodes, edges: cEdges }, null, 1), "utf8");
+}
+
+/* ── 13. lint: 깨진 링크·고아 검사 ── */
+const allNotes = new Set([...units.keys(), ...subjectsAll.map(s => s.name), "🏠 HOME", "INDEX", "SCHEMA", "LOG", "GRAPH_REPORT", "🗺️ 전체 지도.canvas"]);
 let broken = 0;
 for (const dir of ["", "단원", "과목"]) {
   const d = path.join(OUT, dir);
