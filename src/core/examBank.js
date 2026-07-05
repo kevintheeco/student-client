@@ -17,6 +17,8 @@ const BANK_KEY="ng:bank:items";
     choices: [],                            // 객관식 보기(①~⑤)
     answer, explanation,                    // 자료에 있던 공식 정답·해설 (지어낸 것 금지)
     points, difficulty, hasFigure,
+    figure,                                 // 그림 raster: JPEG dataURL (크롭 도구 산출물, 폴백)
+    figureScript,                           // 그림 vector: 장면 스크립트 JSON(§2-1) — MathViz 렌더·채점 컨텍스트용, figure와 병행
     verified, verifiedAt}                   // 사람 검수 완료 여부 — 검색 후보 자격 */
 
 function bankAll(){return LS.get(BANK_KEY)||[];}
@@ -30,7 +32,7 @@ function bankDel(id){const list=bankAll().filter(it=>it.id!==id);bankSet(list);r
 function bankSearch({subject,unit,qtype,verifiedOnly=true,limit=8}={}){
   let list=bankAll();
   if(verifiedOnly)list=list.filter(it=>it.verified);
-  list=list.filter(it=>!it.hasFigure||it.figure);
+  list=list.filter(it=>!it.hasFigure||it.figure||it.figureScript);
   if(subject)list=list.filter(it=>it.subject===subject);
   if(unit)list=list.filter(it=>it.unit===unit);
   if(qtype)list=list.filter(it=>it.qtype===qtype);
@@ -50,7 +52,7 @@ const CIRC="①②③④⑤";
 function toExamItem(it,uidFn){
   const srcLabel=[it.src?.year,it.src?.school,it.src?.exam].filter(Boolean).join(" ")+(it.src?.number?" · "+it.src.number+"번":"");
   const base={id:uidFn(),origin:"기출",bankId:it.id,srcLabel:srcLabel.trim(),
-    unit:it.unit||"",concept:it.unit||"",question:it.question||"",figure:it.figure||null,
+    unit:it.unit||"",concept:it.unit||"",question:it.question||"",figure:it.figure||null,figureScript:it.figureScript||null,
     points:Number(it.points)>0?Number(it.points):(it.qtype==="essay"?15:5)};
   if(it.qtype==="mc"&&Array.isArray(it.choices)&&it.choices.length>=2){
     const m=(it.answer||"").match(/[①②③④⑤]/);

@@ -2,10 +2,12 @@
    흐름: 목록(필터·통계) → 업로드(출처·과목·파일) → AI 추출 → 사람 검수 → 저장.
    검수(verified) 통과분만 출제 검색 후보가 된다 — 0오류 보증선. */
 import { tr } from "../core/platform.js";
-import { extractAnswerKey, extractBankItems, solveBankItem, splitPdfPages, toB64, uid } from "../core/ai.js";
+import { callAI, extractAnswerKey, extractBankItems, solveBankItem, splitPdfPages, toB64, uid } from "../core/ai.js";
 import { bankAll, bankAdd, bankUpdate, bankDel, bankStats } from "../core/examBank.js";
 import { FileDropZone, Prof, Stat } from "../ui/common.jsx";
 import { MathText } from "../ui/math.jsx";
+import { MathViz } from "../ui/mathviz/MathViz.jsx";
+import { isSceneScript, SCENE_SCHEMA_PROMPT } from "../ui/mathviz/scenescript.js";
 import { CURRICULUM } from "../core/curriculum.js";
 import React from "react";
 const { useState, useMemo, useRef, useEffect } = React;
@@ -89,10 +91,31 @@ function ItemEditor({item,units,onChange,onRemove}){
   const setSrc=(f,v)=>onChange({...item,src:{...(item.src||{}),[f]:v}});
   const [preview,setPreview]=useState(true);
   const [cropSrc,setCropSrc]=useState(null);   // 그림 첨부용 원본 이미지 (크롭 대기)
+  const [vecDraft,setVecDraft]=useState(null); // AI가 만든 벡터 스크립트 초안 (사람 승인 대기)
+  const [vecBusy,setVecBusy]=useState(false);
+  const [vecErr,setVecErr]=useState("");
   function pickFigure(file){
     const rd=new FileReader();
     rd.onload=()=>setCropSrc(rd.result);
     rd.readAsDataURL(file);
+  }
+  // 그림 PNG → AI가 장면 스크립트 초안 생성 → 아래 나란히 미리보기 → 사람이 승인해야 저장 (§5)
+  async function toVector(){
+    if(vecBusy)return;
+    setVecBusy(true);setVecErr("");setVecDraft(null);
+    try{
+      const m=String(item.figure||"").match(/^data:(image\/[\w+.-]+);base64,(.+)$/);
+      if(!m)throw new Error(tr("그림 형식을 읽을 수 없어","Bad figure format"));
+      const sys="너는 수학 문항의 그림(그래프·도형)을 벡터 장면 스크립트로 정밀하게 옮기는 도구야. 그림에 실제로 있는 요소만 옮기고, 반드시 JSON만 출력해(코드블록·설명 금지).\n"+SCENE_SCHEMA_PROMPT;
+      const blocks=[
+        {type:"image",source:{type:"base64",media_type:m[1],data:m[2]}},
+        {type:"text",text:"[문항 본문 — 그림 해석의 맥락]\n"+(item.question||"(없음)")+"\n\n이 그림을 장면 스크립트 JSON으로 재구성해."},
+      ];
+      const r=await callAI(sys,blocks,true,{maxTok:1900});
+      if(!isSceneScript(r))throw new Error(tr("AI 초안이 스크립트 형식에 안 맞아 — 다시 시도해줘","Draft failed validation"));
+      setVecDraft(r);
+    }catch(e){setVecErr(e.message||String(e));}
+    setVecBusy(false);
   }
   return(
     <div className="card" style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:10,
@@ -127,14 +150,40 @@ function ItemEditor({item,units,onChange,onRemove}){
       {cropSrc&&<FigureCropper src={cropSrc} onCancel={()=>setCropSrc(null)}
         onDone={(dataUrl)=>{onChange({...item,figure:dataUrl,hasFigure:true});setCropSrc(null);}}/>}
       {item.figure?(
-        <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+        <div style={{display:"flex",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
           <img src={item.figure} alt="" style={{maxWidth:280,maxHeight:200,border:"1px solid var(--line)",borderRadius:8,background:"#fff"}}/>
-          <button className="btn gho xs" onClick={()=>set("figure",null)} style={{color:"#B91C1C"}}>✕ {tr("그림 제거","Remove figure")}</button>
+          <span style={{display:"inline-flex",flexDirection:"column",gap:6}}>
+            <button className="btn gho xs" onClick={()=>set("figure",null)} style={{color:"#B91C1C"}}>✕ {tr("그림 제거","Remove figure")}</button>
+            {!item.figureScript&&<button className="btn gho xs" onClick={toVector} disabled={vecBusy}
+              title={tr("AI가 그림을 벡터 스크립트 초안으로 변환 — 검수 승인해야 저장","AI drafts a vector script — approve to save")}>
+              {vecBusy?tr("🧭 변환 중…","🧭 Converting…"):tr("🧭 벡터로 변환","🧭 To vector")}
+            </button>}
+            {item.figureScript&&<span className="chip" style={{background:"var(--pri-s)",color:"var(--pri-d)",fontWeight:800}}>🧭 {tr("벡터 그림 있음","Vector figure")}</span>}
+            {item.figureScript&&<button className="btn gho xs" onClick={()=>set("figureScript",null)} style={{color:"#B91C1C"}}>✕ {tr("벡터 제거","Remove vector")}</button>}
+          </span>
+          {vecErr&&<span style={{fontSize:12.5,color:"#B91C1C"}}>⚠️ {vecErr}</span>}
         </div>
       ):(item.hasFigure&&
         <div style={{padding:"8px 12px",background:"#FEF2F2",borderRadius:9,fontSize:12.5,color:"#991B1B"}}>
           ⚠️ {tr("그림 필수 문항인데 그림이 없어요 — 첨부 전까지는 출제 후보에서 제외됩니다.","Figure required but missing — excluded from exams until attached.")}
         </div>)}
+      {vecDraft&&(   /* AI 벡터 초안: 원본과 나란히 놓고 사람이 승인/거절 */
+        <div style={{border:"1.5px solid var(--pri)",borderRadius:12,padding:12,display:"flex",flexDirection:"column",gap:8,background:"var(--pri-s)"}}>
+          <b style={{fontSize:13,color:"var(--pri-d)"}}>🧭 {tr("AI 벡터 초안 — 원본 그림과 비교해서 승인해줘","AI vector draft — compare & approve")}</b>
+          <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-start"}}>
+            <img src={item.figure} alt="" style={{maxWidth:240,maxHeight:180,border:"1px solid var(--line)",borderRadius:8,background:"#fff"}}/>
+            <div style={{maxWidth:300,flex:"1 1 240px"}}><MathViz script={vecDraft} staticOnly controls={false}/></div>
+          </div>
+          <span style={{display:"flex",gap:8}}>
+            <button className="btn pri xs" onClick={()=>{onChange({...item,figureScript:vecDraft});setVecDraft(null);}}>✓ {tr("승인 — 벡터 저장","Approve")}</button>
+            <button className="btn gho xs" onClick={()=>setVecDraft(null)}>{tr("거절","Discard")}</button>
+            <button className="btn gho xs" onClick={toVector} disabled={vecBusy}>{tr("다시 생성","Regenerate")}</button>
+          </span>
+        </div>
+      )}
+      {!vecDraft&&item.figureScript&&preview&&(
+        <div style={{maxWidth:320}}><MathViz script={item.figureScript} staticOnly controls={false}/></div>
+      )}
       {preview?(
         <div style={{fontSize:14,lineHeight:1.75}}>
           <MathText text={item.question||""} tag="div"/>
@@ -304,6 +353,8 @@ function ExamBank({onExit}){
         const ok=arr.filter(it=>it&&it.question&&it.unit!==undefined).map(it=>({
           ...it,id:uid(),createdAt:it.createdAt||Date.now(),
           corpus:it.corpus==="문제집"?"문제집":"기출",
+          // 벡터 그림은 검증 통과분만 (깨진 JSON·거대 쓰레기 저장 방지)
+          figureScript:isSceneScript(it.figureScript)?it.figureScript:undefined,
           verified:!!it.verified,verifiedAt:it.verified?(it.verifiedAt||Date.now()):null}));
         if(!ok.length){setErr(tr("가져올 문제가 없어 — 형식을 확인해줘.","Nothing to import."));return;}
         setItems(bankAdd(ok));
