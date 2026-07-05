@@ -1,8 +1,9 @@
 // geointeract — 기하 상호작용 엔진: 손글씨 스트로크 → 도형 인식 → 정답 모델 비교 (§4)
-// 검증된 브라우저 PoC(geo-interaction-poc.html)의 규칙 기반 로직을 그대로 이식.
-// 전부 순수 함수(DOM 무관) — node --test로 단위 테스트한다.
-// 2차 인식(AI 비전 → 장면 스크립트)은 5단계에서 recognizeAI로 추가 예정.
+// 1차: 규칙 기반(오프라인, 즉시) — 검증된 브라우저 PoC 로직 이식. node --test로 단위 테스트.
+// 2차: recognizeAI — 스트로크 이미지+지오메트리 요약을 AI 비전에 보내 장면 스크립트로 재구성
+//      (ai.js는 함수 안에서 동적 import — 규칙 기반 경로는 브라우저 의존성 0 유지)
 import { projectFoot } from "../ui/mathviz/mathcore.js";
+import { isSceneScript, SCENE_SCHEMA_PROMPT } from "../ui/mathviz/scenescript.js";
 
 const dist=(a,b)=>Math.hypot(a[0]-b[0], a[1]-b[1]);
 
@@ -108,7 +109,44 @@ function compare(model, requirements){
   return out;
 }
 
+/* ── 2차 인식: AI 비전 (§4-1-2) ──
+   스트로크를 RDP로 요약한 지오메트리 텍스트 + (선택) 렌더 이미지로 AI에 보내
+   장면 스크립트 JSON을 받는다. 실패·형식 불일치면 null — 호출부는 규칙 기반으로 폴백. */
+function strokeSummary(strokes){
+  const all=strokes.flat();
+  const h=hull(all).map(p=>[Math.round(p[0]),Math.round(p[1])]);
+  const {area}=h.length>=3?bestTriangle(h):{area:0};
+  return JSON.stringify({
+    strokeCount:strokes.length,
+    strokes:strokes.map(s=>({
+      points:s.length,
+      simplified:rdp(s,6).map(p=>[Math.round(p[0]),Math.round(p[1])]),
+      straight:isStraight(s),
+    })),
+    convexHull:h,
+    maxTriangleArea:Math.round(area||0),
+  });
+}
+
+async function recognizeAI(strokes, pngBase64, opts={}, signal){
+  const { callAI }=await import("./ai.js");   // 동적 import — 순수 함수 경로와 분리
+  const sys="너는 학생이 손으로 그린 수학 그림(그래프·도형)을 벡터 장면 스크립트로 재구성하는 도구야. "+
+    "지오메트리 요약의 좌표(픽셀, y는 아래로 증가)를 근거로 하되 손떨림은 정규화하고, 실제로 그려진 요소만 옮겨. "+
+    "view는 그림 전체가 들어가게 잡아. 반드시 JSON만 출력해(코드블록·설명 금지).\n"+SCENE_SCHEMA_PROMPT;
+  const blocks=[];
+  if(pngBase64)blocks.push({type:"image",source:{type:"base64",media_type:"image/png",data:pngBase64}});
+  blocks.push({type:"text",text:"[스트로크 지오메트리 요약]\n"+strokeSummary(strokes)+
+    "\n\n학생이 그린 도형을 장면 스크립트 JSON으로 재구성해."+(opts.hint?"\n[문항 맥락] "+opts.hint:"")});
+  try{
+    const r=await callAI(sys,blocks,true,{maxTok:1600},signal);
+    return isSceneScript(r)?r:null;
+  }catch(e){
+    if(e&&e.name!=="AbortError")console.warn("[geointeract] AI 인식 실패 — 규칙 기반 폴백",e);
+    return null;
+  }
+}
+
 export {
   dist, distToLine, rdp, hull, bestTriangle, isStraight,
-  normalizeStrokes, recognize, compare,
+  normalizeStrokes, recognize, compare, strokeSummary, recognizeAI,
 };
