@@ -16,6 +16,9 @@ const qtypeLabel=(v)=>(QTYPES.find(q=>q[0]===v)||[])[1]||v;
 
 // 과목 평탄화: 업로드 시 과목을 고르면 그 과목 대단원이 unit 태그 후보가 된다
 const SUBJECTS=CURRICULUM.flatMap(lv=>lv.subjects.map(s=>({id:s.id,name:s.name,level:lv.level,units:s.units})));
+// 자동 모드(모의고사·전국연합처럼 여러 학년 범위가 섞인 시험지): 전체 목차에서 단원 판별
+const ALL_UNITS=[...new Set(SUBJECTS.flatMap(s=>s.units))];
+const UNIT_SUBJECT={};SUBJECTS.forEach(s=>s.units.forEach(u=>{if(!(u in UNIT_SUBJECT))UNIT_SUBJECT[u]=s.name;}));
 
 /* ── 문제 1건 편집 카드 (검수·수정 공용) ── */
 function ItemEditor({item,units,onChange,onRemove}){
@@ -96,7 +99,9 @@ function ExamBank({onExit}){
   const [fSubj,setFSubj]=useState("");const [fUnit,setFUnit]=useState("");const [fVer,setFVer]=useState("");
   const [editing,setEditing]=useState(null);       // 목록에서 단건 수정 중인 id
 
+  const isAuto=subjId==="auto";
   const subj=SUBJECTS.find(s=>s.id===subjId)||SUBJECTS[0];
+  const tagUnits=isAuto?ALL_UNITS:subj.units;   // 추출·검수에서 쓰는 단원 태그 후보
   const stats=useMemo(()=>bankStats(),[items]);
   const shown=items.filter(it=>
     (!fSubj||it.subject===fSubj)&&(!fUnit||it.unit===fUnit)&&
@@ -121,7 +126,7 @@ function ExamBank({onExit}){
         setBusyMsg(tr("이미지 분석 중… (","Reading images… (")+(i+1)+"~"+Math.min(i+4,imgs.length)+"/"+imgs.length+")");
         const blocks=[];
         for(const f of batch)blocks.push({type:"image",source:{type:"base64",media_type:f.type||"image/jpeg",data:await toB64(f)}});
-        out.push(...await extractBankItems(blocks,subj.units,srcHint));
+        out.push(...await extractBankItems(blocks,tagUnits,srcHint));
       }
       // PDF는 6쪽 단위로 쪼개 순차 추출 (시험지 여러 장도 안전)
       for(const f of files.filter(f=>f.type==="application/pdf")){
@@ -131,18 +136,19 @@ function ExamBank({onExit}){
         for(let ci=0;ci<chunks.length;ci++){
           const c=chunks[ci];const cb64=typeof c==="string"?c:c.b64;
           setBusyMsg(tr("PDF 분석 중… ","Reading PDF… ")+f.name+(chunks.length>1?" ("+(ci+1)+"/"+chunks.length+")":""));
-          out.push(...await extractBankItems([{type:"document",source:{type:"base64",media_type:"application/pdf",data:cb64}}],subj.units,srcHint));
+          out.push(...await extractBankItems([{type:"document",source:{type:"base64",media_type:"application/pdf",data:cb64}}],tagUnits,srcHint));
         }
       }
       if(pasted.trim()){
         setBusyMsg(tr("텍스트 분석 중…","Reading text…"));
-        out.push(...await extractBankItems([{type:"text",text:"[자료]\n"+pasted.slice(0,14000)}],subj.units,srcHint));
+        out.push(...await extractBankItems([{type:"text",text:"[자료]\n"+pasted.slice(0,14000)}],tagUnits,srcHint));
       }
       if(!out.length){setErr(tr("문제를 추출하지 못했어. 자료 상태나 API 키를 확인해줘.","No questions extracted — check the files or API key."));setBusy(false);return;}
       setDraft(out.map(q=>({
         id:uid(),createdAt:Date.now(),corpus,
         src:{year:srcYear.trim(),school:srcSchool.trim(),exam:srcExam.trim(),number:q.number||""},
-        subject:subj.name,unit:subj.units.includes(q.unit)?q.unit:"",
+        subject:isAuto?(UNIT_SUBJECT[q.unit]||""):subj.name,
+        unit:tagUnits.includes(q.unit)?q.unit:"",
         qtype:["mc","short","essay"].includes(q.qtype)?q.qtype:"short",
         question:q.question||"",choices:Array.isArray(q.choices)?q.choices:[],
         answer:q.answer||"",explanation:q.explanation||"",
@@ -152,6 +158,31 @@ function ExamBank({onExit}){
       setMode("review");
     }catch(e){setErr(tr("추출 실패: ","Extraction failed: ")+(e.message||e));}
     setBusy(false);
+  }
+
+  // ── JSON 백업/이관: 은행 전체 내보내기·가져오기 (기기 간 이동, 외부에서 준비한 데이터 반입) ──
+  function exportJson(){
+    const blob=new Blob([JSON.stringify(bankAll(),null,1)],{type:"application/json"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);a.download="기출은행-"+new Date().toISOString().slice(0,10)+".json";
+    a.click();URL.revokeObjectURL(a.href);
+  }
+  function importJson(file){
+    const rd=new FileReader();
+    rd.onload=()=>{
+      try{
+        const arr=JSON.parse(rd.result);
+        if(!Array.isArray(arr))throw new Error("JSON 배열이 아님");
+        const ok=arr.filter(it=>it&&it.question&&it.unit!==undefined).map(it=>({
+          ...it,id:uid(),createdAt:it.createdAt||Date.now(),
+          corpus:it.corpus==="문제집"?"문제집":"기출",
+          verified:!!it.verified,verifiedAt:it.verified?(it.verifiedAt||Date.now()):null}));
+        if(!ok.length){setErr(tr("가져올 문제가 없어 — 형식을 확인해줘.","Nothing to import."));return;}
+        setItems(bankAdd(ok));
+        alert(tr(ok.length+"문제를 가져왔어. 검수 안 된 문제는 검수 후에 출제에 쓰여.",ok.length+" items imported."));
+      }catch(e){setErr(tr("가져오기 실패: ","Import failed: ")+(e.message||e));}
+    };
+    rd.readAsText(file);
   }
 
   function saveDraft(){
@@ -180,7 +211,7 @@ function ExamBank({onExit}){
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
         {draft.map((d,i)=>(
-          <ItemEditor key={d.id} item={d} units={subj.units}
+          <ItemEditor key={d.id} item={d} units={tagUnits}
             onChange={(nd)=>setDraft(ds=>ds.map((x,xi)=>xi===i?nd:x))}
             onRemove={()=>setDraft(ds=>ds.filter((_,xi)=>xi!==i))}/>))}
       </div>
@@ -222,6 +253,7 @@ function ExamBank({onExit}){
             {tr("과목 (단원 태그가 이 과목 목차에서 달려요)","Subject — units are tagged from its chapters")}
           </label>
           <select className="field" value={subjId} onChange={e=>setSubjId(e.target.value)}>
+            <option value="auto">🌐 {tr("자동 — 전체 목차에서 단원 판별 (모의고사·전국연합처럼 여러 학년 범위가 섞인 시험지)","Auto — detect units across all subjects")}</option>
             {SUBJECTS.map(s=><option key={s.id} value={s.id}>{s.level} · {s.name}</option>)}
           </select>
         </div>
@@ -252,8 +284,14 @@ function ExamBank({onExit}){
         <Stat n={stats.pending} l={tr("검수 대기","Pending")}/>
         <Stat n={stats.unitCount} l={tr("커버 단원","Units")}/>
         <button className="btn pri" onClick={()=>{setErr("");setMode("upload");}} style={{marginLeft:"auto",alignSelf:"center"}}>➕ {tr("기출 올리기","Add exams")}</button>
+        <label className="btn gho sm" style={{alignSelf:"center",cursor:"pointer"}} title={tr("JSON 파일에서 문제 가져오기","Import from JSON")}>
+          📥 {tr("가져오기","Import")}
+          <input type="file" accept="application/json,.json" style={{display:"none"}} onChange={e=>{if(e.target.files[0])importJson(e.target.files[0]);e.target.value="";}}/>
+        </label>
+        {items.length>0&&<button className="btn gho sm" onClick={exportJson} style={{alignSelf:"center"}} title={tr("은행 전체를 JSON으로 백업","Export bank as JSON")}>📤 {tr("백업","Export")}</button>}
         <button className="btn gho" onClick={onExit} style={{alignSelf:"center"}}>🏠 {tr("홈","Home")}</button>
       </div>
+      {err&&mode==="list"&&<div style={{color:"#B91C1C",fontSize:13,marginBottom:12}}>{err}</div>}
       {items.length>0&&(
         <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
           <select className="field" value={fSubj} onChange={e=>{setFSubj(e.target.value);setFUnit("");}} style={{width:"auto",padding:"7px 10px",fontSize:13}}>
@@ -283,7 +321,7 @@ function ExamBank({onExit}){
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         {shown.map(it=>editing===it.id?(
           <div key={it.id}>
-            <ItemEditor item={it} units={(SUBJECTS.find(s=>s.name===it.subject)||subj).units}
+            <ItemEditor item={it} units={(SUBJECTS.find(s=>s.name===it.subject)||{}).units||ALL_UNITS}
               onChange={(nd)=>setItems(bankUpdate(it.id,nd))}
               onRemove={()=>{if(confirm(tr("이 문제를 은행에서 삭제할까?","Delete this item?"))){setItems(bankDel(it.id));setEditing(null);}}}/>
             <div style={{textAlign:"right",marginTop:6}}><button className="btn gho sm" onClick={()=>setEditing(null)}>{tr("닫기","Close")}</button></div>
