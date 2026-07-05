@@ -9,6 +9,7 @@ import { clearDemoStudents, seedDemoStudents } from "../core/demoStudents.js";
 import { fetchShared, importShared } from "../core/link.js";
 import { ACADEMY_CODE, uid } from "../core/ai.js";
 import { CURRICULUM } from "../core/curriculum.js";
+import { KnowledgeMap } from "./KnowledgeMap.jsx";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
 
@@ -200,6 +201,9 @@ function AcademyApp(){
            badge:students.length?students.length+tr("명",""):null,
            d:tr("학생 목록·홈학습 연동·전체 대시보드·성장 인사이트 — 누가 어떤 이유로 관심이 필요한지 한눈에.","Roster, home-study link, dashboard and growth insight in one place."),
            cta:tr("학생 보러 가기 →","Open →")},
+          {e:"🗺️",go:"map",t:tr("수학 지식 지도","Knowledge map"),
+           d:tr("중1부터 미적분까지 단원 사이 선수관계를 지도로. 단원을 클릭하면 확대되며 '여기가 무너지면 어디까지 무너지나'가 보여요 — 상담·보강 설계용.","Every unit and its prerequisites on one map — click to zoom into the structure."),
+           cta:tr("지도 열기 →","Open map →")},
         ].map(w=>(
           <div key={w.go} className="card" onClick={()=>setView(w.go)}
             style={{padding:"30px 28px",cursor:"pointer",display:"flex",flexDirection:"column",gap:8,minHeight:190}}>
@@ -232,6 +236,14 @@ function AcademyApp(){
         {activeStu&&<button className="btn gho" onClick={()=>setView("insight")}>📊 {activeStu.name+tr(" 성장 인사이트"," growth insight")}</button>}
       </div>
     </section>
+  </>);
+  // ── 지식 지도: 단원 클릭·확대 → 선수/후속 구조 → 그 단원으로 바로 레벨테스트 ──
+  if(view==="map")return(<>
+    <Head/>
+    <KnowledgeMap onPickUnit={(sid,sname,u)=>{
+      setPicked(p=>p[keyOf(sid,u)]?p:{...p,[keyOf(sid,u)]:{name:u,subj:sname,count:2,difficulty:"medium"}});
+      setView("build");
+    }}/>
   </>);
   if(view==="exam"&&topic)return(<Exam topic={topic} student={student} academy academyName={acaName} onExit={()=>setView("build")}/>);
   if(view==="insight")return(<><Head/><Insight onExit={()=>setView("students")} studentName={activeStu?.name||student}/></>);

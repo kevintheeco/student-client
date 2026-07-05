@@ -6,7 +6,7 @@
    규약은 SCHEMA.md에 — 목차 수정은 curriculum.js에서 하고 이 스크립트로 재생성.
 ════════════════════════════════════════════════════════════════ */
 import { LEVELS } from "../src/core/curriculum.js";
-import { GRAPH_NODES, GRAPH_EDGES, STRANDS } from "../src/core/knowledgeGraph.js";
+import { GRAPH_NODES, GRAPH_EDGES, NAME_EDGES, STRANDS } from "../src/core/knowledgeGraph.js";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -46,54 +46,20 @@ for (const [name, u] of units) {
 }
 const strandName = id => (STRANDS.find(s => s.id === id) || {}).name || id;
 
-/* ── 3. 엣지 통합: 그래프 엣지(id 기반) + 보강 엣지(그래프 미커버 단원, 이름 기반) ── */
-const SUPPLEMENT = [
-  // [선수, 후속, 의존도, 왜]
-  ["순열과 조합","여러 가지 순열",0.9,"순열·조합의 기본 계산 위에 원순열·중복순열이 선다"],
-  ["순열과 조합","중복조합과 이항정리",0.8,"조합 개념 없이는 중복조합·이항계수를 정의할 수 없다"],
-  ["다항식의 연산","중복조합과 이항정리",0.5,"이항정리는 다항식 전개의 일반화"],
-  ["경우의 수와 확률","확률의 뜻과 활용",0.8,"중2 확률의 뜻·계산이 고교 확률의 출발점"],
-  ["순열과 조합","확률의 뜻과 활용",0.7,"수학적 확률 계산은 결국 경우의 수 세기"],
-  ["집합","확률의 뜻과 활용",0.6,"사건 = 표본공간의 부분집합, 덧셈정리는 집합 연산"],
-  ["확률의 뜻과 활용","조건부확률",0.9,"확률의 덧셈·곱셈 위에 조건부 개념이 선다"],
-  ["조건부확률","이산확률변수의 확률분포",0.6,"독립시행의 확률이 이항분포의 뼈대"],
-  ["대푯값과 산포도","이산확률변수의 확률분포",0.6,"평균·분산·표준편차 개념의 확률변수 버전"],
-  ["이산확률변수의 확률분포","연속확률변수와 정규분포",0.8,"이산 분포 이해 위에 밀도함수·정규분포"],
-  ["연속확률변수와 정규분포","통계적 추정",0.9,"표본평균의 분포가 정규분포로 귀결된다"],
-  ["등차수열과 등비수열","수열의 극한",0.8,"극한을 취하는 대상이 수열, 특히 등비수열"],
-  ["함수의 극한","수열의 극한",0.6,"극한의 성질·계산 감각을 공유"],
-  ["수열의 극한","급수",0.9,"급수의 수렴 = 부분합 수열의 극한"],
-  ["수열의 합","급수",0.6,"부분합 계산은 Σ 조작"],
-  ["지수함수와 로그함수","여러 가지 함수의 미분",0.8,"지수·로그함수를 알아야 그 미분이 가능"],
-  ["삼각함수","여러 가지 함수의 미분",0.8,"삼각함수의 정의·그래프 위에 덧셈정리와 미분"],
-  ["미분계수와 도함수","여러 가지 함수의 미분",0.9,"미분의 정의·기본 미분법이 전제"],
-  ["여러 가지 함수의 미분","여러 가지 미분법",0.9,"초월함수 미분 위에 합성·매개변수·음함수 미분"],
-  ["여러 가지 미분법","도함수의 활용(미적분)",0.9,"복잡한 함수의 그래프 분석은 미분법이 도구"],
-  ["도함수의 활용","도함수의 활용(미적분)",0.7,"다항함수에서 익힌 그래프 분석 틀의 확장"],
-  ["여러 가지 미분법","여러 가지 적분법",0.8,"치환·부분적분은 미분법의 역과정"],
-  ["정적분","여러 가지 적분법",0.7,"정적분의 정의·기본정리가 전제"],
-  ["여러 가지 적분법","정적분의 활용(미적분)",0.9,"넓이·부피 계산은 적분 기술 그 자체"],
-  ["정적분의 활용","정적분의 활용(미적분)",0.6,"넓이 계산 틀의 초월함수 확장"],
-  ["이차방정식과 이차함수","이차곡선",0.6,"포물선은 이차함수 그래프의 기하적 재해석"],
-  ["원의 방정식","이차곡선",0.7,"곡선의 방정식·접선을 다루는 틀을 공유"],
-  ["평면좌표와 직선의 방정식","평면벡터",0.7,"성분·내분점·직선이 벡터 표현의 밑바탕"],
-  ["사인법칙과 코사인법칙","평면벡터",0.5,"내적의 정의는 코사인"],
-  ["평면도형의 성질","입체도형의 성질",0.7,"원의 둘레·넓이가 기둥·뿔·구의 겉넓이·부피 계산의 기초"],
-  ["입체도형의 성질","공간도형",0.4,"다면체·회전체 감각이 공간 위치 관계의 밑그림"],
-  ["기본 도형","공간도형",0.6,"위치 관계 논리의 3차원 확장"],
-  ["피타고라스 정리","공간도형",0.6,"공간에서의 거리·정사영 계산의 기본"],
-  ["평면좌표와 직선의 방정식","공간좌표",0.7,"좌표 개념의 3차원 확장"],
-  ["공간도형","공간좌표",0.6,"공간 감각 위에 좌표를 얹는다"],
-  ["원의 방정식","공간좌표",0.5,"구의 방정식은 원의 방정식의 확장"],
-  ["평면벡터","공간벡터(2022)",0.9,"평면벡터 연산·내적의 3차원 확장"],
-  ["공간좌표","공간벡터(2022)",0.7,"성분 표현은 공간좌표로 한다"],
-];
-const edges = []; // {from, to, w, why} — 이름 기반
+/* ── 3. 엣지 통합: 그래프 엣지(id 기반) + NAME_EDGES(이름 기반 보강, knowledgeGraph.js) ── */
+const edges = []; // {from, to, w, why} — 이름 기반, from→to 중복 제거
+const seenPair = new Set();
+const pushEdge = (e) => {
+  if (!units.has(e.from) || !units.has(e.to)) return;
+  const k = e.from + "→" + e.to;
+  if (seenPair.has(k)) return;
+  seenPair.add(k); edges.push(e);
+};
 for (const e of GRAPH_EDGES) {
   const f = nodeById.get(e.from), t = nodeById.get(e.to);
-  if (f && t && units.has(f.name) && units.has(t.name)) edges.push({ from: f.name, to: t.name, w: e.w, why: e.why });
+  if (f && t) pushEdge({ from: f.name, to: t.name, w: e.w, why: e.why });
 }
-for (const [from, to, w, why] of SUPPLEMENT) edges.push({ from, to, w, why });
+for (const e of NAME_EDGES) pushEdge({ ...e });
 
 const prereqsOf = name => edges.filter(e => e.to === name);
 const nextOf = name => edges.filter(e => e.from === name);
@@ -335,8 +301,9 @@ write("SCHEMA.md", [
     "# LOG (append-only)",
     "",
     "- 2026-07-05 v1 — 과목 단위 15노트 초판 생성 (curriculum.js 신설과 함께)",
-    `- ${TODAY} v2 — 지식그래프 통합 재설계: 단원 엔티티 노트 ${units.size}개, 선수관계 엣지 ${edges.length}개(앱 그래프 ${edges.length - SUPPLEMENT.length} + 보강 ${SUPPLEMENT.length}), HOME/INDEX/SCHEMA/GRAPH_REPORT 도입 (Karpathy LLM-wiki + Graphify 방식)`,
+    `- ${TODAY} v2 — 지식그래프 통합 재설계: 단원 엔티티 노트 ${units.size}개, 선수관계 엣지 ${edges.length}개, HOME/INDEX/SCHEMA/GRAPH_REPORT 도입 (Karpathy LLM-wiki + Graphify 방식)`,
     `- ${TODAY} v3 — 🗺️ 전체 지도.canvas 추가: 과목 그룹 × 단원 카드 × 선수관계 화살표, 클릭·확대 탐색 (Graphify graph.canvas 방식)`,
+    `- ${TODAY} v4 — 선수관계 원천을 knowledgeGraph.js로 일원화(확통·미적분 노드명 새 목차와 1:1 정리, NAME_EDGES 보강 엣지), 학원앱 안 지식 지도 화면과 동일 데이터 공유`,
   ]);
 }
 
