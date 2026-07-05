@@ -7,7 +7,7 @@ import { bankAll, bankAdd, bankUpdate, bankDel, bankStats } from "../core/examBa
 import { FileDropZone, Prof, Stat } from "../ui/common.jsx";
 import { MathText } from "../ui/math.jsx";
 import { MathViz } from "../ui/mathviz/MathViz.jsx";
-import { isSceneScript, SCENE_SCHEMA_PROMPT } from "../ui/mathviz/scenescript.js";
+import { isSceneScript, validateScript, SCENE_SCHEMA_PROMPT } from "../ui/mathviz/scenescript.js";
 import { CURRICULUM } from "../core/curriculum.js";
 import React from "react";
 const { useState, useMemo, useRef, useEffect } = React;
@@ -112,7 +112,8 @@ function ItemEditor({item,units,onChange,onRemove}){
         {type:"text",text:"[문항 본문 — 그림 해석의 맥락]\n"+(item.question||"(없음)")+"\n\n이 그림을 장면 스크립트 JSON으로 재구성해."},
       ];
       const r=await callAI(sys,blocks,true,{maxTok:1900});
-      if(!isSceneScript(r))throw new Error(tr("AI 초안이 스크립트 형식에 안 맞아 — 다시 시도해줘","Draft failed validation"));
+      const v=validateScript(r);   // 정밀 검증: expr 컴파일·plot 참조·정의역까지 통과해야 초안 표시
+      if(!v.ok)throw new Error(tr("AI 초안 검증 실패: ","Draft failed: ")+v.errors.slice(0,2).join(" / "));
       setVecDraft(r);
     }catch(e){setVecErr(e.message||String(e));}
     setVecBusy(false);

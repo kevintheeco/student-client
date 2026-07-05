@@ -3,7 +3,7 @@
 // 2차: recognizeAI — 스트로크 이미지+지오메트리 요약을 AI 비전에 보내 장면 스크립트로 재구성
 //      (ai.js는 함수 안에서 동적 import — 규칙 기반 경로는 브라우저 의존성 0 유지)
 import { projectFoot } from "../ui/mathviz/mathcore.js";
-import { isSceneScript, SCENE_SCHEMA_PROMPT } from "../ui/mathviz/scenescript.js";
+import { validateScript, SCENE_SCHEMA_PROMPT } from "../ui/mathviz/scenescript.js";
 
 const dist=(a,b)=>Math.hypot(a[0]-b[0], a[1]-b[1]);
 
@@ -139,7 +139,7 @@ async function recognizeAI(strokes, pngBase64, opts={}, signal){
     "\n\n학생이 그린 도형을 장면 스크립트 JSON으로 재구성해."+(opts.hint?"\n[문항 맥락] "+opts.hint:"")});
   try{
     const r=await callAI(sys,blocks,true,{maxTok:1600},signal);
-    return isSceneScript(r)?r:null;
+    return validateScript(r).ok?r:null;
   }catch(e){
     if(e&&e.name!=="AbortError")console.warn("[geointeract] AI 인식 실패 — 규칙 기반 폴백",e);
     return null;

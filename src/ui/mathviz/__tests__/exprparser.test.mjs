@@ -39,6 +39,39 @@ test("정의역 밖·발산은 NaN (throw 금지)", () => {
   assert.ok(Number.isNaN(compileExpr("1/x")(0)));      // Infinity → NaN
 });
 
+/* ── Sonnet 백테스트용 현실 표기 코퍼스 — AI가 실제로 내는 유효한 수학 표기는 전부 처리 ── */
+test("암시적 곱셈: 2x, 2sin(x), x(x-1), (x-1)(x+2), 2pi", () => {
+  assert.equal(compileExpr("2x")(3), 6);
+  assert.ok(near(compileExpr("2sin(x)")(Math.PI/2), 2));
+  assert.equal(compileExpr("x(x-1)")(3), 6);
+  assert.equal(compileExpr("(x-1)(x+2)")(2), 4);
+  assert.ok(near(compileExpr("2pi")(0), 2*Math.PI));
+  assert.equal(compileExpr("2x^3")(2), 16);          // 2·(x³) — 우선순위 유지
+  assert.ok(near(compileExpr("2e^x")(1), 2*Math.E));  // 2·e^x
+});
+
+test("파이썬식·유니코드 표기: x**2, −, ×, ·, π, √, x²", () => {
+  assert.equal(compileExpr("x**2")(3), 9);
+  assert.equal(compileExpr("−x")(4), -4);             // U+2212 마이너스
+  assert.equal(compileExpr("3×x")(2), 6);
+  assert.equal(compileExpr("3·x")(2), 6);
+  assert.ok(near(compileExpr("sin(π/2)")(0), 1));
+  assert.equal(compileExpr("√(x+7)")(9), 4);
+  assert.equal(compileExpr("√x")(16), 4);
+  assert.equal(compileExpr("x²-4")(3), 5);
+});
+
+test("접두·대문자: y=x^2, f(x)=2x+1, X", () => {
+  assert.equal(compileExpr("y=x^2")(3), 9);
+  assert.equal(compileExpr("f(x)=2x+1")(3), 7);
+  assert.equal(compileExpr("X^2")(3), 9);
+});
+
+test("과학적 표기는 e 뒤 숫자일 때만: 1e-2 vs 2e", () => {
+  assert.ok(near(compileExpr("1e-2")(0), 0.01));
+  assert.ok(near(compileExpr("2e")(0), 2*Math.E));    // e=자연상수
+});
+
 test("화이트리스트 밖은 전부 거부", () => {
   for(const bad of ["alert(1)", "x.constructor", "x;1", "y+1", "window", "x=>1", "f(x)", "2..3"]){
     assert.equal(tryCompileExpr(bad).f, null, bad+" 는 거부되어야 함");

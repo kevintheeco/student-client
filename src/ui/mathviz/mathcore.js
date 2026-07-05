@@ -76,7 +76,10 @@ function yIntercept(f){
 
 // 초점 자동 계산 — ellipse: c²=a²−b² / hyperbola: c²=a²+b² / parabola: (p,0)
 function conicFoci(kind,a,b,p){
-  if(kind==="ellipse"){const c=Math.sqrt(a*a-b*b);return[[c,0],[-c,0]];}
+  if(kind==="ellipse"){
+    if(b>a){const c=Math.sqrt(b*b-a*a);return[[0,c],[0,-c]];}   // 세로 장축(b>a)이면 초점은 y축 위
+    const c=Math.sqrt(a*a-b*b);return[[c,0],[-c,0]];
+  }
   if(kind==="hyperbola"){const c=Math.sqrt(a*a+b*b);return[[c,0],[-c,0]];}
   if(kind==="parabola")return[[p,0]];
   throw new Error("conicFoci: 알 수 없는 종류 '"+kind+"'");

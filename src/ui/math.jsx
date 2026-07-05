@@ -3,17 +3,8 @@ const { useState, useEffect, useRef, useCallback } = React;
 
 // MathViz는 지연 로딩 — math.jsx↔MathViz.jsx 정적 순환 import 방지 + 비수학 사용자 초기 번들 경량
 const MathVizLazy=React.lazy(()=>import("./mathviz/MathViz.jsx").then(m=>({default:m.MathViz})));
-
-// ```mathviz 코드블록 → 장면 스크립트 객체 (형식이 안 맞으면 null — 원문 JSON을 화면에 노출하지 않음)
-function _parseSceneBlock(seg){
-  try{
-    const body=seg.replace(/^```mathviz/i,"").replace(/```\s*$/,"");
-    const a=body.indexOf("{"),b=body.lastIndexOf("}");
-    if(a<0||b<=a)return null;
-    const o=JSON.parse(body.slice(a,b+1));
-    return (o&&typeof o==="object"&&o.view&&Array.isArray(o.steps)&&o.steps.length)?o:null;
-  }catch(_){return null;}
-}
+// 블록 파스는 공용 계약(scenescript)의 관대한 파서 사용 — 트레일링 콤마 등 사소한 위반 복구, 실패 시 null
+import { parseSceneBlock as _parseSceneBlock } from "./mathviz/scenescript.js";
 
 function sanitizeSvg(s){
   return s

@@ -1,0 +1,107 @@
+// mathviz 백테스트 — 프로덕션 모델(Sonnet 등)이 실제 앱 프롬프트로 유효한 장면 스크립트를
+// 내는지, 우리 파이프라인(블록 추출→관대 파스→정밀 검증)이 깨지지 않는지 실 API로 검사한다.
+//
+// 사용:
+//   ANTHROPIC_API_KEY=sk-ant-...  node scripts/backtest-mathviz.mjs [--model claude-sonnet-4-6] [--n 3]
+//   YP_ACADEMY_CODE=코드          node scripts/backtest-mathviz.mjs   (프록시 경로 — 앱과 동일)
+//
+// 판정 기준(완화 금지):
+//   수학 시나리오 = mathviz 블록 ≥1 && 모든 블록이 validateScript 통과
+//   경제 시나리오 = mathviz 블록 0 && <svg> 존재 (이원화 계약 준수)
+import { RICH_FMT } from "../src/core/platform.js";
+import { parseSceneBlock, validateScript } from "../src/ui/mathviz/scenescript.js";
+import fs from "node:fs";
+
+const arg=(k,d)=>{const i=process.argv.indexOf(k);return i>0?process.argv[i+1]:d;};
+const MODEL=arg("--model","claude-sonnet-4-6");
+const N=+arg("--n",3);
+const KEY=process.env.ANTHROPIC_API_KEY||"";
+const CODE=process.env.YP_ACADEMY_CODE||"";
+const PROXY="https://yp-ai-proxy.soomin020114.workers.dev";
+if(!KEY&&!CODE){console.error("ANTHROPIC_API_KEY 또는 YP_ACADEMY_CODE 환경변수가 필요합니다.");process.exit(2);}
+
+async function callModel(system,user,maxTok=3000){
+  if(KEY){
+    const res=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{"content-type":"application/json","x-api-key":KEY,"anthropic-version":"2023-06-01"},
+      body:JSON.stringify({model:MODEL,max_tokens:maxTok,system,messages:[{role:"user",content:user}]}),
+    });
+    if(!res.ok)throw new Error("API HTTP "+res.status+" "+(await res.text()).slice(0,200));
+    const d=await res.json();
+    return (d.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
+  }
+  const res=await fetch(PROXY+"/claude",{                     // 앱의 회사키 경로 그대로
+    method:"POST",headers:{"content-type":"application/json"},
+    body:JSON.stringify({academyCode:CODE,system,messages:[{role:"user",content:user}],wantJson:false,maxTok,model:MODEL,stream:false}),
+  });
+  if(!res.ok)throw new Error("Proxy HTTP "+res.status+" "+(await res.text()).slice(0,200));
+  return ((await res.json()).text||"");
+}
+
+/* ── 시나리오: 앱의 실제 시스템 프롬프트(Study.jsx 원문) + 그래프가 꼭 필요한 질문 ── */
+const EXPLAIN_NEW=(mat)=>"너는 친절한 튜터야. 학습자가 이 개념을 전혀 모르니 처음 배우는 사람에게 직관적으로(비유·예시·왜 중요한지) 반말로 설명해줘."+
+  "\n\n출력 형식 규칙:\n① 제목은 ## 소제목은 ### ② 핵심 용어나 강조는 **굵게** ③ 목록은 - 기호 ④ 수식은 LaTeX($...$, $$...$$) ⑤ >> === 같은 ASCII 기호 금지 ⑥ 이해에 도움되면 표·그래프 적극 사용 — 함수 그래프는 아래 형식 규칙 4의 mathviz 스크립트, 함수식이 아닌 개념 도식만 <svg>"+RICH_FMT+"\n\n자료:\n"+mat;
+
+const SCENARIOS=[
+  {id:"explog",   kind:"math", sys:EXPLAIN_NEW("고1 수학: 지수함수 y=2^x-3 과 로그함수의 그래프, 점근선, 절편"),
+   user:"개념: 지수함수의 그래프와 점근선\n원래 질문: y=2^x-3 의 그래프를 그리고 점근선과 x절편, y절편을 표시해서 설명해줘. 그래프 꼭 포함해줘."},
+  {id:"extrema",  kind:"math", sys:EXPLAIN_NEW("수학2: 삼차함수의 극대·극소, 도함수와 증감표"),
+   user:"개념: 삼차함수의 극값\n원래 질문: f(x)=x^3-3x 의 극대·극소를 그래프로 보여주면서 설명해줘. 그래프 꼭 포함해줘."},
+  {id:"area",     kind:"math", sys:EXPLAIN_NEW("수학2: 정적분과 두 곡선 사이 넓이, 교점이 적분 한계"),
+   user:"개념: 두 곡선 사이의 넓이\n원래 질문: y=x^2 과 y=2x 사이의 넓이를 구하는 과정을 그래프와 함께 설명해줘. 그래프 꼭 포함해줘."},
+  {id:"conic",    kind:"math", sys:EXPLAIN_NEW("기하: 쌍곡선의 정의, 초점, 점근선, c²=a²+b²"),
+   user:"개념: 쌍곡선의 초점\n원래 질문: x²/4 - y²/2 = 1 의 초점과 점근선을 그래프로 보여주면서 설명해줘. 그래프 꼭 포함해줘."},
+  {id:"trig",     kind:"math", sys:EXPLAIN_NEW("대수: 삼각함수 y=sin x 의 그래프, 주기, 최댓값"),
+   user:"개념: 사인함수의 그래프\n원래 질문: y=2sin(x) 의 그래프와 최댓값·최솟값 위치를 보여주면서 설명해줘. 그래프 꼭 포함해줘."},
+  {id:"tangent",  kind:"math", sys:EXPLAIN_NEW("수학2: 미분계수와 접선의 방정식"),
+   user:"개념: 접선의 방정식\n원래 질문: y=x^2 위의 점 (1,1) 에서의 접선을 그래프로 보여주면서 설명해줘. 그래프 꼭 포함해줘."},
+  {id:"econ",     kind:"econ", sys:EXPLAIN_NEW("경제학원론: 수요와 공급, 균형가격, 수요곡선의 이동"),
+   user:"개념: 수요곡선의 이동\n원래 질문: 소득이 늘면 수요곡선이 어떻게 이동하고 균형가격이 어떻게 변하는지 그래프로 설명해줘. 그래프 꼭 포함해줘."},
+];
+
+/* ── 판정 ── */
+function judge(scn,text){
+  const blocks=text.match(/```mathviz[\s\S]*?```/gi)||[];
+  const errors=[];
+  if(scn.kind==="econ"){
+    if(blocks.length>0)errors.push("경제 도식에 mathviz 사용(이원화 계약 위반)");
+    if(!/<svg[\s\S]*?<\/svg>/i.test(text))errors.push("<svg> 도식 없음");
+    return {blocks:blocks.length,errors};
+  }
+  if(!blocks.length){errors.push("mathviz 블록 없음(그래프 요청했는데)");return{blocks:0,errors};}
+  blocks.forEach((b,bi)=>{
+    const script=parseSceneBlock(b);
+    if(!script){errors.push("블록"+bi+": JSON 파스 실패");return;}
+    const v=validateScript(script);
+    if(!v.ok)errors.push(...v.errors.map(e=>"블록"+bi+": "+e));
+  });
+  if(/```mathviz(?![\s\S]*```)/i.test(text))errors.push("닫히지 않은 mathviz 펜스");
+  return {blocks:blocks.length,errors};
+}
+
+/* ── 실행 ── */
+const outDir=new URL("../.backtest/",import.meta.url).pathname.replace(/^\/([A-Z]:)/,"$1");
+fs.mkdirSync(outDir,{recursive:true});
+let pass=0,fail=0;const failDetail={};
+console.log(`모델: ${MODEL} · 시나리오 ${SCENARIOS.length}종 × ${N}회 · 경로: ${KEY?"직접 API":"프록시(앱과 동일)"}\n`);
+for(const scn of SCENARIOS){
+  for(let t=1;t<=N;t++){
+    let text="";
+    try{text=await callModel(scn.sys,scn.user);}
+    catch(e){fail++;(failDetail[scn.id]??=[]).push("호출 실패: "+e.message);console.log(`✖ ${scn.id}#${t} 호출 실패: ${e.message}`);continue;}
+    fs.writeFileSync(outDir+scn.id+"-"+t+".md",text);
+    const r=judge(scn,text);
+    if(r.errors.length){
+      fail++;(failDetail[scn.id]??=[]).push(...r.errors);
+      console.log(`✖ ${scn.id}#${t} (블록 ${r.blocks}개)`);r.errors.forEach(e=>console.log("   - "+e));
+    }else{pass++;console.log(`✔ ${scn.id}#${t} (블록 ${r.blocks}개 전부 유효)`);}
+  }
+}
+console.log(`\n결과: ${pass}/${pass+fail} 통과`);
+if(fail){
+  console.log("실패 유형:");
+  for(const[k,v]of Object.entries(failDetail))console.log(" ["+k+"] "+[...new Set(v)].join(" | "));
+}
+console.log("원문 저장: .backtest/");
+process.exit(fail?1:0);

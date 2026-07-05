@@ -5,6 +5,21 @@
 const FN={sin:Math.sin,cos:Math.cos,tan:Math.tan,exp:Math.exp,log:Math.log,ln:Math.log,sqrt:Math.sqrt,abs:Math.abs};
 const CONST={pi:Math.PI,e:Math.E};
 
+// AI·사람이 실제로 쓰는 수학 표기를 표준형으로 정규화 (화이트리스트는 그대로 — 허용 문자만 늘림)
+const SUPS={"⁰":"0","¹":"1","²":"2","³":"3","⁴":"4","⁵":"5","⁶":"6","⁷":"7","⁸":"8","⁹":"9"};
+function _pre(src){
+  let s=String(src)
+    .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+/g,(m)=>"^"+[...m].map(c=>SUPS[c]).join(""))  // x² → x^2
+    .replace(/\*\*/g,"^")                    // 파이썬식 거듭제곱
+    .replace(/[−–]/g,"-")                    // 유니코드 마이너스·대시
+    .replace(/[×·⋅]/g,"*").replace(/÷/g,"/")
+    .replace(/π/g,"pi")
+    .replace(/√\s*\(/g,"sqrt(").replace(/√\s*([\w.]+)/g,"sqrt($1)");
+  const m=s.match(/^\s*[a-zA-Z]\w*\s*(\(\s*[a-zA-Z]\s*\))?\s*=\s*/);     // "y=" / "f(x)=" 접두 → 우변만
+  if(m)s=s.slice(m[0].length);
+  return s;
+}
+
 function tokenize(src){
   const toks=[];let i=0;
   while(i<src.length){
@@ -12,6 +27,11 @@ function tokenize(src){
     if(c===" "||c==="\t"||c==="\n"||c==="\r"){i++;continue;}
     if(/[0-9.]/.test(c)){
       let j=i;while(j<src.length&&/[0-9.]/.test(src[j]))j++;
+      // 과학적 표기(1e-5)는 e 뒤에 숫자가 올 때만 — "2e"는 2×자연상수로 남긴다
+      if(j<src.length&&(src[j]==="e"||src[j]==="E")){
+        let k=j+1;if(k<src.length&&(src[k]==="+"||src[k]==="-"))k++;
+        if(k<src.length&&/[0-9]/.test(src[k])){while(k<src.length&&/[0-9]/.test(src[k]))k++;j=k;}
+      }
       const s=src.slice(i,j),v=Number(s);
       if(!Number.isFinite(v))throw new Error("expr: 숫자 오류 '"+s+"'");
       toks.push({t:"num",v});i=j;continue;
@@ -23,7 +43,20 @@ function tokenize(src){
     if("+-*/^()".includes(c)){toks.push({t:c});i++;continue;}
     throw new Error("expr: 허용되지 않는 문자 '"+c+"'");
   }
-  return toks;
+  return _implicitMul(toks);
+}
+
+// 암시적 곱셈: 2x·2sin(x)·x(x-1)·(x-1)(x+2)·2pi 등 표준 수학 표기 (함수 호출 sin( 은 예외)
+function _implicitMul(toks){
+  const isValueEnd=(t)=>t.t==="num"||t.t===")"||(t.t==="id"&&!(t.v in FN));
+  const isValueStart=(t)=>t.t==="num"||t.t==="("||t.t==="id";
+  const out=[];
+  for(const t of toks){
+    const prev=out[out.length-1];
+    if(prev&&isValueEnd(prev)&&isValueStart(t))out.push({t:"*"});
+    out.push(t);
+  }
+  return out;
 }
 
 // 재귀 하강: expr → term → unary → power → atom. -x^2 = -(x^2), 2^3^2 = 2^(3^2) = 512.
@@ -70,7 +103,7 @@ function parse(toks){
         p++;const arg=expr();eat(")");
         return (x)=>f(arg(x));
       }
-      if(k.v==="x")return (x)=>x;
+      if(k.v==="x"||k.v==="X")return (x)=>x;
       if(Object.prototype.hasOwnProperty.call(CONST,k.v)){const v=CONST[k.v];return ()=>v;}
       throw new Error("expr: 알 수 없는 이름 '"+k.v+"'");
     }
@@ -84,7 +117,7 @@ function parse(toks){
 // 컴파일 결과 f는 NaN-safe: 정의역 밖·오버플로는 전부 NaN (mathtools _safe 등가)
 function compileExpr(src){
   if(typeof src!=="string"||!src.trim())throw new Error("expr: 빈 식");
-  const raw=parse(tokenize(src));
+  const raw=parse(tokenize(_pre(src)));
   return (x)=>{
     let v;
     try{v=raw(x);}catch{return NaN;}
