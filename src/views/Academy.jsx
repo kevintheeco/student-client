@@ -10,6 +10,7 @@ import { fetchShared, importShared } from "../core/link.js";
 import { ACADEMY_CODE, uid } from "../core/ai.js";
 import { CURRICULUM } from "../core/curriculum.js";
 import { KnowledgeMap } from "./KnowledgeMap.jsx";
+import { ExamBank } from "./ExamBank.jsx";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
 
@@ -204,6 +205,9 @@ function AcademyApp(){
           {e:"🗺️",go:"map",t:tr("수학 지식 지도","Knowledge map"),
            d:tr("중1부터 미적분까지 단원 사이 선수관계를 지도로. 단원을 클릭하면 확대되며 '여기가 무너지면 어디까지 무너지나'가 보여요 — 상담·보강 설계용.","Every unit and its prerequisites on one map — click to zoom into the structure."),
            cta:tr("지도 열기 →","Open map →")},
+          {e:"📚",go:"bank",t:tr("기출문제 은행","Exam bank"),
+           d:tr("시험지 사진·PDF를 올리면 AI가 문제·정답·해설을 추출하고 단원 태그를 달아요. 검수를 거친 진짜 기출이 쌓일수록 출제와 변형의 근거가 탄탄해집니다.","Upload exam papers — AI extracts and tags questions; verified items power authentic tests."),
+           cta:tr("은행 열기 →","Open bank →")},
         ].map(w=>(
           <div key={w.go} className="card" onClick={()=>setView(w.go)}
             style={{padding:"30px 28px",cursor:"pointer",display:"flex",flexDirection:"column",gap:8,minHeight:190}}>
@@ -245,6 +249,7 @@ function AcademyApp(){
       setView("build");
     }}/>
   </>);
+  if(view==="bank")return(<><Head/><ExamBank onExit={()=>setView("home")}/></>);
   if(view==="exam"&&topic)return(<Exam topic={topic} student={student} academy academyName={acaName} onExit={()=>setView("build")}/>);
   if(view==="insight")return(<><Head/><Insight onExit={()=>setView("students")} studentName={activeStu?.name||student}/></>);
   if(view==="dash")return(<><Head/><AcademyDash students={students} onBack={()=>setView("students")} onInsight={(s)=>{selectStudent(s);setView("insight");}}/></>);

@@ -5,8 +5,9 @@ let _cache={};   // ng:* 전체 메모리 미러 (동기 읽기용)
 let _meta={};    // 키별 마지막 수정 시각(ms) — 클라우드 병합용
 const META_KEY="ng:__meta";
 // 클라우드 동기화 제외: API 키(보안) + 내부 메타 + 시험 기록(손글씨 이미지가 커서 Firestore 1MB 초과)
+// + 기출은행(ng:bank: — 대량 축적 시 1MB 초과, 로컬 우선. 공유 단계에서 Firestore 컬렉션으로 이전)
 const SYNC_EXCLUDE=new Set(["ng:key","ng:geminiKey",META_KEY]);
-const noSync=(k)=>SYNC_EXCLUDE.has(k)||k.startsWith("ng:exam:");
+const noSync=(k)=>SYNC_EXCLUDE.has(k)||k.startsWith("ng:exam:")||k.startsWith("ng:bank:");
 
 function _idbOpen(){
   return new Promise((res,rej)=>{
