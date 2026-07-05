@@ -227,7 +227,7 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
       "수식·기호는 LaTeX($...$). 반드시 JSON만 출력(코드블록 없이):\n"+
       '{"score":획득점수숫자,"verdict":"correct|partial|incorrect","essence":"이 문항이 진짜 묻는 핵심 1~2문장","gotIt":"내가 제대로 한 것(구체적, 없으면 \'없음\')","gap":"결핍·약점(구체적, 없으면 \'없음\')","known":"내 답에서 드러난, 내가 확실히 아는 것","unknown":"드러난, 내가 모르거나 헷갈리는 것","next":"이 약점을 메우려면 뭘 보강해야 하는지","model":"모범답안/풀이(수식 LaTeX)","factors":{"개념":0~2,"계산":0~2,"전략":0~2,"추론":0~2}}\n'+
       '(factors는 답안에서 드러난 능력 평가 — 개념 이해/계산 정확성/식 세우기·문제 해석/논리 전개. 0=부족 1=보통 2=좋음, 드러나지 않은 능력은 키 자체를 생략)\n'+
-      '추가로 오답이면 "error":{"type":"실수|개념|전략|해석|표기|백지","stage":"식세우기|계산|해석","label":"오개념 12자 라벨"}를 포함해 (정답이면 error 생략). type에서 실수(개념은 아는데 계산·부호 실수)와 개념(개념 자체를 모름)의 구분이 가장 중요해.';
+      '추가로 오답이면 "error":{"type":"실수|개념|전략|해석|표기|기하구성|백지","stage":"식세우기|계산|해석","label":"오개념 12자 라벨"}를 포함해 (정답이면 error 생략). type에서 실수(개념은 아는데 계산·부호 실수)와 개념(개념 자체를 모름)의 구분이 가장 중요해. 도형·그래프 문항에서 보조선(높이·수선·접선)이나 그림 구성 누락이 오답의 원인이면 기하구성.';
     const r=await callAI(sys,blocks,true,{maxTok:1600,lang:examLang},signal);
     const pts=q.points||0;
     let sc=Number(r&&r.score);

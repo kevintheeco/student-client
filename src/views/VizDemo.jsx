@@ -4,6 +4,30 @@
 import React from "react";
 import { MathViz } from "../ui/mathviz/MathViz.jsx";
 import { GeoFeedback } from "../ui/GeoFeedback.jsx";
+import { MathText } from "../ui/math.jsx";
+
+/* ⑤ 해설 렌더 통합 검증: AI 해설 문자열(마크다운+$$수식$$+mathviz블록+기존 svg)이
+   MathText 한 번으로 전부 렌더되는지 — RICH_FMT 전환의 회귀 감시용 샘플 */
+const SAMPLE_EXPLANATION=[
+  "## 두 곡선 사이 넓이",
+  "$f(x)=e^x-2$ 와 $g(x)=\\ln(x+2)$ 는 **역함수 관계**라 $y=x$ 대칭이야.",
+  "$$S=\\int_{a}^{b}\\{g(x)-f(x)\\}\\,dx$$",
+  "```mathviz",
+  JSON.stringify({version:1,theme:"algebra",view:{x:[-3,4.6],y:[-3,4.6]},steps:[
+    {type:"axes",ticks:1},
+    {type:"plot",id:"f",expr:"exp(x)-2",domain:[-3,1.85],color:"accent"},
+    {type:"plot",id:"g",expr:"log(x+2)",domain:[-1.86,4.6],color:"chalk"},
+    {type:"intersections",of:["f","g"]},
+    {type:"area",between:["f","g"],range:"auto-intersections"},
+    {type:"pill",text:"교점이 적분 한계"}]}),
+  "```",
+  "옛 해설의 인라인 SVG도 그대로 나온다:",
+  '<svg viewBox="0 0 200 80" width="200" height="80"><line x1="10" y1="70" x2="190" y2="70" stroke="#221C39"/><path d="M20 60 Q100 -20 180 60" fill="none" stroke="#6C5CE7" stroke-width="2"/><text x="95" y="78" font-size="11" fill="#221C39">x</text></svg>',
+  "깨진 블록은 조용히 생략된다:",
+  "```mathviz",
+  "{이건 JSON이 아님",
+  "```",
+].join("\n");
 
 const { useState, useEffect } = React;
 
@@ -99,6 +123,11 @@ function VizDemo(){
             opacity:tab==="geo"?1:.55,fontWeight:tab==="geo"?700:400}}>
           ④ 기하 채점
         </button>
+        <button className="btn gho" onClick={()=>setTab("mt")}
+          style={{fontSize:13,padding:"8px 14px",
+            opacity:tab==="mt"?1:.55,fontWeight:tab==="mt"?700:400}}>
+          ⑤ 해설 렌더
+        </button>
       </div>
       {tab!=="geo"&&(
         <div style={{display:"flex",gap:8,justifyContent:"center"}}>
@@ -112,14 +141,18 @@ function VizDemo(){
           </button>
         </div>
       )}
-      {tab==="geo"
-        ?<GeoFeedback/>
-        :demo&&(
-          <div style={{display:"flex",justifyContent:"center"}}>
-            <MathViz key={demo.key+theme+runId} script={demo.script} theme={theme}
-              controls autoplay/>
-          </div>
-        )}
+      {tab==="geo"&&<GeoFeedback/>}
+      {tab==="mt"&&(
+        <div className="card" style={{padding:"16px 18px"}}>
+          <MathText text={SAMPLE_EXPLANATION} tag="div"/>
+        </div>
+      )}
+      {tab!=="geo"&&tab!=="mt"&&demo&&(
+        <div style={{display:"flex",justifyContent:"center"}}>
+          <MathViz key={demo.key+theme+runId} script={demo.script} theme={theme}
+            controls autoplay/>
+        </div>
+      )}
     </div>
   );
 }

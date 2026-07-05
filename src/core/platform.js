@@ -187,9 +187,13 @@ const RICH_FMT="\n\n[출력 형식 규칙 — 가독성 최우선, 반드시 지
 "2) 달러·통화 금액은 백슬래시로 이스케이프: \\$10, \\$1,200 처럼. (수식 아닌 맨 $ 기호 절대 금지 — 안 그러면 화면이 깨짐)\n"+
 "2-1) 수식 안에서 퍼센트는 반드시 \\% 로 써라(그냥 %는 LaTeX 주석으로 먹혀 식 전체가 깨짐). 예: 인플레이션 목표 $\\pi^*=2\\%$. 인라인 $...$ 안에는 줄바꿈 넣지 말고, 길거나 여러 줄이면 $$...$$ 블록(여러 줄은 \\begin{aligned}...\\end{aligned})으로.\n"+
 "3) 비교·수치·항목 정리는 GitHub 마크다운 표로:\n| 항목 | 값 |\n| --- | --- |\n| 예 | 1 |\n표 앞뒤에 빈 줄을 넣고, HTML <table>은 쓰지 말 것.\n"+
-"4) 그래프·도식이 이해에 도움되면 <svg>를 코드블록 없이 직접, 아끼지 말고 그려(필요하면 여러 개): viewBox 사용, width≤520 height≤380. 축마다 라벨(예: 가로 수량 Q·실질소득 Y, 세로 가격 P·실질이자율 r), 곡선마다 라벨, 교점(균형점)은 점+좌표/값 표시, 곡선 이동·변화는 '이동 전(점선·회색) → 이동 후(실선)' + 방향 화살표로. 축선=#221C39, 곡선은 #6C5CE7·#27C2A0·#FF6B8A·#FFC24B, 글자 11~13px, 배경 #FFFDF8.\n"+
-"4-1) 특히 경제학: 그래프로 표현되는 개념은 글로만 때우지 말고 반드시 그려라(수요·공급, 한계비용·평균비용 곡선, IS곡선, LM·MP곡선, AD–AS, 필립스곡선, IS–MP에서 AD 도출 등). 여러 곡선이 얽힌 모형은 서로 '유기적으로 연결'되게 그려라 — 같은 축·같은 균형점을 정렬하거나, 패널을 세로로 쌓아 한 패널의 균형값(예: r* 또는 Y*)이 다음 패널의 입력이 되도록 점선 보조선으로 이어서, 인과 흐름이 한눈에 보이게.\n"+
-"4-2) SVG는 간결하게 그려라(불필요한 점·격자·장식 최소화) — 그래야 안 잘린다. 그리고 모든 <svg>는 반드시 </svg>로 닫아라(닫히지 않으면 그래프가 안 보임).";
+"4) [수학 함수 그래프는 mathviz 스크립트로] 함수식으로 그릴 수 있는 그래프(다항·유리·지수·로그·삼각, 접선·극점·넓이·점근선·타원·쌍곡선·포물선, 좌표평면 도형)는 <svg> 대신 ```mathviz 코드블록에 장면 스크립트 JSON을 넣어라 — 렌더러가 교점·절편·극점·변곡점·초점을 자동 계산해 단계별 애니메이션으로 그린다. 예:\n"+
+'```mathviz\n{"version":1,"theme":"algebra","view":{"x":[-3,4.6],"y":[-3,4.6]},"steps":[{"type":"axes","ticks":1},{"type":"plot","id":"f","expr":"exp(x)-2","domain":[-3,1.85],"color":"accent"},{"type":"plot","id":"g","expr":"log(x+2)","domain":[-1.86,4.6],"color":"chalk"},{"type":"asymptote","axis":"h","at":-2,"label":"y=-2"},{"type":"intercepts","of":"f"},{"type":"intersections","of":["f","g"]},{"type":"area","between":["f","g"],"range":"auto-intersections"},{"type":"pill","text":"두 곡선 사이 넓이는 교점부터"}]}\n```\n'+
+'다른 step: {"type":"extrema"|"inflections","of":"f"} · {"type":"tangent","of":"f","at":x0} · {"type":"point","at":[x,y],"label":"(1,\\\\,2)"} · {"type":"guide","at":[x,y]} · {"type":"segment","from":[x,y],"to":[x,y],"dash":true} · {"type":"conic","kind":"ellipse|hyperbola|parabola","a":2,"b":1.414,"p":2,"show":["foci","asymptotes","vertices"]} · {"type":"formula","tex":"…","box":true} · {"type":"lines","tex":["유도…","결론"],"mutedExceptLast":true} · {"type":"chip","text":"용어"}\n'+
+"규칙: expr는 사칙·^·sin·cos·tan·exp·log·ln·sqrt·abs·pi·e·x만. 교점·절편·극점·변곡점·초점 좌표를 JSON에 직접 쓰지 말 것(intercepts/intersections/extrema/inflections/conic 스텝이 자동 계산). plot의 domain은 정의역 안으로(log 등). lines는 6줄 이하. tex의 백슬래시는 \\\\ 이스케이프.\n"+
+"4-1) [비함수 개념 도식은 <svg>] 함수식이 아닌 정성적 도식(경제 모형, 개념도, 구조도)은 기존처럼 <svg>를 코드블록 없이 직접, 아끼지 말고 그려(필요하면 여러 개): viewBox 사용, width≤520 height≤380. 축마다 라벨(예: 가로 수량 Q·실질소득 Y, 세로 가격 P·실질이자율 r), 곡선마다 라벨, 교점(균형점)은 점+좌표/값 표시, 곡선 이동·변화는 '이동 전(점선·회색) → 이동 후(실선)' + 방향 화살표로. 축선=#221C39, 곡선은 #6C5CE7·#27C2A0·#FF6B8A·#FFC24B, 글자 11~13px, 배경 #FFFDF8.\n"+
+"4-2) 특히 경제학: 그래프로 표현되는 개념은 글로만 때우지 말고 반드시 그려라(수요·공급, 한계비용·평균비용 곡선, IS곡선, LM·MP곡선, AD–AS, 필립스곡선, IS–MP에서 AD 도출 등). 여러 곡선이 얽힌 모형은 서로 '유기적으로 연결'되게 그려라 — 같은 축·같은 균형점을 정렬하거나, 패널을 세로로 쌓아 한 패널의 균형값(예: r* 또는 Y*)이 다음 패널의 입력이 되도록 점선 보조선으로 이어서, 인과 흐름이 한눈에 보이게.\n"+
+"4-3) SVG는 간결하게 그려라(불필요한 점·격자·장식 최소화) — 그래야 안 잘린다. 모든 <svg>는 반드시 </svg>로, 모든 ```mathviz 블록은 반드시 ```로 닫아라(안 닫히면 그래프가 안 보임).";
 // 이미지·PDF 인식용 모델: 가진 키 기준 (Claude 우선, 없으면 Gemini) — Gemini-only 유저도 동작
 function ocrModel(){
   if(CFG.key)return"claude-sonnet-4-6";

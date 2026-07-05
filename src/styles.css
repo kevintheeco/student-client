@@ -262,6 +262,8 @@ a{color:var(--pri-d)}
 @keyframes viz-linein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .mathviz .viz-dot{transform-box:fill-box;transform-origin:center}
 .viz-dot{transform-box:fill-box;transform-origin:center}
+.mathviz-block{margin:14px 0;display:flex;justify-content:center}
+.mathviz-block .mathviz{width:100%}
 /* GeoFeedback — 기하 상호작용 채점 */
 .geo-problem{border:1px solid var(--line);border-radius:12px;padding:12px 16px;
   background:var(--card);font-size:14px;line-height:1.65}
