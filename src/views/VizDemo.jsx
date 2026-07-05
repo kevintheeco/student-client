@@ -6,7 +6,7 @@ import { MathViz } from "../ui/mathviz/MathViz.jsx";
 import { GeoFeedback } from "../ui/GeoFeedback.jsx";
 import { MathText } from "../ui/math.jsx";
 
-/* ⑤ 해설 렌더 통합 검증: AI 해설 문자열(마크다운+$$수식$$+mathviz블록+기존 svg)이
+/* ⑥ 해설 렌더 통합 검증: AI 해설 문자열(마크다운+$$수식$$+mathviz블록+기존 svg)이
    MathText 한 번으로 전부 렌더되는지 — RICH_FMT 전환의 회귀 감시용 샘플 */
 const SAMPLE_EXPLANATION=[
   "## 두 곡선 사이 넓이",
@@ -84,10 +84,28 @@ const DEMO_HYPERBOLA={
   ],
 };
 
+/* ④ 벡터 내적(투영) — 깨진 유니코드·엇나간 각도 호를 vector/angle 스텝으로 정확히 재현 */
+const DEMO_DOT={
+  version:1, theme:"algebra",
+  view:{ x:[-0.6,6.4], y:[-1.2,3.6] },
+  steps:[
+    { type:"vector", from:[0,0], to:[5,0],     label:"\\vec{a}", color:"accent" },
+    { type:"vector", from:[0,0], to:[3,2.4],   label:"\\vec{b}", color:"chalk" },
+    { type:"angle",  at:[0,0], from:[5,0], to:[3,2.4], label:"θ" },
+    { type:"segment", from:[3,2.4], to:[3,0], dash:true, color:"muted" },
+    { type:"segment", from:[0,-0.55], to:[3,-0.55], color:"point", width:2.4,
+      label:"|\\vec{b}|\\cos θ (투영)" },
+    { type:"point", at:[3,0], label:null },
+    { type:"formula", tex:"\\vec{a}\\cdot\\vec{b}=|\\vec{a}|\\,|\\vec{b}|\\cos\\theta", box:true },
+    { type:"pill", text:"눌러서 투영한 길이 × 나머지 벡터의 크기" },
+  ],
+};
+
 const DEMOS=[
   { key:"tri",  name:"① 삼각형 넓이",     script:DEMO_TRIANGLE },
   { key:"log",  name:"② 지수·로그 점근선", script:DEMO_EXPLOG },
   { key:"hyp",  name:"③ 쌍곡선 초점",     script:DEMO_HYPERBOLA },
+  { key:"dot",  name:"④ 벡터 내적(투영)", script:DEMO_DOT },
 ];
 
 function VizDemo(){
@@ -121,12 +139,12 @@ function VizDemo(){
         <button className="btn gho" onClick={()=>setTab("geo")}
           style={{fontSize:13,padding:"8px 14px",
             opacity:tab==="geo"?1:.55,fontWeight:tab==="geo"?700:400}}>
-          ④ 기하 채점
+          ⑤ 기하 채점
         </button>
         <button className="btn gho" onClick={()=>setTab("mt")}
           style={{fontSize:13,padding:"8px 14px",
             opacity:tab==="mt"?1:.55,fontWeight:tab==="mt"?700:400}}>
-          ⑤ 해설 렌더
+          ⑥ 해설 렌더
         </button>
       </div>
       {tab!=="geo"&&(

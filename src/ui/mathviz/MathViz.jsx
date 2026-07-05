@@ -11,8 +11,8 @@ import {
 } from "./mathcore.js";
 import { placeLabel, estimateLabelBox } from "./placeLabel.js";
 import {
-  Curve, DashedLine, Axis, PointDot, SvgLabel, AreaFill,
-  FormulaBox, Lines, Chip, Pill, polyLength, detex,
+  Curve, DashedLine, Axis, PointDot, SvgLabel, AreaFill, Vector, AngleArc,
+  FormulaBox, Lines, Chip, Pill, polyLength, detex, angleLabelAnchor,
 } from "./primitives.jsx";
 
 const { useState, useEffect, useMemo, useRef } = React;
@@ -67,17 +67,20 @@ function compileScript(script, theme){
   const addSegObstacles=(a,b,n=16)=>{
     for(let k=0;k<=n;k++)obstacles.push([a[0]+(b[0]-a[0])*k/n, a[1]+(b[1]-a[1])*k/n]);
   };
-  // 점 + 라벨(회피 배치) — 라벨 박스도 장애물로 등록해 라벨끼리 안 겹침
+  // 라벨(회피 배치) — 라벨 박스도 장애물로 등록해 라벨끼리 안 겹침
+  const addLabelNear=(step,anchorPx,labelText,color,fontSize=13.5)=>{
+    const plain=detex(labelText);
+    const {w,h}=estimateLabelBox(plain,fontSize);
+    const pos=placeLabel({anchor:anchorPx,w,h,obstacles,unit:m.unit});
+    items.push({step,zone:"svg",kind:"label",at:[pos.x,pos.y],text:labelText,color,fontSize});
+    obstacles.push([pos.x,pos.y],[pos.x+w,pos.y],[pos.x,pos.y+h],[pos.x+w,pos.y+h],[pos.x+w/2,pos.y+h/2]);
+  };
+  // 점 + 라벨
   const addPoint=(step,mathXY,labelText,dotColor,labelColor,fontSize=13.5)=>{
     const at=m.toPx(mathXY[0],mathXY[1]);
     items.push({step,zone:"svg",kind:"dot",at,color:dotColor});
     obstacles.push(at);
-    if(labelText==null)return;
-    const plain=detex(labelText);
-    const {w,h}=estimateLabelBox(plain,fontSize);
-    const pos=placeLabel({anchor:at,w,h,obstacles,unit:m.unit});
-    items.push({step,zone:"svg",kind:"label",at:[pos.x,pos.y],text:labelText,color:labelColor||dotColor,fontSize});
-    obstacles.push([pos.x,pos.y],[pos.x+w,pos.y],[pos.x,pos.y+h],[pos.x+w,pos.y+h],[pos.x+w/2,pos.y+h/2]);
+    if(labelText!=null)addLabelNear(step,at,labelText,labelColor||dotColor,fontSize);
   };
   const needPlot=(id)=>{
     if(plots[id])return plots[id];
@@ -192,6 +195,24 @@ function compileScript(script, theme){
         if(s.dash)items.push({step:i,zone:"svg",kind:"dash",pts,color:color(s.color),width:s.width??2,dash:"8 9"});
         else items.push({step:i,zone:"svg",kind:"curve",pts,color:color(s.color),width:s.width??2.8,dur:TIMING.drawOn});
         addSegObstacles(pts[0],pts[1]);
+        if(s.label)addLabelNear(i,[(pts[0][0]+pts[1][0])/2,(pts[0][1]+pts[1][1])/2],s.label,color(s.color));
+        dur=TIMING.drawOn;break;
+      }
+      case "vector":{    // 벡터 화살표 — 조합문자 없이 도형으로 그린다 (투영·내적 다이어그램)
+        if(!Array.isArray(s.from)||!Array.isArray(s.to))break;
+        const from=m.toPx(s.from[0],s.from[1]), to=m.toPx(s.to[0],s.to[1]);
+        items.push({step:i,zone:"svg",kind:"vector",from,to,color:color(s.color)||accent,width:s.width??3,dur:TIMING.drawOn});
+        addSegObstacles(from,to);
+        if(s.label)addLabelNear(i,to,s.label,color(s.color)||accent,14.5);
+        dur=TIMING.drawOn;break;
+      }
+      case "angle":{     // 각도 호 — at 꼭짓점에서 from·to 방향 사이 (θ 라벨은 이등분선 바깥)
+        if(!Array.isArray(s.at)||!Array.isArray(s.from)||!Array.isArray(s.to))break;
+        const at=m.toPx(s.at[0],s.at[1]);
+        const pf=m.toPx(s.from[0],s.from[1]), pt=m.toPx(s.to[0],s.to[1]);
+        const radius=s.radius??22;
+        items.push({step:i,zone:"svg",kind:"angle",at,from:pf,to:pt,radius,color:color(s.color)||t.chalk});
+        if(s.label)addLabelNear(i,angleLabelAnchor(at,pf,pt,radius),s.label,color(s.color)||t.chalk,13);
         dur=TIMING.drawOn;break;
       }
       case "guide":{
@@ -308,6 +329,8 @@ function renderSvgItem(it, idx, cur, reduced, compiled){
         chalk={compiled.tokens.chalk} grid={compiled.tokens.muted} anim={anim}/>;
     case "curve": return <Curve key={key} pts={it.pts} color={it.color} width={it.width} anim={anim}/>;
     case "dash":  return <DashedLine key={key} pts={it.pts} color={it.color} width={it.width} dash={it.dash} anim={anim}/>;
+    case "vector":return <Vector key={key} from={it.from} to={it.to} color={it.color} width={it.width} anim={anim}/>;
+    case "angle": return <AngleArc key={key} at={it.at} from={it.from} to={it.to} radius={it.radius} color={it.color} anim={{...anim,dur:500}}/>;
     case "dot":   return <PointDot key={key} at={it.at} color={it.color} anim={{...anim,dur:400}}/>;
     case "label": return <SvgLabel key={key} at={it.at} text={it.text} color={it.color} fontSize={it.fontSize} anim={{...anim,dur:400,delay:120}}/>;
     case "area":  return <AreaFill key={key} pts={it.pts} color={it.color} opacity={it.opacity} anim={{...anim,dur:TIMING.cardFade}}/>;
@@ -363,14 +386,18 @@ function MathViz({script, theme="light", controls=true, autoplay=true, staticOnl
       )}
       {controls&&!staticOnly&&total>1&&(
         <div className="viz-controls" style={{color:t.muted}}>
-          <button type="button" aria-label="이전 단계" onClick={player.prev} disabled={cur<=0}>◀</button>
           <button type="button" aria-label={player.playing?"일시정지":"재생"} onClick={player.toggle}>
             {player.playing?"❚❚":"▶"}
           </button>
-          <button type="button" aria-label="다음 단계" onClick={player.next} disabled={cur>=total-1}>▶</button>
-          <input type="range" min={0} max={total-1} value={cur} aria-label="단계 이동"
-            onChange={(e)=>player.setStep(+e.target.value)}/>
-          <span className="viz-stepnum">{cur+1}/{total}</span>
+          <div className="viz-stepchips" role="group" aria-label="단계 이동">
+            {Array.from({length:total},(_,i)=>(
+              <button key={i} type="button"
+                className={"viz-stepchip"+(i===cur?" on":i<cur?" done":"")}
+                onClick={()=>player.setStep(i)}>
+                {i===total-1?"최종":(i+1)+"단계"}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>

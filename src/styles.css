@@ -254,6 +254,11 @@ a{color:var(--pri-d)}
 .viz-controls button:disabled{opacity:.3;cursor:default}
 .viz-controls input[type=range]{flex:1;accent-color:currentColor;min-width:60px}
 .viz-stepnum{font-size:11.5px;letter-spacing:.04em}
+.viz-stepchips{display:flex;gap:5px;flex-wrap:wrap;flex:1}
+.viz-stepchip{font-size:11px !important;padding:4px 9px !important;border-radius:999px !important;
+  opacity:.55;transition:all .2s}
+.viz-stepchip.done{opacity:.8;border-style:dashed !important}
+.viz-stepchip.on{opacity:1;font-weight:700}
 .viz-line-in{opacity:0;animation:viz-linein .5s ease forwards}
 @keyframes viz-draw{to{stroke-dashoffset:0}}
 @keyframes viz-pop{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}}

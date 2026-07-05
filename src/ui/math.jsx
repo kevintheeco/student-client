@@ -9,6 +9,8 @@ import { parseSceneBlock as _parseSceneBlock } from "./mathviz/scenescript.js";
 function sanitizeSvg(s){
   return s
     .replace(/<!--[\s\S]*?-->/g,"")
+    // 유니코드 조합문자(벡터 화살표 b⃗의 U+20D7, 오버라인 등)는 SVG 폰트가 못 그려 ▯로 깨짐 — 제거
+    .replace(/[\u0300-\u036F\u20D0-\u20FF]/g,"")
     .replace(/<script[\s\S]*?<\/script>/gi,"")
     .replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi,"")
     .replace(/javascript\s*:/gi,"")

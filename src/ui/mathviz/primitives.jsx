@@ -32,10 +32,13 @@ const SUP={"0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7
 const SUB={"0":"₀","1":"₁","2":"₂","3":"₃","4":"₄","5":"₅","6":"₆","7":"₇","8":"₈","9":"₉","n":"ₙ"};
 function detex(s){
   return String(s)
+    .replace(/\\vec\s*\{([^}]*)\}/g,"$1")   // 벡터 기호는 SVG 폰트가 조합문자를 못 그림 — 화살표는 도형으로
+    .replace(/\\overline\s*\{([^}]*)\}/g,"$1")
     .replace(/\\left|\\right/g,"")
     .replace(/\\,|\\;|\\!|\\ /g," ")
-    .replace(/\\pi/g,"π").replace(/\\theta/g,"θ").replace(/\\sqrt/g,"√")
+    .replace(/\\pi/g,"π").replace(/\\theta/g,"θ").replace(/\\alpha/g,"α").replace(/\\beta/g,"β").replace(/\\sqrt/g,"√")
     .replace(/\\cdot/g,"·").replace(/\\times/g,"×").replace(/\\pm/g,"±").replace(/\\prime/g,"′")
+    .replace(/\\(sin|cos|tan|log|ln|exp)\b/g,"$1")   // 함수 명령은 이름 그대로
     .replace(/\^\{([^}]*)\}/g,(m,p)=>[...p].map(c=>SUP[c]||c).join(""))
     .replace(/\^(.)/g,(m,c)=>SUP[c]||c)
     .replace(/_\{([^}]*)\}/g,(m,p)=>[...p].map(c=>SUB[c]||c).join(""))
@@ -127,6 +130,50 @@ function Axis({mapping, ticks=1, chalk, grid, anim, fontSize=11}){
   );
 }
 
+/* ── 벡터 화살표: 선 draw-on 후 화살촉 pop (투영·내적 다이어그램용) ── */
+function Vector({from, to, color, width=3, anim}){
+  const dx=to[0]-from[0], dy=to[1]-from[1], L=Math.hypot(dx,dy)||1;
+  const ux=dx/L, uy=dy/L;
+  const hs=Math.max(9,width*3.2);                       // 화살촉 크기
+  const b=[to[0]-ux*hs, to[1]-uy*hs];                   // 촉 밑점 (선은 여기까지)
+  const p1=[b[0]-uy*hs*0.45, b[1]+ux*hs*0.45];
+  const p2=[b[0]+uy*hs*0.45, b[1]-ux*hs*0.45];
+  const on=anim&&anim.animate;
+  return (
+    <g>
+      <Curve pts={[from,b]} color={color} width={width} anim={anim}/>
+      <polygon points={`${to} ${p1} ${p2}`} fill={color} className="viz-dot"
+        style={on?{opacity:0,animation:`viz-pop 250ms ease forwards ${(anim.delay||0)+(anim.dur||0)}ms`}:null}/>
+    </g>
+  );
+}
+
+/* ── 각도 호: 꼭짓점 at에서 from·to 방향 사이 최단 호 (θ 표시) ── */
+function AngleArc({at, from, to, radius=22, color, width=1.8, anim}){
+  const ang=(p)=>Math.atan2(p[1]-at[1], p[0]-at[0]);
+  const a0=ang(from);
+  let d=ang(to)-a0;
+  while(d<=-Math.PI)d+=2*Math.PI;
+  while(d>Math.PI)d-=2*Math.PI;
+  const p0=[at[0]+radius*Math.cos(a0), at[1]+radius*Math.sin(a0)];
+  const p1=[at[0]+radius*Math.cos(a0+d), at[1]+radius*Math.sin(a0+d)];
+  const path=`M${p0[0].toFixed(2)} ${p0[1].toFixed(2)} A${radius} ${radius} 0 0 ${d>0?1:0} ${p1[0].toFixed(2)} ${p1[1].toFixed(2)}`;
+  const on=anim&&anim.animate;
+  return <path d={path} fill="none" stroke={color} strokeWidth={width} strokeLinecap="round"
+    pathLength={on?1:undefined}
+    style={on?{strokeDasharray:1,strokeDashoffset:1,...animStyle(anim,"viz-draw")}:null}/>;
+}
+// 각도 라벨 anchor: 이등분선 방향 radius 바깥 (MathViz 컴파일 패스에서 사용)
+function angleLabelAnchor(at, from, to, radius=22){
+  const ang=(p)=>Math.atan2(p[1]-at[1], p[0]-at[0]);
+  const a0=ang(from);
+  let d=ang(to)-a0;
+  while(d<=-Math.PI)d+=2*Math.PI;
+  while(d>Math.PI)d-=2*Math.PI;
+  const mid=a0+d/2, r=radius+7;
+  return [at[0]+r*Math.cos(mid), at[1]+r*Math.sin(mid)];
+}
+
 /* ── 점·라벨·영역·직각 표시 ── */
 function PointDot({at, color, r=4.5, anim}){
   return <circle cx={at[0]} cy={at[1]} r={r} fill={color}
@@ -207,7 +254,8 @@ function Pill({text, chalk, anim}){
 }
 
 export {
-  pathFrom, polyLength, detex,
+  pathFrom, polyLength, detex, angleLabelAnchor,
   Curve, DashedLine, Axis, PointDot, SvgLabel, AreaFill, RightAngleMark,
+  Vector, AngleArc,
   FormulaBox, Lines, Chip, Pill,
 };

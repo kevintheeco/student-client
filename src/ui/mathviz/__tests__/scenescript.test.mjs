@@ -77,6 +77,18 @@ test("validateScript: 세로 장축 타원(b>a)은 이제 유효 (초점 y축)",
   assert.ok(Math.abs(f[0][1]-4)<1e-9 && f[0][0]===0);   // c=√(25−9)=4, y축 위
 });
 
+test("validateScript: vector/angle 스텝 — 유효 통과, 좌표 누락 거부", () => {
+  const good={version:1,view:{x:[-1,6],y:[-1,4]},steps:[
+    {type:"vector",from:[0,0],to:[5,0],label:"\\vec{a}"},
+    {type:"vector",from:[0,0],to:[3,2.4],label:"\\vec{b}"},
+    {type:"angle",at:[0,0],from:[5,0],to:[3,2.4],label:"θ"}]};
+  assert.deepEqual(validateScript(good).errors, []);
+  const bad={version:1,view:{x:[-1,6],y:[-1,4]},steps:[
+    {type:"vector",from:[0,0]},{type:"angle",at:[0,0],from:[5,0]}]};
+  const v=validateScript(bad);
+  assert.equal(v.errors.length, 2);
+});
+
 test("isSceneScript: 구조 위반 거부 (steps 41개·view 누락)", () => {
   assert.ok(!isSceneScript({view:{x:[0,1],y:[0,1]},steps:Array.from({length:41},()=>({type:"axes"}))}));
   assert.ok(!isSceneScript({steps:[{type:"axes"}]}));

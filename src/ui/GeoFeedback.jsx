@@ -7,6 +7,7 @@ import { normalizeStrokes, recognize, compare, dist } from "../core/geointeract.
 import { logAttempt } from "../core/attempts.js";
 import { VIZ_LIGHT } from "./mathviz/tokens.js";
 import { Curve, DashedLine, PointDot, SvgLabel, RightAngleMark, FormulaBox } from "./mathviz/primitives.jsx";
+import { placeLabel, estimateLabelBox } from "./mathviz/placeLabel.js";
 
 const { useState, useRef } = React;
 const T=VIZ_LIGHT;   // 오버레이는 크림색 패드 위에 그림 — 라이트 세트가 4.5:1 확보
@@ -18,6 +19,16 @@ function vertexLabelPos(v, centroid, off=22){
   const dx=v[0]-centroid[0], dy=v[1]-centroid[1];
   const L=Math.hypot(dx,dy)||1;
   return [v[0]+dx/L*off-5, v[1]+dy/L*off-9];
+}
+
+// 한글 판정 라벨("내 그림 (오답 풀이)"/"정답 풀이")을 그림·다른 라벨과 안 겹치게 배치 (대표 지시)
+function judgeLabel(text, anchor, color, obst, bounds, fontSize=17, delay=1400){
+  const {w,h}=estimateLabelBox(text,fontSize);
+  const pos=placeLabel({anchor,w,h,obstacles:obst,unit:60,maxBuff:1.6});
+  const x=Math.max(6,Math.min(bounds.w-w-6,pos.x));      // 캔버스 밖으로 안 나가게 클램프
+  const y=Math.max(6,Math.min(bounds.h-h-6,pos.y));
+  obst.push([x,y],[x+w,y],[x,y+h],[x+w,y+h],[x+w/2,y+h/2]);
+  return {kind:"label",at:[x,y],text,color,fontSize,delay};
 }
 
 function GeoFeedback({
@@ -82,12 +93,18 @@ function GeoFeedback({
     // 직각 표시 방향: 밑변 방향 × 높이 방향
     const uB=(()=>{const p=dist(B,H)>2?B:C;const L=dist(p,H)||1;return[(p[0]-H[0])/L,(p[1]-H[1])/L];})();
     const uA=(()=>{const L=dist(A,H)||1;return[(A[0]-H[0])/L,(A[1]-H[1])/L];})();
+    // 판정 라벨 겹침 회피용 장애물: 학생 획 전체 + 꼭짓점·수선의 발 + AH 선분
+    const obst=[...strokes.flat(),A,B,C,H];
+    for(let k=0;k<=12;k++)obst.push([A[0]+(H[0]-A[0])*k/12, A[1]+(H[1]-A[1])*k/12]);
+    const bounds={w:dump.w,h:dump.h};
     if(missingAux.length){
       setItems([...base,
         {kind:"dash",pts:[A,H],color:T.fix,width:3,delay:200},
         {kind:"dot",at:H,color:T.fix,delay:1000},
         {kind:"label",at:[H[0]+10,H[1]+14],text:"H",color:T.fix,delay:1100},
         {kind:"angle",corner:H,uA:uB,uB:uA,color:T.fix,delay:1300},
+        judgeLabel("내 그림 (오답 풀이)",B,T.student,obst,bounds),
+        judgeLabel("정답 풀이: 높이 AH",[(A[0]+H[0])/2,(A[1]+H[1])/2],T.fix,obst,bounds,17,1600),
       ]);
       setStepSt(["done","done","done","done"]);
       setResult({
@@ -101,6 +118,7 @@ function GeoFeedback({
         {kind:"dash",pts:[A,H],color:T.ok,width:2.6,delay:200},
         {kind:"dot",at:H,color:T.ok,delay:900},
         {kind:"angle",corner:H,uA:uB,uB:uA,color:T.ok,delay:1000},
+        judgeLabel("내 그림 (정답 풀이 ✓)",B,T.ok,obst,bounds),
       ]);
       setStepSt(["done","done","done","done"]);
       setResult({
@@ -136,7 +154,7 @@ function GeoFeedback({
       case "line": return <Curve key={i} pts={it.pts} color={it.color} width={4} anim={anim}/>;
       case "dash": return <DashedLine key={i} pts={it.pts} color={it.color} width={it.width||3} dash="10 11" anim={anim}/>;
       case "dot":  return <PointDot key={i} at={it.at} color={it.color} r={6} anim={{...anim,dur:400}}/>;
-      case "label":return <SvgLabel key={i} at={it.at} text={it.text} color={it.color} fontSize={19} anim={{...anim,dur:400}}/>;
+      case "label":return <SvgLabel key={i} at={it.at} text={it.text} color={it.color} fontSize={it.fontSize||19} anim={{...anim,dur:400}}/>;
       case "angle":return <RightAngleMark key={i} corner={it.corner} uA={it.uA} uB={it.uB} size={15} color={it.color} anim={{...anim,dur:400}}/>;
       default: return null;
     }
