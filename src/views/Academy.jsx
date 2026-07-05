@@ -8,24 +8,9 @@ import { setActiveStudent } from "../core/attempts.js";
 import { clearDemoStudents, seedDemoStudents } from "../core/demoStudents.js";
 import { fetchShared, importShared } from "../core/link.js";
 import { ACADEMY_CODE, uid } from "../core/ai.js";
+import { CURRICULUM } from "../core/curriculum.js";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
-
-const CURRICULUM=[
-  {level:"중등 수학",subjects:[
-    {id:"m1",name:"중1 수학",units:["소인수분해","정수와 유리수","문자의 사용과 식의 계산","일차방정식","좌표평면과 그래프(정비례·반비례)","기본 도형","작도와 합동","평면도형의 성질","입체도형의 성질","자료의 정리와 해석"]},
-    {id:"m2",name:"중2 수학",units:["유리수와 순환소수","단항식과 다항식의 계산","일차부등식","연립일차방정식","일차함수와 그래프","일차함수와 일차방정식","삼각형의 성질","사각형의 성질","도형의 닮음","피타고라스 정리","경우의 수와 확률"]},
-    {id:"m3",name:"중3 수학",units:["제곱근과 실수","다항식의 곱셈과 인수분해","이차방정식","이차함수","삼각비","원의 성질","대푯값과 산포도"]},
-  ]},
-  {level:"고등 수학",subjects:[
-    {id:"cm1",name:"공통수학1",units:["다항식의 연산","나머지정리와 인수분해","복소수와 이차방정식","이차방정식과 이차함수","여러 가지 방정식","여러 가지 부등식","순열과 조합","행렬과 그 연산"]},
-    {id:"cm2",name:"공통수학2",units:["평면좌표와 직선의 방정식","원의 방정식","도형의 이동","집합","명제","함수","유리함수와 무리함수"]},
-    {id:"s1",name:"수학Ⅰ",units:["지수와 로그","지수함수와 로그함수","삼각함수","사인법칙과 코사인법칙","등차수열과 등비수열","수열의 합","수학적 귀납법"]},
-    {id:"s2",name:"수학Ⅱ",units:["함수의 극한","함수의 연속","미분계수와 도함수","도함수의 활용","부정적분","정적분","정적분의 활용"]},
-    {id:"prob",name:"확률과 통계",units:["순열과 조합","이항정리","확률의 뜻과 활용","조건부확률","확률변수와 확률분포","이항분포와 정규분포","통계적 추정"]},
-    {id:"calc",name:"미적분",units:["수열의 극한","급수","지수·로그·삼각함수의 미분","여러 가지 미분법","도함수의 활용","여러 가지 적분법","정적분의 활용"]},
-  ]},
-];
 
 function AcademyApp(){
   const [view,setView]=useState("home");   // home | students | build | preview | exam | insight | dash

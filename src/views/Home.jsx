@@ -4,7 +4,7 @@ import { deckSummary } from "../core/srs.js";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
 
-function Home({decks,subjects,onAdd,onOpen,onNotes,onChanged,nick,onInsight}){
+function Home({decks,subjects,onAdd,onUnits,onOpen,onNotes,onChanged,nick,onInsight}){
   const [det,setDet]=useState({});
   const [pickFor,setPickFor]=useState(null);   // 공부 시작 시 모드 선택 시트 {id,def}
   useEffect(()=>{
@@ -37,14 +37,43 @@ function Home({decks,subjects,onAdd,onOpen,onNotes,onChanged,nick,onInsight}){
         <Prof size={66}/>
         <div>
           {nick&&<div style={{fontFamily:"'Jua',sans-serif",fontSize:15,color:"var(--pri)",marginBottom:4}}>{tr("안녕, ","Hi, ")}{nick}! 👋</div>}
-          <h2>{tr(<>공부한 거,<br/>다시 안 까먹게 해줄게</>,<>What you studied,<br/>I'll keep it from fading</>)}</h2>
-          <p>{tr(<>자료를 넣어주면 핵심을 뽑아 무작위로 물어봐.<br/>맞히면 뜸하게, 틀리면 자주 — 그게 장기기억의 비결이야.</>,<>Add your material and I'll pull out the key ideas and quiz you.<br/>Right → less often, wrong → more often — that's how long-term memory works.</>)}</p>
+          {onUnits?(
+            <>
+              <h2>{tr(<>중·고등 수학,<br/>단원별로 정복하자</>,<>Middle·High math,<br/>unit by unit</>)}</h2>
+              <p>{tr(<>교과서 단원을 고르거나, 학교 프린트·노트를 넣어줘.<br/>맞히면 뜸하게, 틀리면 자주 — 그게 장기기억의 비결이야.</>,<>Pick a textbook unit or drop in your own notes.<br/>Right → less often, wrong → more often.</>)}</p>
+            </>
+          ):(
+            <>
+              <h2>{tr(<>공부한 거,<br/>다시 안 까먹게 해줄게</>,<>What you studied,<br/>I'll keep it from fading</>)}</h2>
+              <p>{tr(<>자료를 넣어주면 핵심을 뽑아 무작위로 물어봐.<br/>맞히면 뜸하게, 틀리면 자주 — 그게 장기기억의 비결이야.</>,<>Add your material and I'll pull out the key ideas and quiz you.<br/>Right → less often, wrong → more often — that's how long-term memory works.</>)}</p>
+            </>
+          )}
         </div>
       </div>
-      <div className="row" style={{marginBottom:18}}>
-        <button className="btn pri" onClick={onAdd}>{tr("+ 공부한 거 추가","+ Add material")}</button>
-        {onInsight&&<button className="btn gho" onClick={onInsight}>{tr("📊 성장 인사이트","📊 Growth insight")}</button>}
-      </div>
+      {onUnits?(
+        <>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))",gap:12,marginBottom:12}}>
+            <article className="card" onClick={onUnits} style={{cursor:"pointer",padding:"18px 20px",border:"1.5px solid var(--pri)",background:"var(--pri-s)"}}>
+              <div style={{fontSize:24}}>📚</div>
+              <div style={{fontFamily:"'Jua',sans-serif",fontSize:16,color:"var(--ink)",margin:"6px 0 4px"}}>{tr("단원별 공부","Study by unit")}</div>
+              <div style={{fontSize:12.5,color:"var(--sub)",lineHeight:1.6}}>{tr("교과서 목차에서 단원을 고르면 AI 교수님이 바로 과외 시작 — 자료 없어도 OK","Pick units from the curriculum — no material needed")}</div>
+            </article>
+            <article className="card" onClick={onAdd} style={{cursor:"pointer",padding:"18px 20px"}}>
+              <div style={{fontSize:24}}>📎</div>
+              <div style={{fontFamily:"'Jua',sans-serif",fontSize:16,color:"var(--ink)",margin:"6px 0 4px"}}>{tr("학습자료 넣어 공부","Study my material")}</div>
+              <div style={{fontSize:12.5,color:"var(--sub)",lineHeight:1.6}}>{tr("학교 프린트·문제집·노트·PDF를 넣으면 핵심을 뽑아 복습시켜줘","Drop in handouts, notes, or PDFs")}</div>
+            </article>
+          </div>
+          <div className="row" style={{marginBottom:18}}>
+            {onInsight&&<button className="btn gho" onClick={onInsight}>{tr("📊 성장 인사이트","📊 Growth insight")}</button>}
+          </div>
+        </>
+      ):(
+        <div className="row" style={{marginBottom:18}}>
+          <button className="btn pri" onClick={onAdd}>{tr("+ 공부한 거 추가","+ Add material")}</button>
+          {onInsight&&<button className="btn gho" onClick={onInsight}>{tr("📊 성장 인사이트","📊 Growth insight")}</button>}
+        </div>
+      )}
       {decks.length===0?(
         <div className="empty">{tr("아직 자료가 없네! 공부한 거 던져주면 문제 낼게 📚","No materials yet! Drop in what you studied and I'll quiz you 📚")}</div>
       ):(
