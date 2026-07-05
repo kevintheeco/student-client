@@ -63,6 +63,10 @@ function compileScript(script, theme){
   const addObstacles=(pxPts,every=4)=>{
     for(let k=0;k<pxPts.length;k+=every){const p=pxPts[k];if(p)obstacles.push(p);}
   };
+  // 선분을 따라 장애물 점 샘플 (끝점만으로는 라벨이 선 위에 얹힘)
+  const addSegObstacles=(a,b,n=16)=>{
+    for(let k=0;k<=n;k++)obstacles.push([a[0]+(b[0]-a[0])*k/n, a[1]+(b[1]-a[1])*k/n]);
+  };
   // 점 + 라벨(회피 배치) — 라벨 박스도 장애물로 등록해 라벨끼리 안 겹침
   const addPoint=(step,mathXY,labelText,dotColor,labelColor,fontSize=13.5)=>{
     const at=m.toPx(mathXY[0],mathXY[1]);
@@ -112,7 +116,7 @@ function compileScript(script, theme){
           ?[m.toPx(s.at,vy0),m.toPx(s.at,vy1)]
           :[m.toPx(vx0,s.at),m.toPx(vx1,s.at)];
         items.push({step:i,zone:"svg",kind:"dash",pts,color:t.muted,width:1.8,dash:"7 8"});
-        addObstacles(pts.length===2?[pts[0],pts[1]]:pts,1);
+        addSegObstacles(pts[0],pts[1]);
         if(s.label){
           const anchor=s.axis==="v"?m.toPx(s.at,vy0+(vy1-vy0)*0.12):m.toPx(vx0+(vx1-vx0)*0.1,s.at);
           const plain=detex(s.label);
@@ -181,6 +185,14 @@ function compileScript(script, theme){
         if(!Array.isArray(s.at))break;
         addPoint(i,s.at,s.label??null,t.point);
         break;
+      }
+      case "segment":{   // 명시 선분 (도형·보조선) — from/to는 수학 좌표
+        if(!Array.isArray(s.from)||!Array.isArray(s.to))break;
+        const pts=[m.toPx(s.from[0],s.from[1]),m.toPx(s.to[0],s.to[1])];
+        if(s.dash)items.push({step:i,zone:"svg",kind:"dash",pts,color:color(s.color),width:s.width??2,dash:"8 9"});
+        else items.push({step:i,zone:"svg",kind:"curve",pts,color:color(s.color),width:s.width??2.8,dur:TIMING.drawOn});
+        addSegObstacles(pts[0],pts[1]);
+        dur=TIMING.drawOn;break;
       }
       case "guide":{
         if(!Array.isArray(s.at))break;
