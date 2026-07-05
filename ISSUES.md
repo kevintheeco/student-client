@@ -112,3 +112,20 @@ localStorage가 전부인데 브라우저 데이터 삭제 한 번에 모든 학
 | 3 | #1 partial 스케쥴 | 학습 진도 체감에 직결 |
 | 4 | #10 보충질문 보상 | 열심히 해도 box 안 오르는 문제 |
 | 5 | #7 백업 | 데이터 손실 리스크 |
+
+
+---
+
+# 벡터수학엔진 백로그 — 5단계 (다음 세션, 2026-07-06 기록)
+
+1~4단계 완료(수학계산층·MathViz 렌더러·#vizdemo·기하 상호작용 #geodemo). 남은 5단계:
+
+- [ ] **AI 비전 인식 경로**: geointeract에 recognizeAI(스트로크 이미지 + 지오메트리 요약 → ai.js 비전 → 장면 스크립트 JSON). 프롬프트에 지시서 §2-1 스키마를 계약으로 명시, 실패 시 규칙 기반 폴백
+- [ ] **기출은행 figureScript**: examBank 스키마에 figureScript(장면 스크립트) 필드 병행 — bankSearch 필터(figure||figureScript), toExamItem 복사, importJson 검증(steps 배열+view 없으면 드롭). PNG는 폴백 유지
+- [ ] **ExamBank 검수 화면**: ItemEditor에 "🧭 벡터로 변환" 버튼(AI가 figure 이미지→스크립트 초안 → 사람 검수 승인/거절 미리보기 MathViz staticOnly)
+- [ ] **Exam.jsx 연동**: 문제/결과 화면에서 figureScript 있으면 MathViz(스텝 제어), 없으면 기존 img figure 분기. 채점 시 스크립트 JSON을 텍스트 블록으로 전송(정확 좌표·함수 — PNG보다 채점 정확), 채점 프롬프트 오류 enum에 "기하구성" 추가
+- [ ] **RICH_FMT rule 4 이원화**(platform.js): 수학 함수 그래프 = mathviz 펜스 코드블록(스키마 예시 포함, "특이점 좌표를 직접 쓰지 말고 intercepts/intersections/extrema 스텝 사용"), 경제 등 비함수 도식 = 기존 svg 유지. MathText에 mathviz 블록 감지 추가 — React.lazy로 순환 import 회피, 기존 svg 경로는 무수정(캐시된 해설 회귀 0)
+- [ ] **개념 과외 노출**: Tutor 응답이 MathText를 거치므로 RICH_FMT 전환만으로 층층설명에 스텝 제어 자동 노출 — 시스템 프롬프트에 한 줄 권장 추가
+- [ ] **GeoFeedback 실전 배선**: 기출은행 정답 모델(figureScript.requirements)이 생기면 Exam 오답 리뷰에 "직접 그어보기" 연결 (compare() diff 계약은 이미 준비됨). 실전 패드는 penOnly=true로
+
+주의: MathText 변경은 모든 AI 해설에 영향 — 3개 에디션 캐시 해설로 회귀 테스트 필수. 데모 진입로: #vizdemo(렌더러)·#geodemo(기하 채점).
