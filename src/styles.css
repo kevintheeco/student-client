@@ -235,6 +235,35 @@ a{color:var(--pri-d)}
   .hero{flex-direction:column;text-align:center}
   canvas.pad{height:260px}
 }
+/* MATHVIZ — 벡터 수학 렌더링 보드 (다크 칠판 기본, theme-light 반전) */
+.mathviz{display:flex;flex-direction:column;gap:10px;margin:14px 0;padding:12px;
+  border-radius:16px;border:1px solid;max-width:560px}
+.mathviz-board{display:block;width:100%;height:auto;border-radius:12px}
+.mathviz .viz-caption{display:flex;flex-direction:column;gap:8px;padding:0 4px}
+.viz-formula{font-size:15px;text-align:center;padding:8px 14px;line-height:1.7}
+.viz-formula.boxed{border:1.5px solid;border-radius:12px}
+.viz-lines{display:flex;flex-direction:column;gap:4px}
+.viz-lineitem{font-size:14px;line-height:1.8;text-align:center}
+.viz-chiprow{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.viz-chip{font-size:12px;padding:3px 11px;border-radius:999px;border:1px solid}
+.viz-pill{font-size:13px;text-align:center;padding:7px 14px;border-radius:999px;
+  border:1px solid;border-color:inherit;opacity:.92}
+.viz-controls{display:flex;align-items:center;gap:8px;padding:0 4px}
+.viz-controls button{background:none;border:1px solid currentColor;color:inherit;
+  border-radius:8px;font-size:12px;line-height:1;padding:6px 10px;cursor:pointer}
+.viz-controls button:disabled{opacity:.3;cursor:default}
+.viz-controls input[type=range]{flex:1;accent-color:currentColor;min-width:60px}
+.viz-stepnum{font-size:11.5px;letter-spacing:.04em}
+.viz-line-in{opacity:0;animation:viz-linein .5s ease forwards}
+@keyframes viz-draw{to{stroke-dashoffset:0}}
+@keyframes viz-pop{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:scale(1)}}
+@keyframes viz-fade{from{opacity:0}to{opacity:1}}
+@keyframes viz-area{from{opacity:0}to{opacity:var(--viz-op,.35)}}
+@keyframes viz-linein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.mathviz .viz-dot{transform-box:fill-box;transform-origin:center}
+
 @media(prefers-reduced-motion:reduce){
   .qcard{animation:none}.spinner{animation-duration:0s}.btn{transition:none}
+  .mathviz *{animation:none !important;transition:none !important;
+    opacity:1 !important;stroke-dashoffset:0 !important}
 }
