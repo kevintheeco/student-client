@@ -404,6 +404,26 @@ async function extractBankItems(fileBlocks,unitNames,srcHint){
   return Array.isArray(r?.items)?r.items.filter(q=>q&&q.question):[];
 }
 
+// 정답지에서 문항번호→정답(+해설) 매핑 추출 — 기출은행 병합용. 정답지가 진리, 지어내기 금지.
+async function extractAnswerKey(fileBlocks){
+  const r=await callAI(
+    "너는 수학 시험 정답지 디지털화 전문가야. 자료에서 문항번호별 정답을 빠짐없이 추출해(해설이 있으면 해설도). 수식은 LaTeX($...$). 자료에 없는 내용은 절대 지어내지 마.",
+    [...fileBlocks,{type:"text",text:'JSON만 출력: {"answers":[{"number":"문항번호","answer":"정답(객관식은 ①~⑤ 기호 그대로)","explanation":"해설(없으면 빈 문자열)"}]}'}],
+    true,{maxTok:6000});
+  return Array.isArray(r?.answers)?r.answers.filter(a=>a&&a.number!=null&&a.answer):[];
+}
+
+// AI 풀이 초안: 정답 없는 기출을 풀어 정답·해설 초안 생성 — 정확도는 높지만 100%가 아니므로
+// 반드시 '초안' 표시와 함께 저장하고, 공식 정답 대조(사람 검수)를 거쳐야 출제에 쓰인다.
+async function solveBankItem(q){
+  const r=await callAI(
+    "너는 대한민국 중·고등 수학 만점 강사야. 아래 문제를 정확히 풀어. 차근차근 풀고 반드시 검산까지 마친 뒤 최종 정답을 확정해. 수식은 LaTeX($...$).",
+    "[문제]\n"+q.question+(Array.isArray(q.choices)&&q.choices.length?"\n[보기]\n"+q.choices.join("\n"):"")+
+    '\n\nJSON만 출력: {"answer":"최종 정답(객관식은 ①~⑤ 기호로)","explanation":"풀이 과정 요약(핵심 단계 위주)"}',
+    true,{maxTok:2500});
+  return r&&r.answer?{answer:String(r.answer),explanation:String(r.explanation||"")}:null;
+}
+
 /* ── 책(교재) 모드: 긴 PDF를 페이지로 쪼개 흡수 → 대/중/소단원 개념 트리 ── */
 // PDF base64를 per쪽씩 잘라 여러 PDF로 (pdf-lib). 짧거나 실패하면 원본 1개.
 async function splitPdfPages(b64,per){
@@ -473,4 +493,4 @@ const toB64=(file)=>new Promise((res,rej)=>{
 let _uidSeq=0;
 const uid=()=>Date.now().toString(36)+(_uidSeq++).toString(36).padStart(3,'0')+Math.random().toString(36).slice(2,5);
 
-export { MODELS, QMODELS, callGemini, PROXY_URL, COMPANY_MODE, ACADEMY_CODE, _sleep, _aiRetriable, _geminiFallbackModel, _fbToastT, _notifyFallback, callProxy, _readClaudeSSE, callProxyClaude, callAI, fixJson, repairJson, parseJsonLoose, parseFactorsLine, parseGrading, parseDerivePlan, parseDeriveCheck, parseOcrCheck, parseQuestion, callClaude, transcribeFile, processPdf, extractExamQuestions, extractBankItems, splitPdfPages, analyzeBookChunk, ingestBook, toB64, _uidSeq, uid };
+export { MODELS, QMODELS, callGemini, PROXY_URL, COMPANY_MODE, ACADEMY_CODE, _sleep, _aiRetriable, _geminiFallbackModel, _fbToastT, _notifyFallback, callProxy, _readClaudeSSE, callProxyClaude, callAI, fixJson, repairJson, parseJsonLoose, parseFactorsLine, parseGrading, parseDerivePlan, parseDeriveCheck, parseOcrCheck, parseQuestion, callClaude, transcribeFile, processPdf, extractExamQuestions, extractBankItems, extractAnswerKey, solveBankItem, splitPdfPages, analyzeBookChunk, ingestBook, toB64, _uidSeq, uid };

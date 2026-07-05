@@ -2,7 +2,7 @@
    흐름: 목록(필터·통계) → 업로드(출처·과목·파일) → AI 추출 → 사람 검수 → 저장.
    검수(verified) 통과분만 출제 검색 후보가 된다 — 0오류 보증선. */
 import { tr } from "../core/platform.js";
-import { extractBankItems, splitPdfPages, toB64, uid } from "../core/ai.js";
+import { extractAnswerKey, extractBankItems, solveBankItem, splitPdfPages, toB64, uid } from "../core/ai.js";
 import { bankAll, bankAdd, bankUpdate, bankDel, bankStats } from "../core/examBank.js";
 import { FileDropZone, Prof, Stat } from "../ui/common.jsx";
 import { MathText } from "../ui/math.jsx";
@@ -57,6 +57,8 @@ function ItemEditor({item,units,onChange,onRemove}){
           {(item.choices||[]).length>0&&<div style={{marginTop:4,color:"var(--ink)"}}>{(item.choices||[]).map((c,i)=><MathText key={i} text={c} tag="div"/>)}</div>}
           {item.answer&&<div style={{marginTop:8,padding:"8px 12px",background:"#F0FDF4",borderRadius:9,fontSize:13}}>
             <b style={{color:"#166534"}}>{tr("정답","Answer")}</b> <MathText text={item.answer} tag="span"/>
+            {item.answerSource==="sheet"&&<span className="chip" style={{marginLeft:8,background:"#DCFCE7",color:"#166534",fontSize:10.5}}>📄 {tr("정답지 반영","From key")}</span>}
+            {item.answerSource==="ai"&&<span className="chip" style={{marginLeft:8,background:"#FEF3C7",color:"#92400E",fontSize:10.5,fontWeight:800}}>🧮 {tr("AI 풀이 초안 — 공식 정답 대조 필요","AI draft — verify vs official key")}</span>}
           </div>}
           {item.explanation&&<div style={{marginTop:6,padding:"8px 12px",background:"var(--pri-s)",borderRadius:9,fontSize:13}}>
             <b style={{color:"var(--pri-d)"}}>{tr("해설","Solution")}</b> <MathText text={item.explanation} tag="div"/>
@@ -160,6 +162,48 @@ function ExamBank({onExit}){
     setBusy(false);
   }
 
+  // ── 정답지 병합: 정답지 파일에서 문항번호→정답 추출 → 문항번호로 초안에 자동 매칭 (정답지가 진리) ──
+  const normNo=(s)=>String(s||"").replace(/[^0-9]/g,"");
+  async function mergeAnswerSheet(file){
+    setBusy(true);setErr("");
+    try{
+      setBusyMsg(tr("정답지 읽는 중… ","Reading answer key… ")+file.name);
+      const b64=await toB64(file);
+      const block=file.type==="application/pdf"
+        ?{type:"document",source:{type:"base64",media_type:"application/pdf",data:b64}}
+        :{type:"image",source:{type:"base64",media_type:file.type||"image/jpeg",data:b64}};
+      const key=await extractAnswerKey([block]);
+      let hit=0;
+      const next=draft.map(d=>{
+        const m=key.find(k=>normNo(k.number)&&normNo(k.number)===normNo(d.src?.number));
+        if(!m)return d;
+        hit++;
+        return{...d,answer:m.answer,explanation:m.explanation||d.explanation,answerSource:"sheet"};
+      });
+      setDraft(next);
+      if(!key.length)setErr(tr("정답지에서 정답을 못 읽었어 — 파일을 확인해줘.","Couldn't read the answer key."));
+      else alert(tr("정답 "+key.length+"개 추출 → "+hit+"문제에 반영했어 (문항번호 기준 매칭).",key.length+" answers extracted, "+hit+" matched."));
+    }catch(e){setErr(tr("정답지 병합 실패: ","Answer merge failed: ")+(e.message||e));}
+    setBusy(false);setBusyMsg("");
+  }
+
+  // ── AI 풀이 초안: 정답 없는 문제를 AI가 풀어 채움 — 100%가 아니므로 반드시 '대조 필요' 표시 ──
+  async function solveAll(){
+    const targets=draft.filter(d=>!(d.answer||"").trim());
+    if(!targets.length){setErr(tr("정답이 비어 있는 문제가 없어.","No unanswered items."));return;}
+    if(!confirm(tr("정답 없는 "+targets.length+"문제를 AI가 풀어 초안을 채울게.\n\n⚠️ AI 풀이는 정확도가 높지만 100%는 아니야. 반드시 공식 정답표와 대조한 뒤 '검수 완료'를 체크해줘. 진행할까?","AI will draft answers for "+targets.length+" items. Not 100% accurate — verify against the official key. Proceed?")))return;
+    setBusy(true);setErr("");
+    for(let i=0;i<targets.length;i++){
+      setBusyMsg(tr("AI 풀이 중… (","Solving… (")+(i+1)+"/"+targets.length+")");
+      try{
+        const s=await solveBankItem(targets[i]);
+        if(s)setDraft(ds=>ds.map(d=>d.id===targets[i].id
+          ?{...d,answer:s.answer,explanation:s.explanation||d.explanation,answerSource:"ai"}:d));
+      }catch(e){console.warn("[bank] AI 풀이 실패",e);}
+    }
+    setBusy(false);setBusyMsg("");
+  }
+
   // ── JSON 백업/이관: 은행 전체 내보내기·가져오기 (기기 간 이동, 외부에서 준비한 데이터 반입) ──
   function exportJson(){
     const blob=new Blob([JSON.stringify(bankAll(),null,1)],{type:"application/json"});
@@ -206,9 +250,21 @@ function ExamBank({onExit}){
       <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:14,flexWrap:"wrap"}}>
         <span className="chip" style={{background:"var(--pri-s)",color:"var(--pri-d)",fontWeight:800}}>{draft.length}{tr("문제 추출됨"," extracted")}</span>
         <span className="chip" style={{background:"#DCFCE7",color:"#166534"}}>{draft.filter(d=>d.verified).length}{tr(" 검수됨"," verified")}</span>
-        <button className="btn gho sm" style={{marginLeft:"auto"}}
-          onClick={()=>setDraft(ds=>ds.map(d=>({...d,verified:true,verifiedAt:Date.now()})))}>{tr("전체 검수 완료로 표시","Mark all verified")}</button>
+        {draft.filter(d=>!(d.answer||"").trim()).length>0&&
+          <span className="chip" style={{background:"#FEF3C7",color:"#92400E"}}>{tr("정답 없음 ","No answer ")}{draft.filter(d=>!(d.answer||"").trim()).length}</span>}
+        <span style={{marginLeft:"auto",display:"inline-flex",gap:6,flexWrap:"wrap"}}>
+          <label className="btn gho sm" style={{cursor:busy?"default":"pointer",opacity:busy?.5:1}} title={tr("공식 정답지(PDF/사진)를 올리면 문항번호로 정답을 자동 병합 — 정답지가 진리","Merge official answer key by question number")}>
+            📄 {tr("정답지 병합","Merge key")}
+            <input type="file" accept="image/*,application/pdf" style={{display:"none"}} disabled={busy}
+              onChange={e=>{if(e.target.files[0])mergeAnswerSheet(e.target.files[0]);e.target.value="";}}/>
+          </label>
+          <button className="btn gho sm" onClick={solveAll} disabled={busy} title={tr("정답 없는 문제를 AI가 풀어 초안 작성 — 100%가 아니므로 공식 정답 대조 필수","AI drafts answers — verify against the official key")}>🧮 {tr("AI 풀이 초안","AI draft")}</button>
+          <button className="btn gho sm" disabled={busy}
+            onClick={()=>setDraft(ds=>ds.map(d=>({...d,verified:true,verifiedAt:Date.now()})))}>{tr("전체 검수 완료로 표시","Mark all verified")}</button>
+        </span>
       </div>
+      {busy&&<div style={{display:"flex",alignItems:"center",gap:10,color:"var(--sub)",fontSize:13.5,marginBottom:12}}><span className="spinner" style={{width:16,height:16}}/>{busyMsg}</div>}
+      {err&&<div style={{color:"#B91C1C",fontSize:13,marginBottom:12}}>{err}</div>}
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
         {draft.map((d,i)=>(
           <ItemEditor key={d.id} item={d} units={tagUnits}
