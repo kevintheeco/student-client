@@ -42,4 +42,27 @@ function bankStats(){
   return {total:list.length,verified,pending:list.length-verified,unitCount:Object.keys(units).length,units};
 }
 
-export { BANK_KEY, bankAll, bankAdd, bankUpdate, bankDel, bankSearch, bankStats };
+// 은행 문제 → Exam 문항 변환. origin="기출"(원본 그대로 출제)로 표시된다.
+// mc는 정답 텍스트의 ①~⑤ 기호로 정답 인덱스를 복원 — 복원 불가면 단답형으로 강등해 텍스트 채점(오채점 방지).
+const CIRC="①②③④⑤";
+function toExamItem(it,uidFn){
+  const srcLabel=[it.src?.year,it.src?.school,it.src?.exam].filter(Boolean).join(" ")+(it.src?.number?" · "+it.src.number+"번":"");
+  const base={id:uidFn(),origin:"기출",bankId:it.id,srcLabel:srcLabel.trim(),
+    unit:it.unit||"",concept:it.unit||"",question:it.question||"",
+    points:Number(it.points)>0?Number(it.points):(it.qtype==="essay"?15:5)};
+  if(it.qtype==="mc"&&Array.isArray(it.choices)&&it.choices.length>=2){
+    const m=(it.answer||"").match(/[①②③④⑤]/);
+    const ai=m?CIRC.indexOf(m[0]):-1;
+    if(ai>=0&&ai<it.choices.length)
+      return{...base,type:"mc",choices:it.choices.map(c=>String(c).replace(/^\s*[①②③④⑤]\s*/,"")),answer:ai,
+        accept:[],rubric:[],solution:it.explanation||it.answer||"",model_answer:""};
+    return{...base,type:"short",question:(it.question||"")+"\n"+it.choices.join("  "),answer:it.answer||"",
+      accept:[],rubric:[],solution:it.explanation||"",model_answer:""};
+  }
+  if(it.qtype==="essay")
+    return{...base,type:"essay",accept:[],rubric:[],solution:it.explanation||"",
+      model_answer:(it.answer?it.answer+"\n":"")+(it.explanation||"")};
+  return{...base,type:"short",answer:it.answer||"",accept:[],rubric:[],solution:it.explanation||"",model_answer:""};
+}
+
+export { BANK_KEY, bankAll, bankAdd, bankUpdate, bankDel, bankSearch, bankStats, toExamItem };

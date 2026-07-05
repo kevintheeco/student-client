@@ -857,7 +857,7 @@ function Study({deck:initial,subjects,onExit}){
                     background:q.source==="기출"?"#FFF7E0":q.source==="심화"?"#FFE4EC":"#EFE7FF",
                     color:q.source==="기출"?"#946200":q.source==="심화"?"#C2185B":"#5B21B6",
                     border:"none",fontSize:11,fontWeight:700
-                  }}>{q.source==="기출"?T("📜 기출","📜 Past exam"):q.source==="심화"?T("🔥 심화","🔥 Deep"):T("🔄 변형","🔄 Variant")}</span>}
+                  }}>{q.source==="기출"?T("📜 기출","📜 Past exam"):q.source==="심화"?T("🔥 심화","🔥 Deep"):T("🔄 기출변형","🔄 Exam variant")}</span>}
                   {q?.qtype&&<span className="chip" style={{
                     background:q.qtype==='recall'?"#FFF0E6":q.qtype==='apply'?"#E6F7FF":"#F0EDFF",
                     color:q.qtype==='recall'?"#C05A00":q.qtype==='apply'?"#0066A3":"#5B21B6",

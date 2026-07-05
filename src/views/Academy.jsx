@@ -11,6 +11,7 @@ import { ACADEMY_CODE, uid } from "../core/ai.js";
 import { CURRICULUM } from "../core/curriculum.js";
 import { KnowledgeMap } from "./KnowledgeMap.jsx";
 import { ExamBank } from "./ExamBank.jsx";
+import { bankSearch } from "../core/examBank.js";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
 
@@ -263,13 +264,16 @@ function AcademyApp(){
         <div style={{fontFamily:"'Jua',sans-serif",fontSize:20,color:"var(--ink)",marginBottom:4}}>{topic.label}</div>
         <div style={{fontSize:13.5,color:"var(--sub)",marginBottom:16}}>{tr("학생","Student")}: <b style={{color:"var(--ink)"}}>{student||tr("(미입력)","(none)")}</b></div>
         <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
-          {topic.units.map((u,i)=>(
-            <div key={i} style={{display:"flex",alignItems:"center",gap:10,border:"1px solid var(--line)",borderRadius:10,padding:"10px 14px"}}>
+          {topic.units.map((u,i)=>{
+            const nBank=bankSearch({unit:u.name,verifiedOnly:true,limit:99}).length;
+            return(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:10,border:"1px solid var(--line)",borderRadius:10,padding:"10px 14px",flexWrap:"wrap"}}>
               <span style={{flex:1,fontWeight:600,color:"var(--ink)"}}>{u.name}</span>
+              {nBank>0&&<span className="chip" style={{background:"#FFF7E0",color:"#946200",fontWeight:700}} title={tr("검수 완료된 실제 기출 — 이 단원은 기출을 우선 출제해요","Verified past-exam items — used first for this unit")}>📜 {tr("기출 ","")}{Math.min(nBank,Number(u.count)||2)}{tr("문항 사용","Q from bank")}</span>}
               <span className="chip" style={{background:"var(--pri-s)",color:"var(--pri-d)"}}>{u.count}{tr("문항","Q")}</span>
               <span className="chip gho">{(DIFFS.find(d=>d[0]===u.difficulty)||[])[1]}</span>
-            </div>
-          ))}
+            </div>);
+          })}
         </div>
         <div style={{display:"flex",gap:16,fontSize:14,fontWeight:700,color:"var(--ink)",marginBottom:6}}>
           <span>📋 {tr("총","Total")} {totalQ}{tr("문항","Q")}</span>
