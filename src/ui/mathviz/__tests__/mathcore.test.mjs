@@ -34,6 +34,42 @@ test("교점: 지시서 예시 exp(x)−2 ∩ log(x+2)", () => {
   for(const [x,y] of pts) assert.ok(near(Math.exp(x)-2, y, 1e-5));
 });
 
+/* ── 고교수학 확장 커버리지: 접점(중근)·사차함수·삼차∩이차 ── */
+test("접점: y=x² 와 y=2x−1 은 (1,1)에서 접함 — 중근도 교점으로 잡는다", () => {
+  const pts=findIntersections((x)=>x*x, (x)=>2*x-1, -3, 4);
+  assert.equal(pts.length, 1);
+  assert.ok(near(pts[0][0], 1, 1e-4) && near(pts[0][1], 1, 1e-4));
+});
+
+test("접하는 x절편: y=(x−1)² → x=1 (부호 변화 없음)", () => {
+  const xi=xIntercepts(compileExpr("(x-1)^2"), -3, 4);
+  assert.equal(xi.length, 1);
+  assert.ok(near(xi[0][0], 1, 1e-4));
+});
+
+test("근접-접선 오탐 없음: y=x² 와 y=2x−1.01 은 교점 0개", () => {
+  assert.equal(findIntersections((x)=>x*x, (x)=>2*x-1.01, -3, 4).length, 0);
+});
+
+test("사차함수: x⁴−2x² 극값 3개(−1,0,1)·변곡점 2개(±1/√3)", () => {
+  const f=compileExpr("x^4-2x^2");
+  const ex=findExtrema(f, -2.5, 2.5);
+  assert.equal(ex.length, 3);
+  assert.equal(ex.filter(e=>e.kind==="min").length, 2);
+  assert.equal(ex.filter(e=>e.kind==="max").length, 1);
+  assert.ok(near(ex.find(e=>e.kind==="max").x, 0, 1e-3));
+  const inf=findInflections(f, -2.5, 2.5);
+  assert.equal(inf.length, 2);
+  assert.ok(near(Math.abs(inf[0][0]), 1/Math.sqrt(3), 1e-3));
+});
+
+test("삼차∩이차: x³−3x 와 x²−3 → 교점 3개 (1, ±√3)", () => {
+  const pts=findIntersections(compileExpr("x^3-3x"), compileExpr("x^2-3"), -3, 3);
+  assert.equal(pts.length, 3);
+  const xs=pts.map(p=>p[0]);
+  assert.ok(near(xs[0], -Math.sqrt(3)) && near(xs[1], 1) && near(xs[2], Math.sqrt(3)));
+});
+
 test("극점: x³−3x → 극대(−1,2)·극소(1,−2)", () => {
   const ex=findExtrema((x)=>x*x*x-3*x, -3, 3);
   assert.equal(ex.length, 2);

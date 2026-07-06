@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   hull, bestTriangle, isStraight, rdp,
-  normalizeStrokes, recognize, compare,
+  normalizeStrokes, recognize, recognizeQuad, compare, polygonCoverage,
 } from "../../../core/geointeract.js";
 
 // 두 점 사이를 n등분 샘플한 "손으로 그은 직선" 스트로크
@@ -66,6 +66,40 @@ test("recognize: 삼각형 내부의 무관한 낙서는 높이로 오인하지 
 test("recognize: 너무 작은 그림은 인식 실패", () => {
   const tiny=[seg([0,0],[40,0]),seg([40,0],[20,30]),seg([20,30],[0,0])];
   assert.equal(recognize(tiny).ok, false);
+});
+
+/* ── 사각형+대각선 (고교수학 확장) ── */
+const P=[150,150], Q=[650,180], R=[700,600], S=[120,560];   // 볼록 사각형
+const quadStrokes=[seg(P,Q),seg(Q,R),seg(R,S),seg(S,P)];
+
+test("사각형 인식: 4획 → 꼭짓점 4개, 대각선 미작도", () => {
+  const m=recognizeQuad(quadStrokes);
+  assert.ok(m.ok);
+  assert.equal(m.kind, "quad");
+  assert.equal(Object.keys(m.vertices).length, 4);
+  assert.equal(m.aux[0].kind, "diagonal");
+  assert.equal(m.aux[0].drawn, false);
+  assert.ok(polygonCoverage(quadStrokes,[m.vertices.A,m.vertices.B,m.vertices.C,m.vertices.D])>=0.85);
+});
+
+test("사각형: 대각선(어느 쪽이든) 그리면 drawn=true", () => {
+  const m1=recognizeQuad([...quadStrokes, seg(P,R)]);   // AC 방향
+  assert.equal(m1.aux[0].drawn, true);
+  const m2=recognizeQuad([...quadStrokes, seg(Q,S)]);   // BD 방향
+  assert.equal(m2.aux[0].drawn, true);
+  // 짧은 무관한 획은 오탐 없음
+  const m3=recognizeQuad([...quadStrokes, seg([300,300],[380,340])]);
+  assert.equal(m3.aux[0].drawn, false);
+});
+
+test("compare(quad): 대각선 누락 → missing, 그리면 correct 9개", () => {
+  const miss=compare(recognizeQuad(quadStrokes));
+  assert.equal(miss.missing.length, 1);
+  assert.equal(miss.missing[0].label, "대각선");
+  assert.equal(miss.correct.length, 8);          // 꼭짓점 4 + 변 4
+  const okd=compare(recognizeQuad([...quadStrokes, seg(P,R)]));
+  assert.equal(okd.missing.length, 0);
+  assert.equal(okd.correct.length, 9);
 });
 
 test("compare: 높이 누락 → missing, 그리면 correct로 이동", () => {

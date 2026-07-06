@@ -38,10 +38,19 @@ function findRoots(f,xMin,xMax,n=800,tol=1e-9){
   return out;
 }
 
-// 두 그래프의 교점 [[x,y],...]
+// 두 그래프의 교점 [[x,y],...] — 접점(중근)도 포함.
+// 접하는 경우(이차함수와 직선 y=x², y=2x-1 등)는 f-g가 부호를 안 바꿔 스캔이 놓치므로,
+// (f-g)'=0인 극점에서 |f-g|≈0이면 접점으로 추가한다 (고교수학 단골 케이스).
 function findIntersections(f,g,xMin,xMax,n=800){
   const sf=safeFn(f),sg=safeFn(g);
-  return findRoots((t)=>sf(t)-sg(t),xMin,xMax,n).map((x)=>[x,sf(x)]);
+  const h=(t)=>sf(t)-sg(t);
+  const xs=findRoots(h,xMin,xMax,n);
+  for(const x of findRoots((t)=>d1(h,t),xMin,xMax,n)){
+    const v=h(x);
+    if(Number.isFinite(v)&&Math.abs(v)<1e-6&&!xs.some(r=>Math.abs(r-x)<1e-4))xs.push(x);
+  }
+  xs.sort((a,b)=>a-b);
+  return xs.map((x)=>[x,sf(x)]);
 }
 
 // 중앙차분 수치미분
@@ -67,8 +76,17 @@ function findInflections(f,xMin,xMax,n=800){
   return out;
 }
 
-// x절편 [[x,0],...] / y절편 [0,f(0)] — 정의 안 되면 null
-function xIntercepts(f,xMin,xMax){return findRoots(f,xMin,xMax).map((x)=>[x,0]);}
+// x절편 [[x,0],...] — 접하는 절편(중근, y=(x-1)² 등)도 포함 / y절편 [0,f(0)] — 정의 안 되면 null
+function xIntercepts(f,xMin,xMax){
+  const sf=safeFn(f);
+  const xs=findRoots(sf,xMin,xMax);
+  for(const x of findRoots((t)=>d1(sf,t),xMin,xMax)){
+    const v=sf(x);
+    if(Number.isFinite(v)&&Math.abs(v)<1e-6&&!xs.some(r=>Math.abs(r-x)<1e-4))xs.push(x);
+  }
+  xs.sort((a,b)=>a-b);
+  return xs.map((x)=>[x,0]);
+}
 function yIntercept(f){
   const v=safeFn(f)(0);
   return Number.isNaN(v)?null:[0,v];

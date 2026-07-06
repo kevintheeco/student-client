@@ -58,6 +58,12 @@ const SCENARIOS=[
    user:"개념: 사인함수의 그래프\n원래 질문: y=2sin(x) 의 그래프와 최댓값·최솟값 위치를 보여주면서 설명해줘. 그래프 꼭 포함해줘."},
   {id:"tangent",  kind:"math", sys:EXPLAIN_NEW("수학2: 미분계수와 접선의 방정식"),
    user:"개념: 접선의 방정식\n원래 질문: y=x^2 위의 점 (1,1) 에서의 접선을 그래프로 보여주면서 설명해줘. 그래프 꼭 포함해줘."},
+  {id:"tangentline",kind:"math", sys:EXPLAIN_NEW("수학: 이차함수와 직선의 위치 관계 — 접할 때 판별식=0, 접점"),
+   user:"개념: 이차함수와 직선이 접한다\n원래 질문: y=x^2 과 y=2x-1 이 접한다는 것을 그래프로 보여주고 접점을 표시해서 설명해줘. 그래프 꼭 포함해줘."},
+  {id:"quartic",  kind:"math", sys:EXPLAIN_NEW("수학2: 사차함수의 그래프 개형 — 극값 3개, 변곡점 2개"),
+   user:"개념: 사차함수의 개형\n원래 질문: f(x)=x^4-2x^2 의 극값과 변곡점을 그래프로 보여주면서 개형을 설명해줘. 그래프 꼭 포함해줘."},
+  {id:"cubicmix", kind:"math", sys:EXPLAIN_NEW("수학2: 삼차함수와 이차함수의 교점 — 방정식 f(x)=g(x)의 실근"),
+   user:"개념: 두 함수의 교점\n원래 질문: y=x^3-3x 와 y=x^2-3 의 교점을 그래프로 보여주면서 설명해줘. 그래프 꼭 포함해줘."},
   {id:"vecdot",   kind:"math", sys:EXPLAIN_NEW("기하: 벡터의 내적, 투영, 사잇각 θ — 그림은 vector·angle 스텝으로"),
    user:"개념: 벡터의 내적과 투영\n원래 질문: 내적이 왜 |a||b|cosθ 인지 투영 그림(두 벡터, 사잇각 θ, 수선)으로 보여주면서 설명해줘. 그림 꼭 포함해줘."},
   {id:"econ",     kind:"econ", sys:EXPLAIN_NEW("경제학원론: 수요와 공급, 균형가격, 수요곡선의 이동"),
@@ -114,7 +120,9 @@ function judge(scn,text){
 const outDir=fileURLToPath(new URL("../.backtest/",import.meta.url));   // 한글 경로 안전
 fs.mkdirSync(outDir,{recursive:true});
 let pass=0,fail=0;const failDetail={};
-const ALL=[...SCENARIOS,...(VISION_SCENARIO?[VISION_SCENARIO]:[])];
+const ONLY=(arg("--only","")||"").split(",").filter(Boolean);   // 특정 시나리오만 (회귀 시 경제적 재실행)
+let ALL=[...SCENARIOS,...(VISION_SCENARIO?[VISION_SCENARIO]:[])];
+if(ONLY.length)ALL=ALL.filter(s=>ONLY.includes(s.id));
 console.log(`모델: ${MODEL} · 시나리오 ${ALL.length}종 × ${N}회 · 경로: ${KEY?"직접 API":"프록시(앱과 동일)"}${VISION_SCENARIO?"":" · (비전 픽스처 없음 — tovector 생략)"}\n`);
 for(const scn of ALL){
   for(let t=1;t<=N;t++){

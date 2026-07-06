@@ -8,6 +8,8 @@ import { GeoFeedback, GeoInsight } from "../ui/GeoFeedback.jsx";
 // GeoInsight(채점 결과 자동 부착형) 상시 샘플 — 합성 잉크: 삼각형만 그리고 높이는 안 그린 학생
 const _seg=(a,b,n=24)=>({pts:Array.from({length:n+1},(_,i)=>({x:a[0]+(b[0]-a[0])*i/n,y:a[1]+(b[1]-a[1])*i/n,p:.5})),col:"#221C39",sz:1});
 const GEO_INK_SAMPLE={pages:[[_seg([100,600],[700,600]),_seg([700,600],[400,150]),_seg([400,150],[100,600])]],w:800,h:750};
+// 사각형 샘플: 사각형만 그리고 대각선은 안 그린 학생
+const GEO_INK_QUAD={pages:[[_seg([150,150],[650,180]),_seg([650,180],[700,600]),_seg([700,600],[120,560]),_seg([120,560],[150,150])]],w:800,h:750};
 import { MathText } from "../ui/math.jsx";
 
 /* ⑥ 해설 렌더 통합 검증: AI 해설 문자열(마크다운+$$수식$$+mathviz블록+기존 svg)이
@@ -171,6 +173,7 @@ function VizDemo(){
               ↓ 실전에서는 별도 메뉴 없이 — 학습·시험 채점 결과에 이렇게 자동으로 붙습니다 (기하 문항 + 작도 감지 시)
             </p>
             <GeoInsight ink={GEO_INK_SAMPLE} question="삼각형 ABC의 넓이를 구하시오. (필요한 보조선 포함)"/>
+            <GeoInsight ink={GEO_INK_QUAD} question="사각형 ABCD의 넓이를 구하시오. (필요한 보조선 포함)"/>
           </div>
         </>
       )}

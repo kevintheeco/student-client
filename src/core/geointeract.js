@@ -88,6 +88,60 @@ function recognize(strokes,{kind="triangle",minArea=8000}={}){
   };
 }
 
+// hull에서 넓이 최대 4점 = 사각형 꼭짓점 (hull 순서 유지 → 둘레 순서 그대로)
+function bestQuad(h){
+  if(h.length<4)return{quad:null,area:0};
+  const tri=(p,q,r)=>Math.abs((q[0]-p[0])*(r[1]-p[1])-(r[0]-p[0])*(q[1]-p[1]))/2;
+  let best=null,ba=-1;
+  for(let i=0;i<h.length;i++)for(let j=i+1;j<h.length;j++)
+    for(let k=j+1;k<h.length;k++)for(let l=k+1;l<h.length;l++){
+      const a=tri(h[i],h[j],h[k])+tri(h[i],h[k],h[l]);
+      if(a>ba){ba=a;best=[h[i],h[j],h[k],h[l]];}
+    }
+  return {quad:best,area:ba};
+}
+
+/* 사각형 인식: 꼭짓점 4개(hull 최대넓이) + 보조선(대각선 AC 또는 BD) 작도 여부.
+   시나리오: 사각형 넓이 → 대각선을 그어 삼각형 2개로 분할 */
+function recognizeQuad(strokes,{minArea=8000}={}){
+  const all=strokes.flat();
+  if(all.length<8)return{ok:false,reason:"empty"};
+  const {quad,area}=bestQuad(hull(all));
+  if(!quad||area<minArea)return{ok:false,reason:"too-small"};
+  const [A,B,C,D]=quad;
+  const r=0.28*Math.sqrt(area);
+  const near=(p,q)=>dist(p,q)<r;
+  let drawn=false,pair="AC";
+  for(const s of strokes){
+    if(!isStraight(s))continue;
+    const e1=s[0],e2=s[s.length-1];
+    if((near(e1,A)&&near(e2,C))||(near(e2,A)&&near(e1,C))){drawn=true;pair="AC";break;}
+    if((near(e1,B)&&near(e2,D))||(near(e2,B)&&near(e1,D))){drawn=true;pair="BD";break;}
+  }
+  return {
+    ok:true, kind:"quad", area,
+    vertices:{A,B,C,D},
+    aux:[{kind:"diagonal", pair, drawn}],
+  };
+}
+
+/* 다각형 변 커버리지 (0~1, 최소 변 기준) — 글씨 hull 가짜 도형 차단 게이트 공용 */
+function polygonCoverage(strokes, pts, tol=16, n=14){
+  if(!pts||pts.length<3)return 0;
+  const all=strokes.flat();
+  let worst=1;
+  for(let i=0;i<pts.length;i++){
+    const p=pts[i], q=pts[(i+1)%pts.length];
+    let hit=0;
+    for(let k=0;k<=n;k++){
+      const s=[p[0]+(q[0]-p[0])*k/n, p[1]+(q[1]-p[1])*k/n];
+      if(all.some(pt=>dist(pt,s)<tol))hit++;
+    }
+    worst=Math.min(worst,hit/(n+1));
+  }
+  return worst;
+}
+
 /* 변 커버리지: 인식된 삼각형의 세 변이 실제 획으로 얼마나 덮였는지 (0~1, 최소값).
    일반 풀이 패드의 '글씨' hull에서 나오는 가짜 삼각형을 걸러낸다 —
    글씨 뭉치는 hull 가장자리를 획이 따라가지 않으므로 커버리지가 낮다. */
@@ -109,16 +163,19 @@ function triangleCoverage(strokes, model, tol=16, n=14){
 
 /* 비교(diff): 학생 모델 vs 요구사항 → {correct, missing, wrong, extra}
    requirements.aux: 필요한 보조선 목록 (기본: 높이). 5단계 기출은행 정답 모델도 이 계약 사용 */
-const AUX_LABEL={height:"높이 AH"};
+const AUX_LABEL={height:"높이 AH", diagonal:"대각선"};
 function compare(model, requirements){
-  const req=requirements||{aux:["height"]};
+  const isQuad=model&&model.kind==="quad";
+  const req=requirements||{aux:[isQuad?"diagonal":"height"]};
   const out={correct:[], missing:[], wrong:[], extra:[]};
   if(!model||!model.ok){
-    out.missing.push({kind:"shape",label:"삼각형"});
+    out.missing.push({kind:"shape",label:isQuad?"사각형":"삼각형"});
     return out;
   }
-  for(const v of ["A","B","C"])out.correct.push({kind:"vertex",label:v});
-  for(const s of ["AB","BC","CA"])out.correct.push({kind:"side",label:s});
+  const verts=isQuad?["A","B","C","D"]:["A","B","C"];
+  const sides=isQuad?["AB","BC","CD","DA"]:["AB","BC","CA"];
+  for(const v of verts)out.correct.push({kind:"vertex",label:v});
+  for(const s of sides)out.correct.push({kind:"side",label:s});
   for(const auxKind of (req.aux||[])){
     const found=(model.aux||[]).find(a=>a.kind===auxKind);
     const item={kind:"auxline",label:AUX_LABEL[auxKind]||auxKind,aux:auxKind};
@@ -166,6 +223,7 @@ async function recognizeAI(strokes, pngBase64, opts={}, signal){
 }
 
 export {
-  dist, distToLine, rdp, hull, bestTriangle, isStraight,
-  normalizeStrokes, recognize, compare, triangleCoverage, strokeSummary, recognizeAI,
+  dist, distToLine, rdp, hull, bestTriangle, bestQuad, isStraight,
+  normalizeStrokes, recognize, recognizeQuad, compare,
+  triangleCoverage, polygonCoverage, strokeSummary, recognizeAI,
 };
