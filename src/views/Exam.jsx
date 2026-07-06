@@ -7,6 +7,7 @@ import { bankSearch, toExamItem } from "../core/examBank.js";
 import { activeStudent, logAttempt } from "../core/attempts.js";
 import { errTypeById, normErrType, normFactors, normStage } from "../core/knowledgeGraph.js";
 import { MathViz } from "../ui/mathviz/MathViz.jsx";
+import { GeoInsight } from "../ui/GeoFeedback.jsx";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
 
@@ -493,6 +494,8 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
               {g.figureScript
                 ?<div style={{maxWidth:520,margin:"0 auto 12px"}}><MathViz script={g.figureScript} staticOnly controls={false}/></div>
                 :g.figure&&<img src={g.figure} alt="" style={{maxWidth:"100%",maxHeight:300,display:"block",margin:"0 auto 12px",border:"1px solid var(--line)",borderRadius:10,background:"#fff"}}/>}
+              {/* 기하 문항 + 삼각형 작도가 감지되면 자동 구성 분석 (같은 세션의 손글씨) */}
+              <GeoInsight ink={items[idx]&&inkRef.current[items[idx].id]} question={g.question||""} concept={g.concept||""} unit={g.unit||""}/>
               {/* 내 답 */}
               {g.type==="mc"&&g.choices&&(
                 <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:12}}>

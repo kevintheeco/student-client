@@ -3,7 +3,7 @@
 // pads.jsx는 수정하지 않는다 — dump()로 획만 읽고, 페이드는 캔버스 style만 건드린다.
 import React from "react";
 import { PenPad } from "./pads.jsx";
-import { normalizeStrokes, recognize, compare, dist } from "../core/geointeract.js";
+import { normalizeStrokes, recognize, compare, dist, triangleCoverage } from "../core/geointeract.js";
 import { logAttempt } from "../core/attempts.js";
 import { VIZ_LIGHT } from "./mathviz/tokens.js";
 import { Curve, DashedLine, PointDot, SvgLabel, RightAngleMark, FormulaBox } from "./mathviz/primitives.jsx";
@@ -200,4 +200,91 @@ function GeoFeedback({
   );
 }
 
-export { GeoFeedback };
+/* ── GeoInsight: 채점 결과에 '자연스럽게' 붙는 기하 구성 분석 (§4를 별도 메뉴 없이) ──
+   평소처럼 손글씨로 풀고 채점받으면, 기하 문제 + 삼각형 작도가 감지될 때만 조용히 나타난다.
+   오탐 방지 3중 게이트: ①문항 텍스트에 기하 키워드 ②규칙 기반 인식 성공 ③변 커버리지 ≥75%
+   (글씨 뭉치의 hull에서 나오는 가짜 삼각형은 변을 획이 안 따라가므로 걸러짐) */
+const GEO_RX=/삼각형|보조선|작도|수선|높이|밑변|꼭짓점/;
+
+function GeoInsight({ink, question="", concept="", unit=""}){
+  const data=React.useMemo(()=>{
+    try{
+      if(!GEO_RX.test([question,concept,unit].join(" ")))return null;
+      const strokes=normalizeStrokes(ink||{});
+      if(strokes.length<2)return null;
+      const model=recognize(strokes,{minArea:8000});
+      if(!model.ok)return null;
+      if(triangleCoverage(strokes,model)<0.75)return null;
+      const diff=compare(model);
+      return {strokes,model,missing:diff.missing.filter(m=>m.kind==="auxline")};
+    }catch(_){return null;}
+  },[ink,question,concept,unit]);
+  if(!data)return null;
+
+  const {strokes,model,missing}=data;
+  const {A,B,C}=model.vertices, H=model.foot;
+  const isMissing=missing.length>0;
+  // 뷰박스: 획 바운딩박스 + 여백
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  for(const p of strokes.flat()){
+    x0=Math.min(x0,p[0]);y0=Math.min(y0,p[1]);x1=Math.max(x1,p[0]);y1=Math.max(y1,p[1]);
+  }
+  const pad=Math.max(34,(x1-x0)*0.16);
+  x0-=pad;y0-=pad;x1+=pad;y1+=pad;
+  const cen=[(A[0]+B[0]+C[0])/3,(A[1]+B[1]+C[1])/3];
+  const obst=[...strokes.flat(),A,B,C,H];
+  for(let k=0;k<=12;k++)obst.push([A[0]+(H[0]-A[0])*k/12, A[1]+(H[1]-A[1])*k/12]);
+  const mkJudge=(text,anchor,color,fs=17,delay=1300)=>{
+    const {w,h}=estimateLabelBox(text,fs);
+    const pos=placeLabel({anchor,w,h,obstacles:obst,unit:60,maxBuff:1.6});
+    const lx=Math.max(x0+6,Math.min(x1-w-6,pos.x));
+    const ly=Math.max(y0+6,Math.min(y1-h-6,pos.y));
+    obst.push([lx,ly],[lx+w,ly],[lx,ly+h],[lx+w,ly+h]);
+    return {at:[lx,ly],text,color,fs,delay};
+  };
+  const jMine=mkJudge(isMissing?"내 그림 (오답 풀이)":"내 그림 (정답 풀이 ✓)",B,isMissing?T.student:T.ok);
+  const jAns=isMissing?mkJudge("정답 풀이: 높이 AH",[(A[0]+H[0])/2,(A[1]+H[1])/2],T.fix,17,1550):null;
+  const uB=(()=>{const p=dist(B,H)>2?B:C;const L=dist(p,H)||1;return[(p[0]-H[0])/L,(p[1]-H[1])/L];})();
+  const uA=(()=>{const L=dist(A,H)||1;return[(A[0]-H[0])/L,(A[1]-H[1])/L];})();
+  const aux=isMissing?T.fix:T.ok;
+  const anim=(delay,dur=650)=>({animate:true,dur,delay});
+
+  return (
+    <div className="geo-result" style={{marginBottom:12}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <b style={{fontSize:14}}>📐 기하 구성 분석</b>
+        <span className="geo-tag" style={{margin:0,color:isMissing?T.fix:T.ok,borderColor:isMissing?T.fix:T.ok}}>
+          {isMissing?"보조선(높이) 누락":"보조선(높이) ✓"}
+        </span>
+      </div>
+      <svg className="geo-overlay" viewBox={`${x0.toFixed(0)} ${y0.toFixed(0)} ${(x1-x0).toFixed(0)} ${(y1-y0).toFixed(0)}`}
+        style={{width:"100%",maxHeight:320,display:"block",background:"#FFFDF8",borderRadius:12,position:"static"}}>
+        {strokes.map((s,i)=>(   // 원본 손글씨는 흐리게
+          <polyline key={"raw"+i} points={s.map(p=>p[0]+","+p[1]).join(" ")}
+            fill="none" stroke="#221C39" strokeWidth={2.2} strokeLinecap="round" opacity={0.18}/>
+        ))}
+        <Curve pts={[B,C]} color={T.student} width={3.4} anim={anim(0)}/>
+        <Curve pts={[C,A]} color={T.student} width={3.4} anim={anim(220)}/>
+        <Curve pts={[A,B]} color={T.student} width={3.4} anim={anim(440)}/>
+        <SvgLabel at={vertexLabelPos(A,cen)} text="A" color={T.student} fontSize={17} anim={anim(700,350)}/>
+        <SvgLabel at={vertexLabelPos(B,cen)} text="B" color={T.student} fontSize={17} anim={anim(780,350)}/>
+        <SvgLabel at={vertexLabelPos(C,cen)} text="C" color={T.student} fontSize={17} anim={anim(860,350)}/>
+        <DashedLine pts={[A,H]} color={aux} width={2.8} dash="10 11" anim={anim(950)}/>
+        <PointDot at={H} color={aux} r={5.5} anim={anim(1500,350)}/>
+        <SvgLabel at={[H[0]+10,H[1]+13]} text="H" color={aux} fontSize={17} anim={anim(1550,350)}/>
+        <RightAngleMark corner={H} uA={uB} uB={uA} size={14} color={aux} anim={anim(1650,350)}/>
+        <SvgLabel at={jMine.at} text={jMine.text} color={jMine.color} fontSize={jMine.fs} anim={anim(jMine.delay,400)}/>
+        {jAns&&<SvgLabel at={jAns.at} text={jAns.text} color={jAns.color} fontSize={jAns.fs} anim={anim(jAns.delay,400)}/>}
+      </svg>
+      <p style={{margin:0,fontSize:13}}>
+        {isMissing
+          ?"삼각형은 정확해. 그런데 넓이로 가려면 높이 AH 보조선이 필요해 — 네 그림 위에 그려줬어. 다음엔 이 선부터!"
+          :"작도 완벽해. 높이까지 그렸으니 넓이 공식에 바로 넣으면 돼."}
+      </p>
+      <FormulaBox tex={"S=\\tfrac12\\cdot\\overline{BC}\\cdot\\overline{AH}"} color={aux} box
+        anim={{animate:true,dur:450,delay:1800}}/>
+    </div>
+  );
+}
+
+export { GeoFeedback, GeoInsight };

@@ -88,6 +88,25 @@ function recognize(strokes,{kind="triangle",minArea=8000}={}){
   };
 }
 
+/* 변 커버리지: 인식된 삼각형의 세 변이 실제 획으로 얼마나 덮였는지 (0~1, 최소값).
+   일반 풀이 패드의 '글씨' hull에서 나오는 가짜 삼각형을 걸러낸다 —
+   글씨 뭉치는 hull 가장자리를 획이 따라가지 않으므로 커버리지가 낮다. */
+function triangleCoverage(strokes, model, tol=16, n=14){
+  if(!model||!model.ok)return 0;
+  const all=strokes.flat();
+  const {A,B,C}=model.vertices;
+  let worst=1;
+  for(const [p,q] of [[A,B],[B,C],[C,A]]){
+    let hit=0;
+    for(let k=0;k<=n;k++){
+      const s=[p[0]+(q[0]-p[0])*k/n, p[1]+(q[1]-p[1])*k/n];
+      if(all.some(pt=>dist(pt,s)<tol))hit++;
+    }
+    worst=Math.min(worst,hit/(n+1));
+  }
+  return worst;
+}
+
 /* 비교(diff): 학생 모델 vs 요구사항 → {correct, missing, wrong, extra}
    requirements.aux: 필요한 보조선 목록 (기본: 높이). 5단계 기출은행 정답 모델도 이 계약 사용 */
 const AUX_LABEL={height:"높이 AH"};
@@ -148,5 +167,5 @@ async function recognizeAI(strokes, pngBase64, opts={}, signal){
 
 export {
   dist, distToLine, rdp, hull, bestTriangle, isStraight,
-  normalizeStrokes, recognize, compare, strokeSummary, recognizeAI,
+  normalizeStrokes, recognize, compare, triangleCoverage, strokeSummary, recognizeAI,
 };

@@ -7,6 +7,7 @@ import { callAI, parseDeriveCheck, parseDerivePlan, parseGrading, parseOcrCheck,
 import { allAttempts, logAttempt, miscLexFor } from "../core/attempts.js";
 import { abilityByNode, predictSuccess } from "../core/rasch.js";
 import { matchNode } from "../core/knowledgeGraph.js";
+import { GeoInsight } from "../ui/GeoFeedback.jsx";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
 
@@ -18,6 +19,7 @@ function Study({deck:initial,subjects,onExit}){
   const [answer,setAnswer]=useState("");
   const [inputMode,setInputMode]=useState("note");   // 'note'(손글씨) | 'type'(타이핑)
   const [ev,setEv]=useState(null);
+  const [geoInk,setGeoInk]=useState(null);   // 채점 시점 손글씨 스냅샷 (기하 구성 분석용)
   const [errMsg,setErrMsg]=useState("");
   const [submitErr,setSubmitErr]=useState("");
   const [deeper,setDeeper]=useState("");
@@ -405,6 +407,8 @@ function Study({deck:initial,subjects,onExit}){
         "너는 학습 분석 튜터야. "+qtypeCtx+" 학습자 답안을 보고 '이 개념의 본질 대비 내 답의 갭'을 분석해. 수식·행렬·그리스 문자·수학 기호(⊥ ∥ ∈ ∉ ⊆ ℝ ∇ 등)는 반드시 LaTeX로: 인라인 $...$, 블록 $$...$$. 유니코드 기호 직접 사용 금지. 다음 형식으로만 출력 (JSON·코드블록 없이):\nESSENCE: 이 질문이 진짜 요구하는 핵심 요소 1~3가지 (학습자가 반드시 알아야 할 것)\nGOT_IT: 내 답이 제대로 담은 부분 (인정해줄 것, 반말)\nGAP: 본질 대비 빠지거나 얕거나 비껴간 핵심 부분 (없으면 정확히 '없음')\nGAP_TYPE: 개념누락 / 이해얕음 / 핵심비껴감 / 표현부족 / 갭없음 중 정확히 하나\nDEPTH: 암기 수준 / 이해 수준 / 설명가능 수준 / 응용가능 수준 중 정확히 하나\nNEXT: 이 갭을 메우려면 구체적으로 뭘 보강해야 하는지 (반말, 1~2문장)\nFACTORS: 이 답안에서 드러난 능력을 각각 평가 — 개념(개념 이해)·계산(절차·연산 정확성)·전략(문제 해석·식 세우기)·추론(논리 전개·정당화)을 0(부족)/1(보통)/2(좋음)으로, 이 문제에서 드러나지 않는 능력은 - 로. 예: 개념=2 계산=1 전략=- 추론=1\nERROR: 오답의 성격을 정확히 하나로 — 없음 / 실수(개념은 아는데 계산·부호·옮겨쓰기 실수) / 개념(필요한 개념 자체를 모르거나 잘못 앎) / 전략(접근·풀이 방법 선택이 틀림) / 해석(문제 조건을 오독·누락) / 표기(과정은 맞는데 표현이 부정확) / 백지(손을 못 댐). '실수'와 '개념'의 구분이 가장 중요하니 풀이 과정을 근거로 신중히 판단해.\nSTAGE: 첫 오류가 난 단계 — 식세우기 / 계산 / 해석 중 하나 (오류 없으면 -)\nMISC: 드러난 오개념·실수 패턴을 12자 이내 라벨로 (예: 부호 분배 실수, 판별식 조건 혼동 — 없으면 -)\nVERDICT: correct 또는 partial 또는 incorrect (갭없음이면 correct, 핵심 갭이면 partial, 본질 전체 누락이면 incorrect)\nANSWER: 모범답안 3~5문장 (수식 LaTeX, 그래프 필요시 아래 형식 규칙 4의 mathviz 스크립트 — 함수식이 아닌 개념 도식만 <svg>)"+RICH_FMT+"\n\n자료:\n"+studyMat,
         userBlocks,false,{cache:true,maxTok:3500,lang:studyLang},abortRef.current?.signal);
       const r=parseGrading(gradingRaw);setEv(r);
+      // 기하 구성 분석용 획 스냅샷 — GeoInsight가 기하 문항+삼각형 작도일 때만 조용히 사용
+      try{setGeoInk(padRef.current&&padRef.current.hasStrokes&&padRef.current.hasStrokes()?padRef.current.dump():null);}catch(_){setGeoInk(null);}
       const v=["correct","partial","incorrect"].includes(r.verdict)?r.verdict:"partial";
       lastAnswerRef.current={answer:hasTxt?answer.trim():"[손글씨]",gap:r.gap||"",gapType:r.gap_type||""};
       logAttempt({src:"study",deckId:deck.id,concept:concept.name,unit:[concept.u1,concept.u2].filter(Boolean).join(" "),
@@ -1031,6 +1035,8 @@ function Study({deck:initial,subjects,onExit}){
                           {T("3회 시도 완료 — 모범답안으로 개념을 잡아봐 💡","3 tries done — grab the concept from the model answer 💡")}
                         </div>
                       )}
+                      {/* 기하 문항 + 삼각형 작도가 감지되면 자동으로 나타나는 구성 분석 (별도 메뉴 없음) */}
+                      <GeoInsight ink={geoInk} question={(q&&q.question)||""} concept={(concept&&concept.name)||""} unit={deck&&deck.subject||""}/>
                       {/* 해설 텍스트 + 오버레이 하이라이트 캔버스 */}
                       <div style={{position:"relative",borderRadius:14}}>
                         <div className="blk" style={{margin:0}}>
