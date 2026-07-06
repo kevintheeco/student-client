@@ -4,15 +4,16 @@
 학생이 스스로 설명하게 만들고, 그 과정을 분석해 약점을 채우는 자기주도 학습 플랫폼.
 "설명할 수 있어야 진짜 아는 것이다" — 지식 소비가 아닌 설명 능력을 기른다.
 
-## 기술 스택 (2026-07 결정: React SPA 유지, Next.js 전환 안 함 — docs/ADR.md 참고)
-- Vite 6 + React 18 (JavaScript/JSX — TypeScript는 점진 전환 예정)
-- 배포: GitHub Pages (`.github/workflows/deploy.yml`, https://youareprofessor.github.io)
+## 기술 스택 (2026-07-07 결정: Next.js 전환 — 학생별 분석·기록 화면의 서버 렌더링 수요, docs/ADR.md ADR-012 참고)
+- 목표: Next.js(App Router) + React (TypeScript 전환 병행)
+- 현재: Vite 6 + React 18 SPA (JavaScript/JSX) — 마이그레이션 완료 전 신규 기능은 기존 구조를 따른다
+- 배포: 현재 GitHub Pages (`.github/workflows/deploy.yml`) — SSR 불가하므로 전환 시 Vercel(1순위) 또는 Cloudflare로 이전
 - AI 백엔드: Cloudflare Worker 프록시 (`proxy/worker.js`, `/claude` 엔드포인트, 학원코드→키 매핑은 `ACADEMY_KEYS` 시크릿)
 - 데이터/인증: Firebase (Auth + Firestore, CDN 스크립트 로드 — `src/core/platform.js`, 규칙은 `firestore.rules`)
 - 프론트 구조: `src/core/`(ai.js·platform.js·srs.js), `src/ui/`(공용 컴포넌트), `src/views/`(화면)
 
 ## 아키텍처 규칙
-- CRITICAL: AI 호출은 반드시 Cloudflare Worker 프록시(`proxy/worker.js`)를 경유한다. 클라이언트에서 AI API 키를 직접 사용하지 않는다.
+- CRITICAL: AI 호출은 반드시 서버 사이드(현재 Cloudflare Worker 프록시 `proxy/worker.js`)를 경유한다. 클라이언트에서 AI API 키를 직접 사용하지 않는다. Next.js 전환 시 Worker를 API Route로 흡수할지는 미결정(ADR-012) — 결정 전까지 Worker 경유 유지.
 - CRITICAL: 모든 AI 파이프라인은 docs/ARCHITECTURE.md 의 파이프라인 설계를 따른다.
 - CRITICAL: OCR, 채점, 문제 생성, 튜터는 Worker 안에서 각각 독립된 엔드포인트로 분리한다 (현재 `/claude` 단일 — 신규 파이프라인 추가 시 분리).
 - CRITICAL: 채점 결과는 반드시 tool_use로 JSON 스키마를 강제한다. 자유 텍스트 파싱 금지.
