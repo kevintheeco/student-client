@@ -150,7 +150,7 @@ function KnowledgeMap({onPickUnit=()=>{},scopeUnits,weakUnits}){
       <div style={{display:"flex",gap:12,flexWrap:"wrap",fontSize:11.5,color:"var(--sub)",marginBottom:8}}>
         {STRANDS.map(s=><span key={s.id} style={{display:"inline-flex",alignItems:"center",gap:5}}><span style={{width:9,height:9,borderRadius:"50%",background:s.color}}/>{s.name}</span>)}
         <span style={{display:"inline-flex",alignItems:"center",gap:5}}><span style={{width:16,height:3,background:"#E14360",borderRadius:2}}/>{tr("의존도 80%+","80%+ dependency")}</span>
-        {weakSet&&<span style={{display:"inline-flex",alignItems:"center",gap:5}}><span style={{width:9,height:9,borderRadius:"50%",border:"2px solid #FF3B5C"}}/>{tr("이번 시험에서 틀린 단원","Missed on this exam")}</span>}
+        {weakSet&&<span style={{display:"inline-flex",alignItems:"center",gap:5}}><span style={{width:9,height:9,borderRadius:"50%",background:"#FF3B5C",boxShadow:"0 0 7px 2px rgba(255,59,92,.75)"}}/>{tr("이번 시험에서 틀린 단원","Missed on this exam")}</span>}
       </div>
 
       <div ref={wrapRef} style={{position:"relative",border:"1px solid var(--line)",borderRadius:18,overflow:"hidden",background:"linear-gradient(160deg,#FDFDFF 0%,#F4F3FB 100%)"}}>
@@ -159,6 +159,10 @@ function KnowledgeMap({onPickUnit=()=>{},scopeUnits,weakUnits}){
           <defs>
             <marker id="km-arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#9AA2C4"/></marker>
             <marker id="km-arr-hot" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#E14360"/></marker>
+            {/* 틀린 단원 글로우 헤일로 (red glowing — 대표 지시) */}
+            <filter id="km-weak-glow" x="-80%" y="-80%" width="260%" height="260%">
+              <feGaussianBlur stdDeviation="10"/>
+            </filter>
           </defs>
           {/* 과목 열 제목 */}
           {MAP.cols.map(c=>(
@@ -169,7 +173,8 @@ function KnowledgeMap({onPickUnit=()=>{},scopeUnits,weakUnits}){
           {MAP.edges.map((e,i)=>{
             const hot=e.w>=0.8;
             const on=related&&(e.from===sel||e.to===sel);
-            const dim=related&&!on;
+            const inScope=scopeSet?(scopeSet.has(e.from)||scopeSet.has(e.to)):true;
+            const dim=scopeSet?!inScope:(related&&!on);
             return <path key={i} d={edgePath(e)} fill="none"
               stroke={on?"#E14360":hot?"#E14360":"#9AA2C4"}
               strokeWidth={on?3:hot?1.9:1.2}
@@ -179,13 +184,21 @@ function KnowledgeMap({onPickUnit=()=>{},scopeUnits,weakUnits}){
           {/* 단원 카드 */}
           {[...MAP.units.values()].map(u=>{
             const c=S_COLOR[u.strand];
-            const on=sel===u.name,near=related?related.has(u.name):true;
+            const on=sel===u.name;
+            const near=scopeSet?scopeSet.has(u.name):(related?related.has(u.name):true);
+            const weak=weakSet?weakSet.has(u.name):false;
             return(
               <g key={u.name} onClick={(e)=>{e.stopPropagation();if(moved.current)return;focusUnit(u);}}
-                 style={{cursor:"pointer"}} opacity={near?1:0.22}>
+                 style={{cursor:"pointer"}} opacity={near?1:0.08}>
+                {weak&&(   // 붉은 글로우 헤일로 — 숨쉬듯 은은하게 (테두리 깜빡임 대신)
+                  <rect x={u.x-3} y={u.y-3} width={NODE_W+6} height={NODE_H+6} rx={15}
+                    fill="#FF3B5C" filter="url(#km-weak-glow)">
+                    <animate attributeName="opacity" values="0.45;0.8;0.45" dur="2.2s" repeatCount="indefinite"/>
+                  </rect>
+                )}
                 <rect x={u.x} y={u.y} width={NODE_W} height={NODE_H} rx={13}
-                  fill={on?c+"26":"#FFFFFF"} stroke={c} strokeWidth={on?3:1.6}/>
-                <rect x={u.x} y={u.y} width={7} height={NODE_H} rx={3.5} fill={c}/>
+                  fill={weak?"#FFF0F3":on?c+"26":"#FFFFFF"} stroke={weak?"#FF3B5C":c} strokeWidth={weak?2.6:on?3:1.6}/>
+                <rect x={u.x} y={u.y} width={7} height={NODE_H} rx={3.5} fill={weak?"#FF3B5C":c}/>
                 <text x={u.x+NODE_W/2+3} y={u.y+NODE_H/2+4} textAnchor="middle"
                   style={{fontSize:u.name.length>14?10.5:12.5,fontWeight:700,fill:"#2A2547"}}>{u.name}</text>
               </g>);

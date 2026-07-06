@@ -12,12 +12,12 @@ import { KnowledgeMap } from "./KnowledgeMap.jsx";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
 
-function Exam({deck,topic,onExit,student,academy,academyName}){
+function Exam({deck,topic,onExit,student,academy,academyName,preset}){
   const examLang=((deck&&deck.lang)||CFG.lang)==="en"?"en":"ko";
   const T=(ko,en)=>examLang==="en"?en:ko;
   const studyMat=deck?(deck.summary||deck.material.slice(0,8000)):"";
   const qmodel=CFG.qmodel||CFG.model;
-  const examTitle=deck?deck.name:(topic?topic.label:T("시험","Exam"));
+  const examTitle=preset?(preset.examTitle||T("예시 시험","Sample exam")):deck?deck.name:(topic?topic.label:T("시험","Exam"));
   const scopeId=deck?deck.id:("topic_"+((topic&&topic.id)||"x"));
 
   const [phase,setPhase]=useState("gen");     // gen | take | grading | result | error
@@ -50,7 +50,15 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
   </>):null;
 
   // ── 출제 ──
-  useEffect(()=>{generate();return ()=>{abortRef.current?.abort();};},[]);
+  useEffect(()=>{
+    if(preset){ // 예시 결과 프리셋 — 출제·채점 없이 결과 화면(리포트+개념지도)으로 바로 진입
+      setItems(preset.items||[]);setGrades(preset.grades||[]);
+      setScore(preset.score||0);setMaxScore(preset.maxScore||0);
+      setAnalysis(preset.analysis||null);setIdx(0);setPhase("result");
+      return;
+    }
+    generate();return ()=>{abortRef.current?.abort();};
+  },[]);
   async function generate(){
     abortRef.current?.abort();
     const ctrl=new AbortController();abortRef.current=ctrl;
@@ -540,7 +548,7 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
           return(
           <div className="card qcard" style={{maxWidth:960,margin:"0 auto",padding:"20px 22px"}}>
             <div style={{fontFamily:"'Jua',sans-serif",fontSize:18,color:"var(--ink)",marginBottom:4}}>🗺️ {T("이 시험이 다룬 개념지도","This exam's concept map")}</div>
-            <p className="hint" style={{marginTop:0,marginBottom:12}}>{T("이 시험에 나온 단원만 확대해서 보여줘요. 반짝이는 빨간 테두리가 이번에 틀린(또는 부분점수) 단원이에요 — ⬅ 방향으로 눌러가며 어디부터 막혔는지 확인해보세요.","Zoomed to just this exam's units. Pulsing red border = units you missed — click ⬅ prerequisites to trace the real gap.")}</p>
+            <p className="hint" style={{marginTop:0,marginBottom:12}}>{T("이 시험에 나온 단원만 확대해서 보여줘요. 붉게 빛나는 카드가 이번에 틀린(또는 부분점수) 단원이에요 — ⬅ 방향으로 눌러가며 어디부터 막혔는지 확인해보세요.","Zoomed to just this exam's units. Red-glowing cards = units you missed — click ⬅ prerequisites to trace the real gap.")}</p>
             <KnowledgeMap scopeUnits={scopeUnits} weakUnits={weakUnits}/>
             <div style={{display:"flex",gap:8,marginTop:4}}>
               <button className="btn gho" onClick={()=>setShowMap(false)}>{T("← 채점 결과로","← Back to results")}</button>
