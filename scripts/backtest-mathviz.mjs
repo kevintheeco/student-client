@@ -11,6 +11,7 @@
 import { RICH_FMT } from "../src/core/platform.js";
 import { parseSceneBlock, validateScript, SCENE_SCHEMA_PROMPT } from "../src/ui/mathviz/scenescript.js";
 import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 
 const arg=(k,d)=>{const i=process.argv.indexOf(k);return i>0?process.argv[i+1]:d;};
 const MODEL=arg("--model","claude-sonnet-4-6");
@@ -95,22 +96,22 @@ function judge(scn,text){
     return {blocks:blocks.length,errors};
   }
   if(!blocks.length){errors.push("mathviz 블록 없음(그래프 요청했는데)");return{blocks:0,errors};}
+  let anyVector=false;
   blocks.forEach((b,bi)=>{
     const script=parseSceneBlock(b);
     if(!script){errors.push("블록"+bi+": JSON 파스 실패");return;}
     const v=validateScript(script);
     if(!v.ok)errors.push(...v.errors.map(e=>"블록"+bi+": "+e));
-    if(scn.id==="vecdot"){   // 벡터 개념인데 vector/angle 스텝을 안 쓰면 품질 미달(손그림 SVG 회귀)
-      const types=new Set(script.steps.map(s=>s.type));
-      if(!types.has("vector"))errors.push("블록"+bi+": vector 스텝 미사용(벡터 다이어그램 계약)");
-    }
+    if(script.steps.some(s=>s.type==="vector"))anyVector=true;
   });
+  // 벡터 개념 시나리오: 투영 '다이어그램'만 vector 스텝 필수 — cosθ 함수 그래프 블록은 plot이 정답
+  if(scn.id==="vecdot"&&!anyVector)errors.push("vector 스텝을 쓴 다이어그램이 하나도 없음(손그림 SVG 회귀)");
   if(/```mathviz(?![\s\S]*```)/i.test(text))errors.push("닫히지 않은 mathviz 펜스");
   return {blocks:blocks.length,errors};
 }
 
 /* ── 실행 ── */
-const outDir=new URL("../.backtest/",import.meta.url).pathname.replace(/^\/([A-Z]:)/,"$1");
+const outDir=fileURLToPath(new URL("../.backtest/",import.meta.url));   // 한글 경로 안전
 fs.mkdirSync(outDir,{recursive:true});
 let pass=0,fail=0;const failDetail={};
 const ALL=[...SCENARIOS,...(VISION_SCENARIO?[VISION_SCENARIO]:[])];
