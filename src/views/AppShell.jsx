@@ -9,11 +9,14 @@ import { Onboard, Settings } from "./Settings.jsx";
 import { Prof } from "../ui/common.jsx";
 import { Study } from "./Study.jsx";
 import { Tutor } from "./Tutor.jsx";
+import { UnitStudy } from "./UnitStudy.jsx";
 import { WeakNotes } from "./WeakNotes.jsx";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
 
-function App(){
+// edition: "general"(범용 — 무엇이든 넣어 공부) | "student"(중·고등 수학 — 단원별 공부 포함)
+function App({edition="general"}){
+  const isStudent=edition==="student";
   const [view,setView]=useState((CFG.key||COMPANY_MODE)?"home":"onboard");
   const [decks,setDecks]=useState([]);
   const [subjects,setSubjects]=useState(defaultSubjects());
@@ -125,7 +128,7 @@ function App(){
       )}
       <div className="hd">
         <div className="brand" onClick={()=>setView((CFG.key||COMPANY_MODE)?"home":"onboard")}>
-          <Prof size={44}/><div><h1>{tr("니가 교수","You're the Prof")}</h1><div className="tag">{tr("니가 설명해봐, 내가 채점할게","You explain, I'll grade")}</div></div>
+          <Prof size={44}/><div><h1>{tr("니가 교수","You're the Prof")}</h1><div className="tag">{isStudent?tr("중·고등 수학 — 니가 설명해봐, 내가 채점할게","Middle·High math — you explain, I'll grade"):tr("니가 설명해봐, 내가 채점할게","You explain, I'll grade")}</div></div>
         </div>
         <div className="hd-r">
           {view!=="home"&&CFG.key&&<button className="btn gho sm" onClick={()=>{refresh();setView("home");}}>{tr("← 목록","← Back")}</button>}
@@ -198,11 +201,12 @@ function App(){
       {view==="home"&&(
         <>
           <SubjectTabs subjects={subjects} active={filterSubj} onChange={setFilterSubj} onSave={saveSubjects}/>
-          <Home decks={filteredDecks} subjects={subjects} onAdd={()=>setView("add")} onOpen={openStudy} onNotes={openNotes} onChanged={refresh} nick={nick} onInsight={()=>setView("insight")}/>
+          <Home decks={filteredDecks} subjects={subjects} onAdd={()=>setView("add")} onUnits={isStudent?()=>setView("units"):null} onOpen={openStudy} onNotes={openNotes} onChanged={refresh} nick={nick} onInsight={()=>setView("insight")}/>
         </>
       )}
       {view==="insight"&&<Insight onExit={()=>{refresh();setView("home");}}/>}
       {view==="add"&&<AddMaterial subjects={subjects} onSave={saveSubjects} onDone={()=>{refresh();setView("home");}} onCancel={()=>setView("home")}/>}
+      {view==="units"&&<UnitStudy subjects={subjects} onSave={saveSubjects} onDone={()=>{refresh();setView("home");}} onCancel={()=>setView("home")}/>}
       {view==="study"&&activeDeck&&<Study deck={activeDeck} subjects={subjects} onExit={()=>{refresh();setView("home");}}/>}
       {view==="exam"&&(activeDeck||examTopic)&&<Exam deck={examTopic?null:activeDeck} topic={examTopic} onExit={()=>{setExamTopic(null);refresh();setView("home");}}/>}
       {view==="tutor"&&activeDeck&&<Tutor deck={activeDeck} onExit={()=>{refresh();setView("home");}} onPractice={(cid,mode)=>openConcept(activeDeck.id,cid,mode)} onExam={(topic)=>{setExamTopic(topic);setView("exam");}}/>}

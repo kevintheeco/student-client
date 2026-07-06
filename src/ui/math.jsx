@@ -1,9 +1,16 @@
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
 
+// MathViz는 지연 로딩 — math.jsx↔MathViz.jsx 정적 순환 import 방지 + 비수학 사용자 초기 번들 경량
+const MathVizLazy=React.lazy(()=>import("./mathviz/MathViz.jsx").then(m=>({default:m.MathViz})));
+// 블록 파스는 공용 계약(scenescript)의 관대한 파서 사용 — 트레일링 콤마 등 사소한 위반 복구, 실패 시 null
+import { parseSceneBlock as _parseSceneBlock } from "./mathviz/scenescript.js";
+
 function sanitizeSvg(s){
   return s
     .replace(/<!--[\s\S]*?-->/g,"")
+    // 유니코드 조합문자(벡터 화살표 b⃗의 U+20D7, 오버라인 등)는 SVG 폰트가 못 그려 ▯로 깨짐 — 제거
+    .replace(/[\u0300-\u036F\u20D0-\u20FF]/g,"")
     .replace(/<script[\s\S]*?<\/script>/gi,"")
     .replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi,"")
     .replace(/javascript\s*:/gi,"")
@@ -204,25 +211,39 @@ function MathText({text,tag:Tag="p",className,style}){
     .replace(/<!--[\s\S]*?-->/g,"")
     .replace(/```[\w]*\s*(<svg[\s\S]*?<\/svg>)\s*```/gi,"$1")
     .replace(/<svg(?![\s\S]*<\/svg>)[\s\S]*$/i,"")                      // 닫히지 않은(잘린) svg는 통째로 제거 — 날것 노출 방지
+    .replace(/```mathviz(?![\s\S]*```)[\s\S]*$/i,"")                    // 스트리밍 중 잘린 mathviz 블록도 동일 처리
     .replace(/\\\[([\s\S]+?)\\\]/g,(m,p)=>"\n\n$$"+p.trim()+"$$\n\n")   // \[..\] → $$..$$
     .replace(/\\\(([\s\S]+?)\\\)/g,(m,p)=>"$"+p.trim()+"$"));           // \(..\) → $..$ → 마지막에 짝 안 맞는 $ 보정
   if(Tag==="span")return React.createElement("span",{className,style},..._renderInline(cleaned,"s"));
   const nodes=[];const kr={n:0};
-  const svgSegs=cleaned.split(/(<svg[\s\S]*?<\/svg>)/i);
-  svgSegs.forEach((seg,si)=>{
-    if(si%2===1){nodes.push(React.createElement("div",{key:"svg"+si,className:"graph-block",dangerouslySetInnerHTML:{__html:sanitizeSvg(seg)}}));return;}
-    // 멀티라인 디스플레이 수식 $$...$$ 먼저 분리 (행렬·정렬식이 줄로 안 깨지게)
-    const dispSegs=seg.split(/(\$\$[\s\S]+?\$\$)/);
-    dispSegs.forEach((dseg,di)=>{
-      if(!dseg)return;
-      if(di%2===1){
-        const latex=dseg.slice(2,-2).trim();const dkk="dm"+si+"_"+di;
-        const html=_safeKatex(latex,true);
-        if(html){nodes.push(React.createElement("div",{key:dkk,style:{margin:"10px 0",overflowX:"auto"},dangerouslySetInnerHTML:{__html:html}}));return;}
-        // 못 읽는 수식 → 빨간 에러 대신 일반 텍스트
-        nodes.push(React.createElement("div",{key:dkk,style:{color:"var(--sub)"}},latex));return;
-      }
-      _renderBlocks(dseg,nodes,kr,si+"_"+di);
+  // 1) 벡터 장면 스크립트(```mathviz) 먼저 분리 — 데이터에서만 렌더(innerHTML 미사용), 실패 시 조용히 생략
+  const vizSegs=cleaned.split(/(```mathviz[\s\S]*?```)/i);
+  vizSegs.forEach((vseg,vi)=>{
+    if(vi%2===1){
+      const script=_parseSceneBlock(vseg);
+      if(script)nodes.push(React.createElement("div",{key:"viz"+vi,className:"mathviz-block"},
+        React.createElement(React.Suspense,{fallback:null},
+          React.createElement(MathVizLazy,{script,controls:true,autoplay:false}))));
+      return;
+    }
+    // 2) 기존 경로 그대로: <svg> 분리 → $$..$$ → 마크다운 (캐시된 옛 해설 렌더 불변)
+    const svgSegs=vseg.split(/(<svg[\s\S]*?<\/svg>)/i);
+    svgSegs.forEach((seg,si)=>{
+      const sk=vi+"_"+si;
+      if(si%2===1){nodes.push(React.createElement("div",{key:"svg"+sk,className:"graph-block",dangerouslySetInnerHTML:{__html:sanitizeSvg(seg)}}));return;}
+      // 멀티라인 디스플레이 수식 $$...$$ 먼저 분리 (행렬·정렬식이 줄로 안 깨지게)
+      const dispSegs=seg.split(/(\$\$[\s\S]+?\$\$)/);
+      dispSegs.forEach((dseg,di)=>{
+        if(!dseg)return;
+        if(di%2===1){
+          const latex=dseg.slice(2,-2).trim();const dkk="dm"+sk+"_"+di;
+          const html=_safeKatex(latex,true);
+          if(html){nodes.push(React.createElement("div",{key:dkk,style:{margin:"10px 0",overflowX:"auto"},dangerouslySetInnerHTML:{__html:html}}));return;}
+          // 못 읽는 수식 → 빨간 에러 대신 일반 텍스트
+          nodes.push(React.createElement("div",{key:dkk,style:{color:"var(--sub)"}},latex));return;
+        }
+        _renderBlocks(dseg,nodes,kr,sk+"_"+di);
+      });
     });
   });
   return React.createElement("div",{className,style},...nodes);

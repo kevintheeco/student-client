@@ -3,21 +3,26 @@ import { Cheer, Fb, Prof } from "../ui/common.jsx";
 import { MathText } from "../ui/math.jsx";
 import { PenPad, inkHas, renderInkPNG } from "../ui/pads.jsx";
 import { callAI, uid } from "../core/ai.js";
+import { bankSearch, toExamItem } from "../core/examBank.js";
 import { activeStudent, logAttempt } from "../core/attempts.js";
 import { errTypeById, normErrType, normFactors, normStage } from "../core/knowledgeGraph.js";
+import { MathViz } from "../ui/mathviz/MathViz.jsx";
+import { GeoInsight } from "../ui/GeoFeedback.jsx";
+import { KnowledgeMap } from "./KnowledgeMap.jsx";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
 
-function Exam({deck,topic,onExit,student,academy,academyName}){
+function Exam({deck,topic,onExit,student,academy,academyName,preset}){
   const examLang=((deck&&deck.lang)||CFG.lang)==="en"?"en":"ko";
   const T=(ko,en)=>examLang==="en"?en:ko;
   const studyMat=deck?(deck.summary||deck.material.slice(0,8000)):"";
   const qmodel=CFG.qmodel||CFG.model;
-  const examTitle=deck?deck.name:(topic?topic.label:T("시험","Exam"));
+  const examTitle=preset?(preset.examTitle||T("예시 시험","Sample exam")):deck?deck.name:(topic?topic.label:T("시험","Exam"));
   const scopeId=deck?deck.id:("topic_"+((topic&&topic.id)||"x"));
 
   const [phase,setPhase]=useState("gen");     // gen | take | grading | result | error
   const [showReport,setShowReport]=useState(false);   // 학부모 상담 리포트 보기
+  const [showMap,setShowMap]=useState(false);         // 이 시험 범위 개념지도 보기(약점 노드 반짝임)
   const [items,setItems]=useState([]);
   const [idx,setIdx]=useState(0);
   const [answers,setAnswers]=useState([]);    // [{choice,text}] (손글씨는 inkRef)
@@ -36,9 +41,24 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
   const answersRef=useRef([]); answersRef.current=answers;
 
   const TYPE_LABEL=(t)=>t==="mc"?T("객관식","Multiple choice"):t==="short"?T("단답형","Short answer"):T("서술·논술형","Essay");
+  const LET="ABCDE";   // 객관식 보기 문자 — 기출 원본은 5지선다일 수 있음
+  // 문제 출처 레이블: 기출(은행 원본 그대로) / 제작(신규 제작). Study의 기출변형과 함께 3분류.
+  const originChip=(o,src)=>o?(<>
+    <span className="chip" style={{background:o==="기출"?"#FFF7E0":"#EEF2FF",color:o==="기출"?"#946200":"#3730A3",fontWeight:800}}>
+      {o==="기출"?"📜 "+T("기출","Past exam"):"✨ "+T("제작","Original")}</span>
+    {o==="기출"&&src&&<span style={{fontSize:11,color:"var(--sub)",alignSelf:"center"}}>{src}</span>}
+  </>):null;
 
   // ── 출제 ──
-  useEffect(()=>{generate();return ()=>{abortRef.current?.abort();};},[]);
+  useEffect(()=>{
+    if(preset){ // 예시 결과 프리셋 — 출제·채점 없이 결과 화면(리포트+개념지도)으로 바로 진입
+      setItems(preset.items||[]);setGrades(preset.grades||[]);
+      setScore(preset.score||0);setMaxScore(preset.maxScore||0);
+      setAnalysis(preset.analysis||null);setIdx(0);setPhase("result");
+      return;
+    }
+    generate();return ()=>{abortRef.current?.abort();};
+  },[]);
   async function generate(){
     abortRef.current?.abort();
     const ctrl=new AbortController();abortRef.current=ctrl;
@@ -57,15 +77,33 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
         "출제 규칙: ① 정답이 문제 문장에 드러나면 안 됨 ② 객관식 오답 3개는 모두 그럴듯(흔한 오개념) ③ 서술형은 단계적 풀이·근거를 요구하는 좋은 문제 ④ 수식은 KaTeX로 렌더되는 유효한 LaTeX($...$)로 — 여는 $·중괄호 {}·\left\right는 반드시 닫고, 위/아래첨자(^_) 뒤엔 인자를 붙이고(x^2처럼), 인라인 안엔 줄바꿈 금지(여러 줄·행렬은 $$...$$). 유니코드 수학기호 대신 \times \le \int 등 명령 사용 ⑤ 범위 전반을 고르게.\n"+
         "배점: 객관식·단답은 작게, 서술은 크게. 총합 100점 근처.\n";
       let sys,userMsg;
+      let bankPicked=[];          // 기출은행에서 원본 그대로 출제할 문항 (origin="기출")
+      let markMade=false;         // 학원 시험이면 AI 신규 문항에 origin="제작" 표시
       if(topic&&topic.src){
         // 책(교재) 시험 — 선택 단원의 교재 내용(src)으로, 지정한 문항 수만큼 출제
         const n=Math.max(1,Math.min(40,Number(topic.count)||8));
         sys="너는 대학 전공 교재로 시험을 출제하는 전문가야. 아래 [교재 내용]에 근거해서만 실전 시험지를 만들어(교재에 없는 내용은 절대 출제 금지). 반드시 정확히 "+n+"문항만 출제해. mc(객관식)·short(단답)·essay(서술)를 적절히 섞고 난이도는 쉬움→어려움 고루. 각 문항의 'unit'에 그 문항이 속한 단원명을 넣어.\n출제 규칙: ① 정답이 문제 문장에 드러나면 안 됨 ② 객관식 오답 3개는 모두 그럴듯(흔한 오개념) ③ 서술형은 단계적 풀이·근거를 요구 ④ 수식은 KaTeX로 렌더되는 유효한 LaTeX($...$)로 — 여는 $·중괄호 {}·\left\right는 반드시 닫고, 위/아래첨자(^_) 뒤엔 인자를 붙이고(x^2처럼), 인라인 안엔 줄바꿈 금지(여러 줄·행렬은 $$...$$). 유니코드 수학기호 대신 \times \le \int 등 명령 사용 ⑤ 범위 전반을 고르게. 배점: 객관식·단답 작게, 서술 크게.\n"+schema;
         userMsg="[총 문항 수] 정확히 "+n+"문항\n[단원] "+((topic.unitNames||[]).join(", ")||"전체")+"\n[교재 내용]:\n"+(""+topic.src).slice(0,14000);
       }else if(topic&&Array.isArray(topic.units)&&topic.units.length){
-        // 학원 레벨테스트 — 여러 단원 동시 출제(단원별 문항 수·난이도 지정), 문항마다 unit 태깅
-        const lines=topic.units.map(u=>"· "+u.name+" — "+(u.count||2)+"문항, 난이도 "+(DIFF_KO[u.difficulty]||u.difficulty||"보통")).join("\n");
-        const totalQ=topic.units.reduce((s,u)=>s+(Number(u.count)||0),0);
+        // 학원 레벨테스트 — 기출은행 우선: 단원별 검증 기출을 먼저 꺼내고, 모자란 만큼만 AI가 신규 제작
+        markMade=true;
+        const aiUnits=[];
+        topic.units.forEach(u=>{
+          const want=Math.max(1,Number(u.count)||2);
+          const hits=bankSearch({unit:u.name,verifiedOnly:true,limit:want});
+          bankPicked.push(...hits.map(it=>toExamItem(it,uid)));
+          if(want-hits.length>0)aiUnits.push({...u,count:want-hits.length});
+        });
+        if(bankPicked.length)setGenMsg(T("검증된 기출 "+bankPicked.length+"문항 확보 — "+(aiUnits.length?"나머지는 신규 제작 중… (조금 걸려)":"기출만으로 시험지를 구성했어!"),
+          "Using "+bankPicked.length+" verified past-exam questions…"));
+        if(!aiUnits.length){
+          // 전 문항이 검증 기출 — AI 호출 없이 즉시 시험지 완성 (가장 빠르고 가장 정확)
+          setItems(bankPicked);setAnswers(bankPicked.map(()=>({})));
+          setMaxScore(bankPicked.reduce((s,q)=>s+q.points,0));
+          inkRef.current={};setIdx(0);setPhase("take");return;
+        }
+        const lines=aiUnits.map(u=>"· "+u.name+" — "+(u.count||2)+"문항, 난이도 "+(DIFF_KO[u.difficulty]||u.difficulty||"보통")).join("\n");
+        const totalQ=aiUnits.reduce((s,u)=>s+(Number(u.count)||0),0);
         sys="너는 대한민국 중·고등 수학 학원의 베테랑 출제위원이야. 학원 '레벨테스트(진단평가)'용 시험지를 한국 수학 교육과정 표준에 근거해 만들어. 아래 [단원별 출제 지시]를 정확히 지켜 — 각 단원에서 지정된 문항 수만큼, 지정된 난이도로 출제하고, 문항마다 그 문항이 속한 단원명을 'unit' 필드에 아래 표기 그대로 넣어. 학생 수준을 진단할 수 있게 단원별 핵심 유형(개념·계산·증명·그래프·활용)을 담아.\n"+
           "출제 규칙: ① 정답이 문제 문장에 드러나면 안 됨 ② 객관식 오답 3개는 모두 그럴듯(흔한 오개념) ③ 서술형은 단계적 풀이·근거를 요구 ④ 수식은 KaTeX로 렌더되는 유효한 LaTeX($...$)로 — 여는 $·중괄호 {}·\left\right는 반드시 닫고, 위/아래첨자(^_) 뒤엔 인자를 붙이고(x^2처럼), 인라인 안엔 줄바꿈 금지(여러 줄·행렬은 $$...$$). 유니코드 수학기호 대신 \times \le \int 등 명령 사용 ⑤ mc/short/essay를 적절히 섞어. 배점: 객관식·단답 작게, 서술 크게, 총합 100점 근처.\n"+schema;
         userMsg="[학년·과목] "+(topic.grade||topic.subject||"")+"\n[단원별 출제 지시] (총 "+totalQ+"문항)\n"+lines+"\n반드시 지정 단원만, 지정 문항 수대로 출제.";
@@ -88,9 +126,16 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
         accept:Array.isArray(q.accept)?q.accept:[],
         rubric:Array.isArray(q.rubric)?q.rubric:[],
         solution:q.solution||"",model_answer:q.model_answer||"",
+        origin:markMade?"제작":undefined,
       })).filter(q=>q.type!=="mc"||(q.choices&&q.choices.length===4));
-      if(!norm.length)throw new Error(T("문항을 만들지 못했어. 자료가 너무 짧거나 형식 오류.","Couldn't build questions."));
-      setItems(norm);setAnswers(norm.map(()=>({})));setMaxScore(norm.reduce((s,q)=>s+q.points,0));
+      if(!norm.length&&!bankPicked.length)throw new Error(T("문항을 만들지 못했어. 자료가 너무 짧거나 형식 오류.","Couldn't build questions."));
+      // 기출 + 신규 제작 병합 — 단원 선택 순서대로 정렬(단원별 진단 흐름 유지)
+      let finalItems=norm;
+      if(bankPicked.length){
+        const uo=(u)=>{const i=(topic&&Array.isArray(topic.units))?topic.units.findIndex(x=>x.name===u):-1;return i<0?999:i;};
+        finalItems=[...bankPicked,...norm].sort((a,b)=>uo(a.unit)-uo(b.unit));
+      }
+      setItems(finalItems);setAnswers(finalItems.map(()=>({})));setMaxScore(finalItems.reduce((s,q)=>s+q.points,0));
       inkRef.current={};setIdx(0);setPhase("take");
     }catch(e){if(e.name==="AbortError")return;setErrMsg((e&&e.message)||String(e));setPhase("error");}
   }
@@ -125,7 +170,7 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
       for(const t of list){
         if(ctrl.signal.aborted)return;
         try{out[t.i]=await gradeOne(t,ctrl.signal);}
-        catch(e){if(e.name==="AbortError")return;out[t.i]={error:true,points:t.q.points,score:0,model:t.q.model_answer||t.q.solution||"",type:t.q.type,mcAnswer:t.q.answer,choice:t.ans.choice,text:t.ans.text,concept:t.q.concept,unit:t.q.unit||t.q.concept||"",inkImg:inkHas(t.ink)?renderInkPNG(t.ink):null,gap:T("채점 오류 — 다시 시도해줘","Grading error")};}
+        catch(e){if(e.name==="AbortError")return;out[t.i]={error:true,points:t.q.points,score:0,model:t.q.model_answer||t.q.solution||"",type:t.q.type,mcAnswer:t.q.answer,choice:t.ans.choice,text:t.ans.text,concept:t.q.concept,unit:t.q.unit||t.q.concept||"",origin:t.q.origin,srcLabel:t.q.srcLabel,figure:t.q.figure||null,figureScript:t.q.figureScript||null,inkImg:inkHas(t.ink)?renderInkPNG(t.ink):null,gap:T("채점 오류 — 다시 시도해줘","Grading error")};}
         done++;setGradeProg(done);
       }
     }
@@ -162,12 +207,18 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
   async function gradeOne({q,ans,ink},signal){
     const inkImg=inkHas(ink)?renderInkPNG(ink):null;
     const blocks=[];
+    // 문제 그림(기하·그래프)이 있으면 첫 번째 이미지로 채점 AI에 전달 — 그림 없이는 채점 근거가 불완전
+    const figM=q.figure?String(q.figure).match(/^data:(image\/[\w+.-]+);base64,(.+)$/):null;
+    if(figM)blocks.push({type:"image",source:{type:"base64",media_type:figM[1],data:figM[2]}});
     if(inkImg)blocks.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:inkImg}});
     const parts=["[문항 유형] "+TYPE_LABEL(q.type),"[배점] "+q.points+"점","[문제]\n"+q.question];
+    if(figM)parts.push(inkImg?"※ 이미지 순서: 첫 번째=[문제 그림], 두 번째=학생의 손글씨(연습장/답안).":"※ 첫 번째 이미지는 [문제 그림]이야.");
+    // 벡터 그림이 있으면 스크립트 원문도 전달 — 래스터보다 정확한 함수식·좌표가 채점 근거가 된다
+    if(q.figureScript)parts.push("[문제 그림 — 벡터 장면 스크립트(정확한 함수·좌표, 그림과 동일)]\n"+JSON.stringify(q.figureScript));
     if(q.type==="mc"){
-      parts.push("[보기]\n"+q.choices.map((c,i)=>"ABCD"[i]+". "+c).join("\n"));
-      parts.push("[정답] "+"ABCD"[q.answer]);
-      parts.push("[학생이 고른 답] "+(ans.choice!=null?"ABCD"[ans.choice]:T("미선택","none")));
+      parts.push("[보기]\n"+q.choices.map((c,i)=>LET[i]+". "+c).join("\n"));
+      parts.push("[정답] "+LET[q.answer]);
+      parts.push("[학생이 고른 답] "+(ans.choice!=null?LET[ans.choice]:T("미선택","none")));
       parts.push("[정답 풀이] "+(q.solution||""));
       parts.push("※ 학생이 위 이미지(연습장)에 정답을 고른 '근거'를 손글씨로 적었을 수 있어. 반드시 읽어서 근거의 타당성까지 평가해. 답만 맞고 근거가 빈약하면 부분점수.");
     }else if(q.type==="short"){
@@ -187,7 +238,7 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
       "수식·기호는 LaTeX($...$). 반드시 JSON만 출력(코드블록 없이):\n"+
       '{"score":획득점수숫자,"verdict":"correct|partial|incorrect","essence":"이 문항이 진짜 묻는 핵심 1~2문장","gotIt":"내가 제대로 한 것(구체적, 없으면 \'없음\')","gap":"결핍·약점(구체적, 없으면 \'없음\')","known":"내 답에서 드러난, 내가 확실히 아는 것","unknown":"드러난, 내가 모르거나 헷갈리는 것","next":"이 약점을 메우려면 뭘 보강해야 하는지","model":"모범답안/풀이(수식 LaTeX)","factors":{"개념":0~2,"계산":0~2,"전략":0~2,"추론":0~2}}\n'+
       '(factors는 답안에서 드러난 능력 평가 — 개념 이해/계산 정확성/식 세우기·문제 해석/논리 전개. 0=부족 1=보통 2=좋음, 드러나지 않은 능력은 키 자체를 생략)\n'+
-      '추가로 오답이면 "error":{"type":"실수|개념|전략|해석|표기|백지","stage":"식세우기|계산|해석","label":"오개념 12자 라벨"}를 포함해 (정답이면 error 생략). type에서 실수(개념은 아는데 계산·부호 실수)와 개념(개념 자체를 모름)의 구분이 가장 중요해.';
+      '추가로 오답이면 "error":{"type":"실수|개념|전략|해석|표기|기하구성|백지","stage":"식세우기|계산|해석","label":"오개념 12자 라벨"}를 포함해 (정답이면 error 생략). type에서 실수(개념은 아는데 계산·부호 실수)와 개념(개념 자체를 모름)의 구분이 가장 중요해. 도형·그래프 문항에서 보조선(높이·수선·접선)이나 그림 구성 누락이 오답의 원인이면 기하구성.';
     const r=await callAI(sys,blocks,true,{maxTok:1600,lang:examLang},signal);
     const pts=q.points||0;
     let sc=Number(r&&r.score);
@@ -195,7 +246,8 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
     sc=Math.max(0,Math.min(pts,Math.round(sc*10)/10));
     return {score:sc,points:pts,verdict:r&&r.verdict,essence:r&&r.essence,gotIt:r&&r.gotIt,gap:r&&r.gap,known:r&&r.known,unknown:r&&r.unknown,next:r&&r.next,
       factors:(r&&r.factors)||null,error:(r&&r.error)||null,
-      model:(r&&r.model)||q.model_answer||q.solution||"",type:q.type,mcAnswer:q.answer,choices:q.choices,choice:ans.choice,text:ans.text,question:q.question,concept:q.concept,unit:q.unit||q.concept||"",inkImg};
+      model:(r&&r.model)||q.model_answer||q.solution||"",type:q.type,mcAnswer:q.answer,choices:q.choices,choice:ans.choice,text:ans.text,question:q.question,concept:q.concept,unit:q.unit||q.concept||"",
+      origin:q.origin,srcLabel:q.srcLabel,figure:q.figure||null,figureScript:q.figureScript||null,inkImg};
   }
 
   // 단원별 집계: 단원→{정답률·약점·보강}. 결과 요약·학부모 리포트·저장에 공용 사용
@@ -351,11 +403,15 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
           <div className="card qcard" key={q.id} style={{maxWidth:760,margin:"0 auto"}}>
             <div className="chips" style={{marginBottom:12}}>
               <span className="chip" style={{background:"var(--pri-s)",color:"var(--pri-d)"}}>{TYPE_LABEL(q.type)}</span>
+              {originChip(q.origin,q.srcLabel)}
               {q.concept&&<MathText text={q.concept} tag="span" className="chip gho"/>}
               <span className="chip gho">{q.points}{T("점","pt")}</span>
               <span style={{marginLeft:"auto",fontSize:11,color:"var(--sub)"}}>{idx+1} / {items.length}</span>
             </div>
-            <MathText text={q.question} tag="div" style={{fontSize:17,fontWeight:600,lineHeight:1.7,marginBottom:14}}/>
+            <MathText text={q.question} tag="div" style={{fontSize:17,fontWeight:600,lineHeight:1.7,marginBottom:q.figure?10:14}}/>
+            {q.figureScript
+              ?<div style={{maxWidth:560,margin:"0 auto 14px"}}><MathViz script={q.figureScript} controls autoplay={false}/></div>
+              :q.figure&&<img src={q.figure} alt={T("문제 그림","Figure")} style={{maxWidth:"100%",maxHeight:360,display:"block",margin:"0 auto 14px",border:"1px solid var(--line)",borderRadius:10,background:"#fff"}}/>}
 
             {q.type==="mc"&&(
               <div style={{display:"flex",flexDirection:"column",gap:9,marginBottom:14}}>
@@ -363,7 +419,7 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
                   <button key={i} type="button" onClick={()=>setChoice(i)}
                     style={{textAlign:"left",padding:"12px 15px",borderRadius:12,border:"1.5px solid "+(on?"var(--pri)":"var(--line)"),
                       background:on?"var(--pri-s)":"#FBFAFF",cursor:"pointer",display:"flex",gap:10,alignItems:"center"}}>
-                    <span style={{fontWeight:800,color:on?"var(--pri-d)":"var(--sub)"}}>{"ABCD"[i]}</span>
+                    <span style={{fontWeight:800,color:on?"var(--pri-d)":"var(--sub)"}}>{LET[i]}</span>
                     <MathText text={ch} tag="span" style={{fontSize:15,lineHeight:1.5}}/>
                   </button>);})}
               </div>
@@ -401,7 +457,7 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
           </div>
         );})()}
 
-        {phase==="result"&&!showReport&&(
+        {phase==="result"&&!showReport&&!showMap&&(
           <div className="card qcard" style={{maxWidth:760,margin:"0 auto"}}>
             {/* 총점 헤더 */}
             <div style={{textAlign:"center",padding:"6px 0 16px",borderBottom:"1px solid var(--line)",marginBottom:16}}>
@@ -443,14 +499,20 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
             </div>
             {grades[idx]&&(()=>{const g=grades[idx];return(<>
               <span className="chip" style={{background:"var(--pri-s)",color:"var(--pri-d)"}}>{TYPE_LABEL(g.type)}</span>
+              {originChip(g.origin,g.srcLabel)}
               <MathText text={g.question} tag="div" style={{fontSize:15.5,fontWeight:600,lineHeight:1.6,margin:"10px 0 12px"}}/>
+              {g.figureScript
+                ?<div style={{maxWidth:520,margin:"0 auto 12px"}}><MathViz script={g.figureScript} staticOnly controls={false}/></div>
+                :g.figure&&<img src={g.figure} alt="" style={{maxWidth:"100%",maxHeight:300,display:"block",margin:"0 auto 12px",border:"1px solid var(--line)",borderRadius:10,background:"#fff"}}/>}
+              {/* 기하 문항 + 삼각형 작도가 감지되면 자동 구성 분석 (같은 세션의 손글씨) */}
+              <GeoInsight ink={items[idx]&&inkRef.current[items[idx].id]} question={g.question||""} concept={g.concept||""} unit={g.unit||""}/>
               {/* 내 답 */}
               {g.type==="mc"&&g.choices&&(
                 <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:12}}>
                   {g.choices.map((ch,i)=>{const isAns=i===g.mcAnswer,isPick=g.choice===i;return(
                     <div key={i} style={{padding:"8px 12px",borderRadius:10,fontSize:14,display:"flex",gap:8,alignItems:"center",
                       border:"1.5px solid "+(isAns?"#3BB371":isPick?"#E06666":"var(--line)"),background:isAns?"#E9FBF0":isPick?"#FFEEEE":"#FBFAFF"}}>
-                      <b style={{color:"var(--sub)"}}>{"ABCD"[i]}</b><MathText text={ch} tag="span"/>
+                      <b style={{color:"var(--sub)"}}>{LET[i]}</b><MathText text={ch} tag="span"/>
                       {isAns&&<span style={{marginLeft:"auto"}}>✅</span>}{isPick&&!isAns&&<span style={{marginLeft:"auto"}}>❌</span>}
                     </div>);})}
                 </div>
@@ -474,10 +536,25 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
             </>);})()}
             <div style={{display:"flex",gap:8,marginTop:18,flexWrap:"wrap"}}>
               <button className="btn pri" onClick={()=>{setShowReport(true);}}>🧾 {academy?T("학부모 상담 리포트","Parent report"):T("진단 리포트","Diagnostic report")}</button>
+              <button className="btn gho" onClick={()=>{setShowMap(true);}}>🗺️ {T("개념지도로 보기","View concept map")}</button>
               <button className="btn gho" onClick={onExit}>{T("← 홈으로","← Home")}</button>
             </div>
           </div>
         )}
+        {phase==="result"&&showMap&&(()=>{
+          const us=aggUnits(grades);
+          const scopeUnits=us.map(u=>u.unit);
+          const weakUnits=us.filter(u=>u.weak).map(u=>u.unit);
+          return(
+          <div className="card qcard" style={{maxWidth:960,margin:"0 auto",padding:"20px 22px"}}>
+            <div style={{fontFamily:"'Jua',sans-serif",fontSize:18,color:"var(--ink)",marginBottom:4}}>🗺️ {T("이 시험이 다룬 개념지도","This exam's concept map")}</div>
+            <p className="hint" style={{marginTop:0,marginBottom:12}}>{T("이 시험에 나온 단원만 확대해서 보여줘요. 붉게 빛나는 카드가 이번에 틀린(또는 부분점수) 단원이에요 — ⬅ 방향으로 눌러가며 어디부터 막혔는지 확인해보세요.","Zoomed to just this exam's units. Red-glowing cards = units you missed — click ⬅ prerequisites to trace the real gap.")}</p>
+            <KnowledgeMap scopeUnits={scopeUnits} weakUnits={weakUnits}/>
+            <div style={{display:"flex",gap:8,marginTop:4}}>
+              <button className="btn gho" onClick={()=>setShowMap(false)}>{T("← 채점 결과로","← Back to results")}</button>
+            </div>
+          </div>);
+        })()}
         {phase==="result"&&showReport&&(()=>{
           const us=aggUnits(grades);
           const weakUnits=us.filter(u=>u.weak);
@@ -504,6 +581,15 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
               <div><span style={{color:"var(--sub)"}}>{T("범위","Scope")}</span> <b>{examTitle}</b></div>
               <div style={{marginLeft:"auto",fontFamily:"'Jua',sans-serif",fontSize:22,color:pct>=80?"var(--mint)":pct>=60?"var(--gold)":"var(--rose)"}}>{score}/{maxScore} <span style={{fontSize:14,color:"var(--sub)"}}>({pct}%)</span></div>
             </div>
+            {/* 시험 구성: 검증 기출 vs 신규 제작 — 학부모 신뢰 포인트 */}
+            {(()=>{const nReal=grades.filter(g=>g&&g.origin==="기출").length;const nMade=grades.filter(g=>g&&g.origin==="제작").length;
+              return nReal>0?(
+              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginBottom:16,padding:"9px 13px",background:"#FFFBEB",border:"1px solid #FDE68A",borderRadius:10,fontSize:13}}>
+                <b style={{color:"#92400E"}}>{T("본 시험 구성","Test composition")}</b>
+                <span className="chip" style={{background:"#FFF7E0",color:"#946200",fontWeight:800}}>📜 {T("실제 기출 ","Past exam ")}{nReal}{T("문항","Q")}</span>
+                {nMade>0&&<span className="chip" style={{background:"#EEF2FF",color:"#3730A3",fontWeight:800}}>✨ {T("신규 제작 ","Original ")}{nMade}{T("문항","Q")}</span>}
+                <span style={{color:"var(--sub)",fontSize:12}}>{T("— 기출은 검수를 거친 실제 시험 문제를 원본 그대로 출제했습니다.","— past-exam items are verified originals.")}</span>
+              </div>):null;})()}
             {/* 종합 소견 */}
             <div style={{background:"var(--pri-s)",borderRadius:12,padding:"14px 16px",marginBottom:18,lineHeight:1.7,fontSize:14}}>
               <div style={{fontWeight:800,color:"var(--pri-d)",marginBottom:6}}>📋 {T("종합 소견","Summary")}</div>
@@ -556,14 +642,15 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
             <div style={{overflowX:"auto",marginBottom:18}}>
               <table style={{borderCollapse:"collapse",width:"100%",fontSize:12.5}}>
                 <thead><tr style={{background:"var(--pri-s)",color:"var(--pri-d)"}}>
-                  {[T("#","#"),T("유형","Type"),T("개념","Concept"),T("점수","Score"),T("결과","Result")].map((h,i)=>
-                    <th key={i} style={{padding:"7px 9px",border:"1px solid var(--line)",textAlign:i>2?"center":"left"}}>{h}</th>)}
+                  {[T("#","#"),T("유형","Type"),T("출처","Origin"),T("개념","Concept"),T("점수","Score"),T("결과","Result")].map((h,i)=>
+                    <th key={i} style={{padding:"7px 9px",border:"1px solid var(--line)",textAlign:i>3?"center":"left"}}>{h}</th>)}
                 </tr></thead>
                 <tbody>
                   {grades.map((g,i)=>(
                     <tr key={i} style={i%2?{background:"var(--bg)"}:undefined}>
                       <td style={{padding:"6px 9px",border:"1px solid var(--line)",textAlign:"center"}}>{i+1}</td>
                       <td style={{padding:"6px 9px",border:"1px solid var(--line)"}}>{TYPE_LABEL(g.type)}</td>
+                      <td style={{padding:"6px 9px",border:"1px solid var(--line)",fontSize:11.5}}>{g.origin==="기출"?("📜 "+T("기출","Past")+(g.srcLabel?" · "+g.srcLabel:"")):g.origin==="제작"?"✨ "+T("제작","Orig."):"-"}</td>
                       <td style={{padding:"6px 9px",border:"1px solid var(--line)"}}><MathText text={g.concept||"-"} tag="span"/></td>
                       <td style={{padding:"6px 9px",border:"1px solid var(--line)",textAlign:"center"}}>{g.score}/{g.points}</td>
                       <td style={{padding:"6px 9px",border:"1px solid var(--line)",textAlign:"center",color:vColor(g.verdict),fontWeight:700}}>{verdictKo(g.verdict)}</td>

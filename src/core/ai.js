@@ -392,6 +392,38 @@ async function extractExamQuestions(material,conceptNames){
   }catch(e){console.warn("[extractExamQuestions]",e.message);return[];}
 }
 
+// 기출DB 입력 도구: 시험지·문제집 PDF/이미지에서 문제를 구조화 추출 (사람 검수 전 초안)
+async function extractBankItems(fileBlocks,unitNames,srcHint){
+  const r=await callAI(
+    "너는 수학 기출문제 디지털화 전문가야. 시험지·문제집 자료에서 출제 문제를 빠짐없이 구조화해 추출해. 규칙:\n"+
+    "①수식은 반드시 LaTeX($...$) ②객관식은 choices에 보기 전부(①②③④⑤ 기호 포함) ③answer·explanation은 자료에 있는 것만 그대로 옮기고 없으면 빈 문자열 — 절대 지어내지 마 ④unit은 [단원 목록]에서 가장 맞는 것 하나를 글자 그대로 복사 ⑤그림·도형 없이는 풀 수 없는 문제는 hasFigure:true",
+    [...fileBlocks,{type:"text",text:
+      "[단원 목록]: "+unitNames.join(", ")+"\n"+(srcHint?"[출처]: "+srcHint+"\n":"")+
+      'JSON만 출력: {"items":[{"number":"문항번호(없으면 빈 문자열)","question":"...","choices":[],"qtype":"mc|short|essay","answer":"...","explanation":"...","unit":"...","points":0,"difficulty":"easy|medium|hard","hasFigure":false}]}'}],
+    true,{maxTok:8000});
+  return Array.isArray(r?.items)?r.items.filter(q=>q&&q.question):[];
+}
+
+// 정답지에서 문항번호→정답(+해설) 매핑 추출 — 기출은행 병합용. 정답지가 진리, 지어내기 금지.
+async function extractAnswerKey(fileBlocks){
+  const r=await callAI(
+    "너는 수학 시험 정답지 디지털화 전문가야. 자료에서 문항번호별 정답을 빠짐없이 추출해(해설이 있으면 해설도). 수식은 LaTeX($...$). 자료에 없는 내용은 절대 지어내지 마.",
+    [...fileBlocks,{type:"text",text:'JSON만 출력: {"answers":[{"number":"문항번호","answer":"정답(객관식은 ①~⑤ 기호 그대로)","explanation":"해설(없으면 빈 문자열)"}]}'}],
+    true,{maxTok:6000});
+  return Array.isArray(r?.answers)?r.answers.filter(a=>a&&a.number!=null&&a.answer):[];
+}
+
+// AI 풀이 초안: 정답 없는 기출을 풀어 정답·해설 초안 생성 — 정확도는 높지만 100%가 아니므로
+// 반드시 '초안' 표시와 함께 저장하고, 공식 정답 대조(사람 검수)를 거쳐야 출제에 쓰인다.
+async function solveBankItem(q){
+  const r=await callAI(
+    "너는 대한민국 중·고등 수학 만점 강사야. 아래 문제를 정확히 풀어. 차근차근 풀고 반드시 검산까지 마친 뒤 최종 정답을 확정해. 수식은 LaTeX($...$).",
+    "[문제]\n"+q.question+(Array.isArray(q.choices)&&q.choices.length?"\n[보기]\n"+q.choices.join("\n"):"")+
+    '\n\nJSON만 출력: {"answer":"최종 정답(객관식은 ①~⑤ 기호로)","explanation":"풀이 과정 요약(핵심 단계 위주)"}',
+    true,{maxTok:2500});
+  return r&&r.answer?{answer:String(r.answer),explanation:String(r.explanation||"")}:null;
+}
+
 /* ── 책(교재) 모드: 긴 PDF를 페이지로 쪼개 흡수 → 대/중/소단원 개념 트리 ── */
 // PDF base64를 per쪽씩 잘라 여러 PDF로 (pdf-lib). 짧거나 실패하면 원본 1개.
 async function splitPdfPages(b64,per){
@@ -461,4 +493,4 @@ const toB64=(file)=>new Promise((res,rej)=>{
 let _uidSeq=0;
 const uid=()=>Date.now().toString(36)+(_uidSeq++).toString(36).padStart(3,'0')+Math.random().toString(36).slice(2,5);
 
-export { MODELS, QMODELS, callGemini, PROXY_URL, COMPANY_MODE, ACADEMY_CODE, _sleep, _aiRetriable, _geminiFallbackModel, _fbToastT, _notifyFallback, callProxy, _readClaudeSSE, callProxyClaude, callAI, fixJson, repairJson, parseJsonLoose, parseFactorsLine, parseGrading, parseDerivePlan, parseDeriveCheck, parseOcrCheck, parseQuestion, callClaude, transcribeFile, processPdf, extractExamQuestions, splitPdfPages, analyzeBookChunk, ingestBook, toB64, _uidSeq, uid };
+export { MODELS, QMODELS, callGemini, PROXY_URL, COMPANY_MODE, ACADEMY_CODE, _sleep, _aiRetriable, _geminiFallbackModel, _fbToastT, _notifyFallback, callProxy, _readClaudeSSE, callProxyClaude, callAI, fixJson, repairJson, parseJsonLoose, parseFactorsLine, parseGrading, parseDerivePlan, parseDeriveCheck, parseOcrCheck, parseQuestion, callClaude, transcribeFile, processPdf, extractExamQuestions, extractBankItems, extractAnswerKey, solveBankItem, splitPdfPages, analyzeBookChunk, ingestBook, toB64, _uidSeq, uid };

@@ -48,6 +48,7 @@ const ERR_TYPES=[
   {id:"strategy",name:"전략 오류",desc:"접근·풀이 방법 선택이 틀림",color:"#FFC24B"},
   {id:"interpret",name:"해석 오류",desc:"문제 조건을 잘못 읽거나 누락",color:"#FF8E72"},
   {id:"notation",name:"표기 미숙",desc:"과정은 맞는데 수학적 표기·서술이 부정확",color:"#A29BFE"},
+  {id:"geometry",name:"기하 구성",desc:"보조선·도형 요소 구성을 못 함 (높이·수선·접선 누락 등)",color:"#E7B36A"},
   {id:"blank",name:"미착수",desc:"손을 못 댐",color:"#857FA0"},
 ];
 const errTypeById=(id)=>ERR_TYPES.find(e=>e.id===id)||null;
@@ -61,6 +62,7 @@ function normErrType(s){
   if(t.includes("전략")||/strateg/i.test(t))return"strategy";
   if(t.includes("해석")||t.includes("오독")||/interpret/i.test(t))return"interpret";
   if(t.includes("표기")||t.includes("표현")||/notation/i.test(t))return"notation";
+  if(t.includes("기하")||t.includes("보조선")||t.includes("작도")||/geometr/i.test(t))return"geometry";
   if(t.includes("백지")||t.includes("미착수")||/blank/i.test(t))return"blank";
   return null;
 }
@@ -158,22 +160,22 @@ const GRAPH_NODES=[
   N("s2_anti","s2","부정적분","cal",["부정적분","적분상수","원시함수"]),
   N("s2_int","s2","정적분","cal",["정적분","구분구적법","미적분의 기본정리"]),
   N("s2_intapp","s2","정적분의 활용","cal",["넓이","속도와 거리"]),
-  // 확률과 통계
-  N("pr_perm","prob","순열과 조합","sta",["원순열","중복순열","중복조합","같은 것이 있는 순열"]),
-  N("pr_binom","prob","이항정리","sta",["이항정리","이항계수","파스칼의 삼각형"]),
+  // 확률과 통계 — 단원명은 curriculum.js PROB 대단원과 1:1
+  N("pr_perm","prob","여러 가지 순열","sta",["원순열","중복순열","같은 것이 있는 순열"]),
+  N("pr_binom","prob","중복조합과 이항정리","sta",["중복조합","이항정리","이항계수","파스칼의 삼각형"]),
   N("pr_prob","prob","확률의 뜻과 활용","sta",["수학적 확률","여사건","확률의 덧셈정리"]),
   N("pr_cond","prob","조건부확률","sta",["조건부확률","독립","종속","확률의 곱셈정리"]),
-  N("pr_rv","prob","확률변수와 확률분포","sta",["확률변수","확률분포","기댓값"]),
-  N("pr_normal","prob","이항분포와 정규분포","sta",["이항분포","정규분포","표준화","표준정규분포"]),
+  N("pr_rv","prob","이산확률변수의 확률분포","sta",["확률변수","확률분포","기댓값","이항분포"]),
+  N("pr_normal","prob","연속확률변수와 정규분포","sta",["확률밀도함수","정규분포","표준화","표준정규분포"]),
   N("pr_est","prob","통계적 추정","sta",["모평균","표본평균","신뢰구간","모비율"]),
-  // 미적분
+  // 미적분(미적분Ⅱ) — 단원명은 curriculum.js CALC2 대단원과 1:1
   N("ca_limseq","calc","수열의 극한","cal",["수열의 극한","등비수열의 극한"]),
   N("ca_series","calc","급수","cal",["급수","등비급수","부분합"]),
-  N("ca_dfelem","calc","지수·로그·삼각함수의 미분","cal",["자연로그","자연상수","덧셈정리","삼각함수의 극한"]),
+  N("ca_dfelem","calc","여러 가지 함수의 미분","cal",["자연로그","자연상수","덧셈정리","삼각함수의 극한"]),
   N("ca_dfmeth","calc","여러 가지 미분법","cal",["합성함수의 미분","몫의 미분","음함수","매개변수","이계도함수"]),
-  N("ca_dfapp","calc","도함수의 활용","cal",["변곡점","그래프의 개형","속도와 가속도"]),
+  N("ca_dfapp","calc","도함수의 활용(미적분)","cal",["변곡점","그래프의 개형","속도와 가속도"]),
   N("ca_intmeth","calc","여러 가지 적분법","cal",["치환적분","부분적분"]),
-  N("ca_intapp","calc","정적분의 활용","cal",["입체의 부피","곡선의 길이"]),
+  N("ca_intapp","calc","정적분의 활용(미적분)","cal",["입체의 부피","곡선의 길이"]),
 ];
 
 /* ── 엣지: [선수, 후속, 가중치, 근거] — 가중치 = "후속을 틀렸을 때 선수 결여를 의심할 강도" ── */
@@ -285,6 +287,29 @@ const GRAPH_EDGES=[
   E("m3_stat","pr_rv",0.4,"평균·분산 개념이 기댓값·분산으로 일반화"),
 ];
 
+/* ── 이름 기반 보강 엣지: 그래프 노드가 없는 단원(기하 등)의 선수관계 ──
+   {from,to} = curriculum.js 대단원 이름. 지식 지도(KnowledgeMap)와
+   옵시디언 볼트 생성기(scripts/gen-curriculum-vault.mjs)가 GRAPH_EDGES와 합쳐 쓴다. */
+const NE=(from,to,w,why)=>({from,to,w,why});
+const NAME_EDGES=[
+  NE("집합","확률의 뜻과 활용",0.6,"사건 = 표본공간의 부분집합, 덧셈정리는 집합 연산"),
+  NE("다항식의 연산","중복조합과 이항정리",0.5,"이항정리는 다항식 전개의 일반화"),
+  NE("조건부확률","이산확률변수의 확률분포",0.6,"독립시행의 확률이 이항분포의 뼈대"),
+  NE("평면도형의 성질","입체도형의 성질",0.7,"원의 둘레·넓이가 기둥·뿔·구의 겉넓이·부피 계산의 기초"),
+  NE("입체도형의 성질","공간도형",0.4,"다면체·회전체 감각이 공간 위치 관계의 밑그림"),
+  NE("기본 도형","공간도형",0.6,"위치 관계 논리의 3차원 확장"),
+  NE("피타고라스 정리","공간도형",0.6,"공간에서의 거리·정사영 계산의 기본"),
+  NE("이차방정식과 이차함수","이차곡선",0.6,"포물선은 이차함수 그래프의 기하적 재해석"),
+  NE("원의 방정식","이차곡선",0.7,"곡선의 방정식·접선을 다루는 틀을 공유"),
+  NE("평면좌표와 직선의 방정식","평면벡터",0.7,"성분·내분점·직선이 벡터 표현의 밑바탕"),
+  NE("사인법칙과 코사인법칙","평면벡터",0.5,"내적의 정의는 코사인"),
+  NE("평면좌표와 직선의 방정식","공간좌표",0.7,"좌표 개념의 3차원 확장"),
+  NE("공간도형","공간좌표",0.6,"공간 감각 위에 좌표를 얹는다"),
+  NE("원의 방정식","공간좌표",0.5,"구의 방정식은 원의 방정식의 확장"),
+  NE("평면벡터","공간벡터(2022)",0.9,"평면벡터 연산·내적의 3차원 확장"),
+  NE("공간좌표","공간벡터(2022)",0.7,"성분 표현은 공간좌표로 한다"),
+];
+
 /* ── 조회 헬퍼 ── */
 const _byId={};GRAPH_NODES.forEach(n=>{_byId[n.id]=n;});
 const nodeById=(id)=>_byId[id]||null;
@@ -346,5 +371,5 @@ function traceRootCauses(nodeId,mastery,maxDepth=3){
   return Object.values(found).sort((a,b)=>b.suspicion-a.suspicion);
 }
 
-export { FACTORS, FACTOR_KO, normFactors, ERR_TYPES, errTypeById, normErrType, normStage, COURSES, STRANDS, GRAPH_NODES, GRAPH_EDGES,
+export { FACTORS, FACTOR_KO, normFactors, ERR_TYPES, errTypeById, normErrType, normStage, COURSES, STRANDS, GRAPH_NODES, GRAPH_EDGES, NAME_EDGES,
   nodeById, prereqsOf, dependentsOf, courseOf, strandOf, impactOf, matchNode, traceRootCauses };

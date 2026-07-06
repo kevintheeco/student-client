@@ -6,26 +6,15 @@ import { KeyForm } from "./Settings.jsx";
 import { Prof } from "../ui/common.jsx";
 import { setActiveStudent } from "../core/attempts.js";
 import { clearDemoStudents, seedDemoStudents } from "../core/demoStudents.js";
+import { buildDemoRecord } from "../core/demoExamSeed.js";
 import { fetchShared, importShared } from "../core/link.js";
 import { ACADEMY_CODE, uid } from "../core/ai.js";
+import { CURRICULUM } from "../core/curriculum.js";
+import { KnowledgeMap } from "./KnowledgeMap.jsx";
+import { ExamBank } from "./ExamBank.jsx";
+import { bankSearch } from "../core/examBank.js";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
-
-const CURRICULUM=[
-  {level:"중등 수학",subjects:[
-    {id:"m1",name:"중1 수학",units:["소인수분해","정수와 유리수","문자의 사용과 식의 계산","일차방정식","좌표평면과 그래프(정비례·반비례)","기본 도형","작도와 합동","평면도형의 성질","입체도형의 성질","자료의 정리와 해석"]},
-    {id:"m2",name:"중2 수학",units:["유리수와 순환소수","단항식과 다항식의 계산","일차부등식","연립일차방정식","일차함수와 그래프","일차함수와 일차방정식","삼각형의 성질","사각형의 성질","도형의 닮음","피타고라스 정리","경우의 수와 확률"]},
-    {id:"m3",name:"중3 수학",units:["제곱근과 실수","다항식의 곱셈과 인수분해","이차방정식","이차함수","삼각비","원의 성질","대푯값과 산포도"]},
-  ]},
-  {level:"고등 수학",subjects:[
-    {id:"cm1",name:"공통수학1",units:["다항식의 연산","나머지정리와 인수분해","복소수와 이차방정식","이차방정식과 이차함수","여러 가지 방정식","여러 가지 부등식","순열과 조합","행렬과 그 연산"]},
-    {id:"cm2",name:"공통수학2",units:["평면좌표와 직선의 방정식","원의 방정식","도형의 이동","집합","명제","함수","유리함수와 무리함수"]},
-    {id:"s1",name:"수학Ⅰ",units:["지수와 로그","지수함수와 로그함수","삼각함수","사인법칙과 코사인법칙","등차수열과 등비수열","수열의 합","수학적 귀납법"]},
-    {id:"s2",name:"수학Ⅱ",units:["함수의 극한","함수의 연속","미분계수와 도함수","도함수의 활용","부정적분","정적분","정적분의 활용"]},
-    {id:"prob",name:"확률과 통계",units:["순열과 조합","이항정리","확률의 뜻과 활용","조건부확률","확률변수와 확률분포","이항분포와 정규분포","통계적 추정"]},
-    {id:"calc",name:"미적분",units:["수열의 극한","급수","지수·로그·삼각함수의 미분","여러 가지 미분법","도함수의 활용","여러 가지 적분법","정적분의 활용"]},
-  ]},
-];
 
 function AcademyApp(){
   const [view,setView]=useState("home");   // home | students | build | preview | exam | insight | dash
@@ -85,6 +74,10 @@ function AcademyApp(){
     setStudents(list);
     if(activeSid&&!list.some(s=>s.id===activeSid)){setActiveSid(null);setActiveStudent(null);saveStudent("");}
   }
+
+  // ── 예시 시험 결과: 2026수능 예시 학생 — 개념지도(약점 노드 반짝임) 시연용, 저장 없이 미리보기만 ──
+  const [examPreset,setExamPreset]=useState(null);
+  function openDemoExam(){setExamPreset(buildDemoRecord());setView("exam");}
 
   // ── 홈학습 연동: 학생 개인 앱이 공유한 데이터를 명단 학생에게 병합 ──
   const [linkOpen,setLinkOpen]=useState(false);
@@ -163,6 +156,7 @@ function AcademyApp(){
             {hasDemo
               ?<button className="btn gho sm" onClick={clearDemo} title={tr("불러온 학생 목록과 기록만 지웁니다 — 직접 등록한 학생은 남아요","Removes only the loaded sample list; real students are kept")}>🧹 {tr("불러온 목록 지우기","Clear loaded list")}</button>
               :<button className="btn gho sm" onClick={seedDemo} title={tr("6개월 학습 데이터를 가진 학생 5명의 목록을 불러와 대시보드를 미리 봅니다","Load a sample roster of 5 students with 6 months of history")}>👥 {tr("학생 목록 불러오기","Load student list")}</button>}
+            <button className="btn gho sm" onClick={openDemoExam} title={tr("2026수능 수학을 본 예시 학생의 결과 화면을 바로 엽니다 — 개념지도에서 틀린 단원이 반짝여요","Open a sample 2026 exam result — weak units glow on the concept map")}>🗺️ {tr("2026수능 예시 결과","2026 exam sample")}</button>
           </span>
         </div>
       </div>
@@ -215,6 +209,12 @@ function AcademyApp(){
            badge:students.length?students.length+tr("명",""):null,
            d:tr("학생 목록·홈학습 연동·전체 대시보드·성장 인사이트 — 누가 어떤 이유로 관심이 필요한지 한눈에.","Roster, home-study link, dashboard and growth insight in one place."),
            cta:tr("학생 보러 가기 →","Open →")},
+          {e:"🗺️",go:"map",t:tr("수학 지식 지도","Knowledge map"),
+           d:tr("중1부터 미적분까지 단원 사이 선수관계를 지도로. 단원을 클릭하면 확대되며 '여기가 무너지면 어디까지 무너지나'가 보여요 — 상담·보강 설계용.","Every unit and its prerequisites on one map — click to zoom into the structure."),
+           cta:tr("지도 열기 →","Open map →")},
+          {e:"📚",go:"bank",t:tr("기출문제 은행","Exam bank"),
+           d:tr("시험지 사진·PDF를 올리면 AI가 문제·정답·해설을 추출하고 단원 태그를 달아요. 검수를 거친 진짜 기출이 쌓일수록 출제와 변형의 근거가 탄탄해집니다.","Upload exam papers — AI extracts and tags questions; verified items power authentic tests."),
+           cta:tr("은행 열기 →","Open bank →")},
         ].map(w=>(
           <div key={w.go} className="card" onClick={()=>setView(w.go)}
             style={{padding:"30px 28px",cursor:"pointer",display:"flex",flexDirection:"column",gap:8,minHeight:190}}>
@@ -248,7 +248,17 @@ function AcademyApp(){
       </div>
     </section>
   </>);
-  if(view==="exam"&&topic)return(<Exam topic={topic} student={student} academy academyName={acaName} onExit={()=>setView("build")}/>);
+  // ── 지식 지도: 단원 클릭·확대 → 선수/후속 구조 → 그 단원으로 바로 레벨테스트 ──
+  if(view==="map")return(<>
+    <Head/>
+    <KnowledgeMap onPickUnit={(sid,sname,u)=>{
+      setPicked(p=>p[keyOf(sid,u)]?p:{...p,[keyOf(sid,u)]:{name:u,subj:sname,count:2,difficulty:"medium"}});
+      setView("build");
+    }}/>
+  </>);
+  if(view==="bank")return(<><Head/><ExamBank onExit={()=>setView("home")}/></>);
+  if(view==="exam"&&(topic||examPreset))return(<Exam topic={topic} preset={examPreset} student={examPreset?examPreset.studentName:student} academy academyName={acaName}
+    onExit={()=>{if(examPreset){setExamPreset(null);setView("students");}else setView("build");}}/>);
   if(view==="insight")return(<><Head/><Insight onExit={()=>setView("students")} studentName={activeStu?.name||student}/></>);
   if(view==="dash")return(<><Head/><AcademyDash students={students} onBack={()=>setView("students")} onInsight={(s)=>{selectStudent(s);setView("insight");}}/></>);
 
@@ -261,13 +271,16 @@ function AcademyApp(){
         <div style={{fontFamily:"'Jua',sans-serif",fontSize:20,color:"var(--ink)",marginBottom:4}}>{topic.label}</div>
         <div style={{fontSize:13.5,color:"var(--sub)",marginBottom:16}}>{tr("학생","Student")}: <b style={{color:"var(--ink)"}}>{student||tr("(미입력)","(none)")}</b></div>
         <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
-          {topic.units.map((u,i)=>(
-            <div key={i} style={{display:"flex",alignItems:"center",gap:10,border:"1px solid var(--line)",borderRadius:10,padding:"10px 14px"}}>
+          {topic.units.map((u,i)=>{
+            const nBank=bankSearch({unit:u.name,verifiedOnly:true,limit:99}).length;
+            return(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:10,border:"1px solid var(--line)",borderRadius:10,padding:"10px 14px",flexWrap:"wrap"}}>
               <span style={{flex:1,fontWeight:600,color:"var(--ink)"}}>{u.name}</span>
+              {nBank>0&&<span className="chip" style={{background:"#FFF7E0",color:"#946200",fontWeight:700}} title={tr("검수 완료된 실제 기출 — 이 단원은 기출을 우선 출제해요","Verified past-exam items — used first for this unit")}>📜 {tr("기출 ","")}{Math.min(nBank,Number(u.count)||2)}{tr("문항 사용","Q from bank")}</span>}
               <span className="chip" style={{background:"var(--pri-s)",color:"var(--pri-d)"}}>{u.count}{tr("문항","Q")}</span>
               <span className="chip gho">{(DIFFS.find(d=>d[0]===u.difficulty)||[])[1]}</span>
-            </div>
-          ))}
+            </div>);
+          })}
         </div>
         <div style={{display:"flex",gap:16,fontSize:14,fontWeight:700,color:"var(--ink)",marginBottom:6}}>
           <span>📋 {tr("총","Total")} {totalQ}{tr("문항","Q")}</span>
