@@ -6,6 +6,7 @@ import { KeyForm } from "./Settings.jsx";
 import { Prof } from "../ui/common.jsx";
 import { setActiveStudent } from "../core/attempts.js";
 import { clearDemoStudents, seedDemoStudents } from "../core/demoStudents.js";
+import { buildDemoRecord } from "../core/demoExamSeed.js";
 import { fetchShared, importShared } from "../core/link.js";
 import { ACADEMY_CODE, uid } from "../core/ai.js";
 import { CURRICULUM } from "../core/curriculum.js";
@@ -73,6 +74,10 @@ function AcademyApp(){
     setStudents(list);
     if(activeSid&&!list.some(s=>s.id===activeSid)){setActiveSid(null);setActiveStudent(null);saveStudent("");}
   }
+
+  // ── 예시 시험 결과: 2026수능 예시 학생 — 개념지도(약점 노드 반짝임) 시연용, 저장 없이 미리보기만 ──
+  const [examPreset,setExamPreset]=useState(null);
+  function openDemoExam(){setExamPreset(buildDemoRecord());setView("exam");}
 
   // ── 홈학습 연동: 학생 개인 앱이 공유한 데이터를 명단 학생에게 병합 ──
   const [linkOpen,setLinkOpen]=useState(false);
@@ -151,6 +156,7 @@ function AcademyApp(){
             {hasDemo
               ?<button className="btn gho sm" onClick={clearDemo} title={tr("불러온 학생 목록과 기록만 지웁니다 — 직접 등록한 학생은 남아요","Removes only the loaded sample list; real students are kept")}>🧹 {tr("불러온 목록 지우기","Clear loaded list")}</button>
               :<button className="btn gho sm" onClick={seedDemo} title={tr("6개월 학습 데이터를 가진 학생 5명의 목록을 불러와 대시보드를 미리 봅니다","Load a sample roster of 5 students with 6 months of history")}>👥 {tr("학생 목록 불러오기","Load student list")}</button>}
+            <button className="btn gho sm" onClick={openDemoExam} title={tr("2026수능 수학을 본 예시 학생의 결과 화면을 바로 엽니다 — 개념지도에서 틀린 단원이 반짝여요","Open a sample 2026 exam result — weak units glow on the concept map")}>🗺️ {tr("2026수능 예시 결과","2026 exam sample")}</button>
           </span>
         </div>
       </div>
@@ -251,7 +257,8 @@ function AcademyApp(){
     }}/>
   </>);
   if(view==="bank")return(<><Head/><ExamBank onExit={()=>setView("home")}/></>);
-  if(view==="exam"&&topic)return(<Exam topic={topic} student={student} academy academyName={acaName} onExit={()=>setView("build")}/>);
+  if(view==="exam"&&(topic||examPreset))return(<Exam topic={topic} preset={examPreset} student={examPreset?examPreset.studentName:student} academy academyName={acaName}
+    onExit={()=>{if(examPreset){setExamPreset(null);setView("students");}else setView("build");}}/>);
   if(view==="insight")return(<><Head/><Insight onExit={()=>setView("students")} studentName={activeStu?.name||student}/></>);
   if(view==="dash")return(<><Head/><AcademyDash students={students} onBack={()=>setView("students")} onInsight={(s)=>{selectStudent(s);setView("insight");}}/></>);
 
