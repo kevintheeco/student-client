@@ -3,7 +3,7 @@
 // pads.jsx는 수정하지 않는다 — dump()로 획만 읽고, 페이드는 캔버스 style만 건드린다.
 import React from "react";
 import { PenPad } from "./pads.jsx";
-import { normalizeStrokes, recognize, recognizeQuad, compare, dist, polygonCoverage } from "../core/geointeract.js";
+import { normalizeStrokes, recognize, recognizeQuad, recognizeCircle, compare, dist, polygonCoverage } from "../core/geointeract.js";
 import { logAttempt } from "../core/attempts.js";
 import { VIZ_LIGHT } from "./mathviz/tokens.js";
 import { Curve, DashedLine, PointDot, SvgLabel, RightAngleMark, FormulaBox } from "./mathviz/primitives.jsx";
@@ -211,21 +211,27 @@ function GeoFeedback({
    (글씨 뭉치의 hull에서 나오는 가짜 도형은 변을 획이 안 따라가므로 걸러짐) */
 const TRI_RX=/삼각형|보조선|작도|수선|높이|밑변|꼭짓점/;
 const QUAD_RX=/사각형|마름모|평행사변|사다리꼴/;
+const CIRCLE_RX=/원의|반지름|지름|원주|부채꼴|원 O|원을|원과/;
 
 function GeoInsight({ink, question="", concept="", unit=""}){
   const data=React.useMemo(()=>{
     try{
       const txt=[question,concept,unit].join(" ");
-      const isQuad=QUAD_RX.test(txt);
-      if(!isQuad&&!TRI_RX.test(txt))return null;
+      const kind=CIRCLE_RX.test(txt)?"circle":QUAD_RX.test(txt)?"quad":TRI_RX.test(txt)?"triangle":null;
+      if(!kind)return null;
       const strokes=normalizeStrokes(ink||{});
-      if(strokes.length<2)return null;
-      const model=isQuad?recognizeQuad(strokes,{minArea:8000}):recognize(strokes,{minArea:8000});
+      if(strokes.length<1)return null;
+      const model=kind==="circle"?recognizeCircle(strokes)
+        :kind==="quad"?recognizeQuad(strokes,{minArea:8000})
+        :recognize(strokes,{minArea:8000});
       if(!model.ok)return null;
-      const V=model.kind==="quad"
-        ?[model.vertices.A,model.vertices.B,model.vertices.C,model.vertices.D]
-        :[model.vertices.A,model.vertices.B,model.vertices.C];
-      if(polygonCoverage(strokes,V)<0.75)return null;
+      let V=null;
+      if(kind!=="circle"){   // 다각형만 변 커버리지 게이트 (원은 잔차·각도 게이트를 인식기가 수행)
+        V=model.kind==="quad"
+          ?[model.vertices.A,model.vertices.B,model.vertices.C,model.vertices.D]
+          :[model.vertices.A,model.vertices.B,model.vertices.C];
+        if(polygonCoverage(strokes,V)<0.75)return null;
+      }
       const diff=compare(model);
       return {strokes,model,V,missing:diff.missing.filter(m=>m.kind==="auxline")};
     }catch(_){return null;}
@@ -234,13 +240,16 @@ function GeoInsight({ink, question="", concept="", unit=""}){
 
   const {strokes,model,V,missing}=data;
   const isQuad=model.kind==="quad";
+  const isCircle=model.kind==="circle";
   const isMissing=missing.length>0;
   const names=isQuad?["A","B","C","D"]:["A","B","C"];
-  // 보조선 양 끝점: 삼각형=꼭짓점 A→수선의 발 H / 사각형=대각선(AC 또는 BD)
+  // 보조선 양 끝점: 삼각형=A→수선의 발 H / 사각형=대각선 / 원=중심→둘레(반지름)
   const pair=isQuad?(model.aux[0].pair||"AC"):"AH";
-  const auxFrom=isQuad?(pair==="AC"?model.vertices.A:model.vertices.B):model.vertices.A;
-  const auxTo  =isQuad?(pair==="AC"?model.vertices.C:model.vertices.D):model.foot;
-  const auxName=isQuad?("대각선 "+pair):"높이 AH";
+  const auxFrom=isCircle?model.center
+    :isQuad?(pair==="AC"?model.vertices.A:model.vertices.B):model.vertices.A;
+  const auxTo  =isCircle?(model.aux[0].end||[model.center[0]+model.r*0.94,model.center[1]-model.r*0.34])
+    :isQuad?(pair==="AC"?model.vertices.C:model.vertices.D):model.foot;
+  const auxName=isCircle?"반지름 r":isQuad?("대각선 "+pair):"높이 AH";
   // 뷰박스: 획 바운딩박스 + 여백
   let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
   for(const p of strokes.flat()){
@@ -248,8 +257,8 @@ function GeoInsight({ink, question="", concept="", unit=""}){
   }
   const padV=Math.max(34,(x1-x0)*0.16);
   x0-=padV;y0-=padV;x1+=padV;y1+=padV;
-  const cen=[V.reduce((s,p)=>s+p[0],0)/V.length, V.reduce((s,p)=>s+p[1],0)/V.length];
-  const obst=[...strokes.flat(),...V];
+  const cen=isCircle?model.center:[V.reduce((s,p)=>s+p[0],0)/V.length, V.reduce((s,p)=>s+p[1],0)/V.length];
+  const obst=[...strokes.flat(),...(V||[model.center])];
   for(let k=0;k<=12;k++)obst.push([auxFrom[0]+(auxTo[0]-auxFrom[0])*k/12, auxFrom[1]+(auxTo[1]-auxFrom[1])*k/12]);
   const mkJudge=(text,anchor,color,fs=17,delay=1300)=>{
     const {w,h}=estimateLabelBox(text,fs);
@@ -259,24 +268,36 @@ function GeoInsight({ink, question="", concept="", unit=""}){
     obst.push([lx,ly],[lx+w,ly],[lx,ly+h],[lx+w,ly+h]);
     return {at:[lx,ly],text,color,fs,delay};
   };
-  const jMine=mkJudge(isMissing?"내 그림 (오답 풀이)":"내 그림 (정답 풀이 ✓)",V[1],isMissing?T.student:T.ok);
+  const mineAnchor=isCircle?[model.center[0]-model.r*0.7,model.center[1]+model.r*0.75]:V[1];
+  const jMine=mkJudge(isMissing?"내 그림 (오답 풀이)":"내 그림 (정답 풀이 ✓)",mineAnchor,isMissing?T.student:T.ok);
   const jAns=isMissing?mkJudge("정답 풀이: "+auxName,[(auxFrom[0]+auxTo[0])/2,(auxFrom[1]+auxTo[1])/2],T.fix,17,1550):null;
   const aux=isMissing?T.fix:T.ok;
   const anim=(delay,dur=650)=>({animate:true,dur,delay});
   // 삼각형 전용: 직각 표시 방향
-  const H=isQuad?null:model.foot;
+  const H=(isQuad||isCircle)?null:model.foot;
   const uB=H?(()=>{const {B,C}=model.vertices;const p=dist(B,H)>2?B:C;const L=dist(p,H)||1;return[(p[0]-H[0])/L,(p[1]-H[1])/L];})():null;
   const uA=H?(()=>{const {A}=model.vertices;const L=dist(A,H)||1;return[(A[0]-H[0])/L,(A[1]-H[1])/L];})():null;
   const msg=isMissing
-    ?(isQuad
+    ?(isCircle
+      ?"원은 정확해. 넓이·둘레로 가려면 반지름 r을 표시해야 해 — 중심에서 둘레까지 그려줬어. 다음엔 이 선부터!"
+      :isQuad
       ?"사각형은 정확해. 넓이로 가려면 대각선을 그어 삼각형 2개로 나눠야 해 — 네 그림 위에 그려줬어. 다음엔 이 선부터!"
       :"삼각형은 정확해. 그런데 넓이로 가려면 높이 AH 보조선이 필요해 — 네 그림 위에 그려줬어. 다음엔 이 선부터!")
-    :(isQuad
+    :(isCircle
+      ?"작도 완벽해. 반지름까지 표시했으니 넓이·둘레 공식에 바로 넣으면 돼."
+      :isQuad
       ?"작도 완벽해. 대각선으로 나눈 삼각형 2개의 넓이를 더하면 돼."
       :"작도 완벽해. 높이까지 그렸으니 넓이 공식에 바로 넣으면 돼.");
-  const formula=isQuad
+  const formula=isCircle
+    ?"S=\\pi r^2,\\quad l=2\\pi r"
+    :isQuad
     ?(pair==="AC"?"S=\\triangle ABC+\\triangle ACD":"S=\\triangle ABD+\\triangle BCD")
     :"S=\\tfrac12\\cdot\\overline{BC}\\cdot\\overline{AH}";
+  // 원 둘레 draw-on용 점열 (피팅된 원)
+  const circlePts=isCircle?Array.from({length:61},(_,i)=>{
+    const a=2*Math.PI*i/60;
+    return [model.center[0]+model.r*Math.cos(a), model.center[1]+model.r*Math.sin(a)];
+  }):null;
 
   return (
     <div className="geo-result" style={{marginBottom:12}}>
@@ -292,14 +313,18 @@ function GeoInsight({ink, question="", concept="", unit=""}){
           <polyline key={"raw"+i} points={s.map(p=>p[0]+","+p[1]).join(" ")}
             fill="none" stroke="#221C39" strokeWidth={2.2} strokeLinecap="round" opacity={0.18}/>
         ))}
-        {V.map((p,i)=>(
+        {isCircle&&<Curve pts={circlePts} color={T.student} width={3.4} anim={anim(0,900)}/>}
+        {isCircle&&<PointDot at={model.center} color={T.student} r={5} anim={anim(950,300)}/>}
+        {isCircle&&<SvgLabel at={[model.center[0]-8,model.center[1]+12]} text="O" color={T.student} fontSize={16} anim={anim(1000,300)}/>}
+        {!isCircle&&V.map((p,i)=>(
           <Curve key={"side"+i} pts={[p,V[(i+1)%V.length]]} color={T.student} width={3.4} anim={anim(i*220)}/>
         ))}
-        {V.map((p,i)=>(
+        {!isCircle&&V.map((p,i)=>(
           <SvgLabel key={"vn"+i} at={vertexLabelPos(p,cen)} text={names[i]} color={T.student} fontSize={17}
             anim={anim(V.length*220+40+i*80,350)}/>
         ))}
         <DashedLine pts={[auxFrom,auxTo]} color={aux} width={2.8} dash="10 11" anim={anim(1000)}/>
+        {isCircle&&<SvgLabel at={[(auxFrom[0]+auxTo[0])/2+6,(auxFrom[1]+auxTo[1])/2-20]} text="r" color={aux} fontSize={17} anim={anim(1500,350)}/>}
         {H&&<PointDot at={H} color={aux} r={5.5} anim={anim(1550,350)}/>}
         {H&&<SvgLabel at={[H[0]+10,H[1]+13]} text="H" color={aux} fontSize={17} anim={anim(1600,350)}/>}
         {H&&<RightAngleMark corner={H} uA={uB} uB={uA} size={14} color={aux} anim={anim(1680,350)}/>}

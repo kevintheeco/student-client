@@ -125,6 +125,64 @@ function recognizeQuad(strokes,{minArea=8000}={}){
   };
 }
 
+/* 원 최소제곱 피팅 (Kåsa): x²+y²+ax+by+c=0 의 a,b,c를 정규방정식으로 풀어
+   중심 (-a/2,-b/2), 반지름 √(a²/4+b²/4−c) — 지시서 §4-1 명시 항목 */
+function fitCircle(pts){
+  const n=pts.length;
+  if(n<6)return null;
+  let sx=0,sy=0,sxx=0,syy=0,sxy=0,sxz=0,syz=0,sz=0;
+  for(const [x,y] of pts){
+    const z=x*x+y*y;
+    sx+=x;sy+=y;sxx+=x*x;syy+=y*y;sxy+=x*y;sxz+=x*z;syz+=y*z;sz+=z;
+  }
+  // [sxx sxy sx][a]   [-sxz]
+  // [sxy syy sy][b] = [-syz]
+  // [sx  sy  n ][c]   [-sz ]
+  const det3=(m)=>m[0]*(m[4]*m[8]-m[5]*m[7])-m[1]*(m[3]*m[8]-m[5]*m[6])+m[2]*(m[3]*m[7]-m[4]*m[6]);
+  const M=[sxx,sxy,sx, sxy,syy,sy, sx,sy,n], D=det3(M);
+  if(Math.abs(D)<1e-9)return null;
+  const a=det3([-sxz,sxy,sx, -syz,syy,sy, -sz,sy,n])/D;
+  const b=det3([sxx,-sxz,sx, sxy,-syz,sy, sx,-sz,n])/D;
+  const c=det3([sxx,sxy,-sxz, sxy,syy,-syz, sx,sy,-sz])/D;
+  const r2=(a*a+b*b)/4-c;
+  if(!(r2>0))return null;
+  return {center:[-a/2,-b/2], r:Math.sqrt(r2)};
+}
+
+/* 원 인식: 곡선 획들을 피팅 → 잔차·각도 커버리지 게이트 → 반지름/지름 작도 여부.
+   시나리오: 원의 넓이·둘레 → 반지름(또는 지름)을 표시해야 식으로 간다 */
+function recognizeCircle(strokes,{minR=45}={}){
+  const curved=strokes.filter(s=>s.length>=8&&!isStraight(s));
+  const pts=curved.flat();
+  if(pts.length<12)return{ok:false,reason:"no-curve"};
+  const fit=fitCircle(pts);
+  if(!fit||fit.r<minR)return{ok:false,reason:"too-small"};
+  const {center,r}=fit;
+  // 잔차: 손떨림 허용치 안에서 원 위에 있어야 (rms 12%·r)
+  let se=0;
+  for(const p of pts){const e=dist(p,center)-r;se+=e*e;}
+  if(Math.sqrt(se/pts.length)>0.12*r)return{ok:false,reason:"not-round"};
+  // 각도 커버리지: 24칸 중 20칸 이상 (호 조각만 그린 건 원이 아님)
+  const bins=new Array(24).fill(false);
+  for(const p of pts){
+    const a=Math.atan2(p[1]-center[1],p[0]-center[0]);
+    bins[Math.floor(((a+Math.PI)/(2*Math.PI))*24)%24]=true;
+  }
+  if(bins.filter(Boolean).length<20)return{ok:false,reason:"open-arc"};
+  // 반지름/지름 작도: 직선 획이 중심~둘레(반지름) 또는 둘레~둘레·중심 통과(지름)
+  let drawn=false, radEnd=null;
+  for(const s of strokes){
+    if(!isStraight(s))continue;
+    const e1=s[0],e2=s[s.length-1];
+    const onCirc=(p)=>Math.abs(dist(p,center)-r)<0.2*r;
+    const nearCen=(p)=>dist(p,center)<0.25*r;
+    if((nearCen(e1)&&onCirc(e2))||(nearCen(e2)&&onCirc(e1))){drawn=true;radEnd=onCirc(e2)?e2:e1;break;}
+    if(onCirc(e1)&&onCirc(e2)&&distToLine(center,e1,e2)<0.15*r){drawn=true;radEnd=e1;break;}   // 지름
+  }
+  return {ok:true, kind:"circle", center, r, area:Math.PI*r*r,
+    aux:[{kind:"radius", drawn, end:radEnd}]};
+}
+
 /* 다각형 변 커버리지 (0~1, 최소 변 기준) — 글씨 hull 가짜 도형 차단 게이트 공용 */
 function polygonCoverage(strokes, pts, tol=16, n=14){
   if(!pts||pts.length<3)return 0;
@@ -163,19 +221,24 @@ function triangleCoverage(strokes, model, tol=16, n=14){
 
 /* 비교(diff): 학생 모델 vs 요구사항 → {correct, missing, wrong, extra}
    requirements.aux: 필요한 보조선 목록 (기본: 높이). 5단계 기출은행 정답 모델도 이 계약 사용 */
-const AUX_LABEL={height:"높이 AH", diagonal:"대각선"};
+const AUX_LABEL={height:"높이 AH", diagonal:"대각선", radius:"반지름 r"};
+const DEFAULT_AUX={triangle:"height", quad:"diagonal", circle:"radius"};
 function compare(model, requirements){
-  const isQuad=model&&model.kind==="quad";
-  const req=requirements||{aux:[isQuad?"diagonal":"height"]};
+  const kind=(model&&model.kind)||"triangle";
+  const req=requirements||{aux:[DEFAULT_AUX[kind]||"height"]};
   const out={correct:[], missing:[], wrong:[], extra:[]};
   if(!model||!model.ok){
-    out.missing.push({kind:"shape",label:isQuad?"사각형":"삼각형"});
+    out.missing.push({kind:"shape",label:kind==="quad"?"사각형":kind==="circle"?"원":"삼각형"});
     return out;
   }
-  const verts=isQuad?["A","B","C","D"]:["A","B","C"];
-  const sides=isQuad?["AB","BC","CD","DA"]:["AB","BC","CA"];
-  for(const v of verts)out.correct.push({kind:"vertex",label:v});
-  for(const s of sides)out.correct.push({kind:"side",label:s});
+  if(kind==="circle"){
+    out.correct.push({kind:"shape",label:"원"});
+  }else{
+    const verts=kind==="quad"?["A","B","C","D"]:["A","B","C"];
+    const sides=kind==="quad"?["AB","BC","CD","DA"]:["AB","BC","CA"];
+    for(const v of verts)out.correct.push({kind:"vertex",label:v});
+    for(const s of sides)out.correct.push({kind:"side",label:s});
+  }
   for(const auxKind of (req.aux||[])){
     const found=(model.aux||[]).find(a=>a.kind===auxKind);
     const item={kind:"auxline",label:AUX_LABEL[auxKind]||auxKind,aux:auxKind};
@@ -224,6 +287,6 @@ async function recognizeAI(strokes, pngBase64, opts={}, signal){
 
 export {
   dist, distToLine, rdp, hull, bestTriangle, bestQuad, isStraight,
-  normalizeStrokes, recognize, recognizeQuad, compare,
+  normalizeStrokes, recognize, recognizeQuad, fitCircle, recognizeCircle, compare,
   triangleCoverage, polygonCoverage, strokeSummary, recognizeAI,
 };

@@ -59,8 +59,21 @@ function edgePath(e){
   return `M ${x1} ${y1} C ${x1+dx} ${y1}, ${x2-dx} ${y2}, ${x2} ${y2}`;
 }
 
-function KnowledgeMap({onPickUnit}){
-  const [vb,setVb]=useState(MAP.bounds);
+// scopeUnits(선택)가 주어지면 그 단원들만 확대해 보여주는 바운딩박스를 계산 — 시험 1건 범위로 지도를 좁힐 때 사용
+function boundsOfUnits(names){
+  let minX=1e9,maxX=-1e9,minY=1e9,maxY=-1e9,found=0;
+  names.forEach(n=>{const u=MAP.units.get(n);if(!u)return;found++;
+    minX=Math.min(minX,u.x);maxX=Math.max(maxX,u.x+NODE_W);minY=Math.min(minY,u.y);maxY=Math.max(maxY,u.y+NODE_H);});
+  if(!found)return MAP.bounds;
+  const pad=90;
+  return{x:minX-pad,y:minY-pad,w:(maxX-minX)+pad*2,h:(maxY-minY)+pad*2};
+}
+
+function KnowledgeMap({onPickUnit=()=>{},scopeUnits,weakUnits}){
+  const scopeSet=scopeUnits&&scopeUnits.length?new Set(scopeUnits):null;
+  const weakSet=weakUnits&&weakUnits.length?new Set(weakUnits):null;
+  const scopedBounds=scopeSet?boundsOfUnits(scopeUnits):MAP.bounds;
+  const [vb,setVb]=useState(scopedBounds);
   const [sel,setSel]=useState(null);
   const wrapRef=useRef(null),svgRef=useRef(null),drag=useRef(null),anim=useRef(null),moved=useRef(false);
   const selUnit=sel?MAP.units.get(sel):null;
@@ -83,7 +96,7 @@ function KnowledgeMap({onPickUnit}){
     const w=Math.min(MAP.bounds.w,1250),h=w*(MAP.bounds.h/MAP.bounds.w);
     animateTo({x:u.x+NODE_W/2-w/2,y:u.y+NODE_H/2-h/2,w,h});
   }
-  const resetView=()=>{setSel(null);animateTo(MAP.bounds);};
+  const resetView=()=>{setSel(null);animateTo(scopedBounds);};
 
   // 휠 줌 (커서 기준) — passive:false 필요해서 직접 등록
   useEffect(()=>{
@@ -127,16 +140,17 @@ function KnowledgeMap({onPickUnit}){
     <section style={{paddingBottom:30}}>
       <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:10}}>
         <div>
-          <div style={{fontFamily:"'Jua',sans-serif",fontSize:20,color:"var(--ink)"}}>🗺️ {tr("수학 지식 지도","Math knowledge map")}</div>
-          <div style={{fontSize:12.5,color:"var(--sub)"}}>{tr("단원을 클릭하면 확대되며 선수·후속 관계가 보여요. 휠로 확대, 드래그로 이동.","Click a unit to zoom into its prerequisites. Wheel to zoom, drag to pan.")}</div>
+          <div style={{fontFamily:"'Jua',sans-serif",fontSize:20,color:"var(--ink)"}}>🗺️ {scopeSet?tr("이 시험의 개념지도","This exam's concept map"):tr("수학 지식 지도","Math knowledge map")}</div>
+          <div style={{fontSize:12.5,color:"var(--sub)"}}>{scopeSet?tr("이 시험에 나온 단원만 확대해서 보여줘요.","Zoomed to just this exam's units."):tr("단원을 클릭하면 확대되며 선수·후속 관계가 보여요. 휠로 확대, 드래그로 이동.","Click a unit to zoom into its prerequisites. Wheel to zoom, drag to pan.")}</div>
         </div>
         <div style={{marginLeft:"auto",display:"flex",gap:6}}>
-          <button className="btn gho sm" onClick={resetView}>⤢ {tr("전체 보기","Fit all")}</button>
+          <button className="btn gho sm" onClick={resetView}>⤢ {scopeSet?tr("이 시험 범위","Fit exam"):tr("전체 보기","Fit all")}</button>
         </div>
       </div>
       <div style={{display:"flex",gap:12,flexWrap:"wrap",fontSize:11.5,color:"var(--sub)",marginBottom:8}}>
         {STRANDS.map(s=><span key={s.id} style={{display:"inline-flex",alignItems:"center",gap:5}}><span style={{width:9,height:9,borderRadius:"50%",background:s.color}}/>{s.name}</span>)}
         <span style={{display:"inline-flex",alignItems:"center",gap:5}}><span style={{width:16,height:3,background:"#E14360",borderRadius:2}}/>{tr("의존도 80%+","80%+ dependency")}</span>
+        {weakSet&&<span style={{display:"inline-flex",alignItems:"center",gap:5}}><span style={{width:9,height:9,borderRadius:"50%",border:"2px solid #FF3B5C"}}/>{tr("이번 시험에서 틀린 단원","Missed on this exam")}</span>}
       </div>
 
       <div ref={wrapRef} style={{position:"relative",border:"1px solid var(--line)",borderRadius:18,overflow:"hidden",background:"linear-gradient(160deg,#FDFDFF 0%,#F4F3FB 100%)"}}>

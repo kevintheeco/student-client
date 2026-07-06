@@ -10,6 +10,11 @@ const _seg=(a,b,n=24)=>({pts:Array.from({length:n+1},(_,i)=>({x:a[0]+(b[0]-a[0])
 const GEO_INK_SAMPLE={pages:[[_seg([100,600],[700,600]),_seg([700,600],[400,150]),_seg([400,150],[100,600])]],w:800,h:750};
 // 사각형 샘플: 사각형만 그리고 대각선은 안 그린 학생
 const GEO_INK_QUAD={pages:[[_seg([150,150],[650,180]),_seg([650,180],[700,600]),_seg([700,600],[120,560]),_seg([120,560],[150,150])]],w:800,h:750};
+// 원 샘플: 원만 그리고 반지름은 표시 안 한 학생 (손떨림 포함)
+const GEO_INK_CIRCLE={pages:[[{pts:Array.from({length:49},(_,i)=>{
+  const a=2*Math.PI*i/48, wob=((i*7)%9-4);
+  return {x:400+(210+wob)*Math.cos(a), y:390+(210+wob)*Math.sin(a), p:.5};
+}),col:"#221C39",sz:1}]],w:800,h:750};
 import { MathText } from "../ui/math.jsx";
 
 /* ⑥ 해설 렌더 통합 검증: AI 해설 문자열(마크다운+$$수식$$+mathviz블록+기존 svg)이
@@ -174,6 +179,7 @@ function VizDemo(){
             </p>
             <GeoInsight ink={GEO_INK_SAMPLE} question="삼각형 ABC의 넓이를 구하시오. (필요한 보조선 포함)"/>
             <GeoInsight ink={GEO_INK_QUAD} question="사각형 ABCD의 넓이를 구하시오. (필요한 보조선 포함)"/>
+            <GeoInsight ink={GEO_INK_CIRCLE} question="원 O의 넓이를 구하시오. (필요한 표시 포함)"/>
           </div>
         </>
       )}

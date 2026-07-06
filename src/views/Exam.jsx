@@ -8,6 +8,7 @@ import { activeStudent, logAttempt } from "../core/attempts.js";
 import { errTypeById, normErrType, normFactors, normStage } from "../core/knowledgeGraph.js";
 import { MathViz } from "../ui/mathviz/MathViz.jsx";
 import { GeoInsight } from "../ui/GeoFeedback.jsx";
+import { KnowledgeMap } from "./KnowledgeMap.jsx";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
 
@@ -21,6 +22,7 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
 
   const [phase,setPhase]=useState("gen");     // gen | take | grading | result | error
   const [showReport,setShowReport]=useState(false);   // 학부모 상담 리포트 보기
+  const [showMap,setShowMap]=useState(false);         // 이 시험 범위 개념지도 보기(약점 노드 반짝임)
   const [items,setItems]=useState([]);
   const [idx,setIdx]=useState(0);
   const [answers,setAnswers]=useState([]);    // [{choice,text}] (손글씨는 inkRef)
@@ -447,7 +449,7 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
           </div>
         );})()}
 
-        {phase==="result"&&!showReport&&(
+        {phase==="result"&&!showReport&&!showMap&&(
           <div className="card qcard" style={{maxWidth:760,margin:"0 auto"}}>
             {/* 총점 헤더 */}
             <div style={{textAlign:"center",padding:"6px 0 16px",borderBottom:"1px solid var(--line)",marginBottom:16}}>
@@ -526,10 +528,25 @@ function Exam({deck,topic,onExit,student,academy,academyName}){
             </>);})()}
             <div style={{display:"flex",gap:8,marginTop:18,flexWrap:"wrap"}}>
               <button className="btn pri" onClick={()=>{setShowReport(true);}}>🧾 {academy?T("학부모 상담 리포트","Parent report"):T("진단 리포트","Diagnostic report")}</button>
+              <button className="btn gho" onClick={()=>{setShowMap(true);}}>🗺️ {T("개념지도로 보기","View concept map")}</button>
               <button className="btn gho" onClick={onExit}>{T("← 홈으로","← Home")}</button>
             </div>
           </div>
         )}
+        {phase==="result"&&showMap&&(()=>{
+          const us=aggUnits(grades);
+          const scopeUnits=us.map(u=>u.unit);
+          const weakUnits=us.filter(u=>u.weak).map(u=>u.unit);
+          return(
+          <div className="card qcard" style={{maxWidth:960,margin:"0 auto",padding:"20px 22px"}}>
+            <div style={{fontFamily:"'Jua',sans-serif",fontSize:18,color:"var(--ink)",marginBottom:4}}>🗺️ {T("이 시험이 다룬 개념지도","This exam's concept map")}</div>
+            <p className="hint" style={{marginTop:0,marginBottom:12}}>{T("이 시험에 나온 단원만 확대해서 보여줘요. 반짝이는 빨간 테두리가 이번에 틀린(또는 부분점수) 단원이에요 — ⬅ 방향으로 눌러가며 어디부터 막혔는지 확인해보세요.","Zoomed to just this exam's units. Pulsing red border = units you missed — click ⬅ prerequisites to trace the real gap.")}</p>
+            <KnowledgeMap scopeUnits={scopeUnits} weakUnits={weakUnits}/>
+            <div style={{display:"flex",gap:8,marginTop:4}}>
+              <button className="btn gho" onClick={()=>setShowMap(false)}>{T("← 채점 결과로","← Back to results")}</button>
+            </div>
+          </div>);
+        })()}
         {phase==="result"&&showReport&&(()=>{
           const us=aggUnits(grades);
           const weakUnits=us.filter(u=>u.weak);
