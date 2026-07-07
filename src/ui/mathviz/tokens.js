@@ -23,9 +23,9 @@ export const VIZ_LIGHT = {
   muted: "#6B6486",              // --sub(#857FA0)은 3.73:1 탈락 → 같은 계열 어둡게 (5.45:1)
   grid: "#E4DFEA",
   accent: {
-    algebra: "#C2185B",          // --rose 계열 다크 (5.78:1)
+    algebra: "#5A48E0",          // --pri-d 브랜드 보라 (6.01:1) — 장미색은 오답 표시와 혼동돼 제외(2026-07-07 대표 결정)
     geometry: "#8A5A12",         // 앱 골드 텍스트색(derive-hint와 동일) (5.82:1)
-    sequence: "#5A48E0",         // --pri-d 그대로 (6.01:1)
+    sequence: "#147A5C",         // --mint 계열 다크 (5.21:1)
   },
   point: "#B45309",              // --gold 계열 다크 (4.94:1)
   student: "#5A48E0",            // 학생 그림 재구성 = 앱 대표 보라 (6.01:1)
