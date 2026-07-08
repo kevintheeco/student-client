@@ -288,7 +288,8 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
       paintStrokes(ctx,pages.current[i]);
       ctx.restore();
     }
-    return off.toDataURL("image/png").split(",")[1];
+    // 배경이 불투명(#FFFDF8)이라 JPEG 안전 — PNG 풀해상도 대비 페이로드 수 분의 1 (전송·API 비용↓, ref 검증 패턴)
+    return off.toDataURL("image/jpeg",0.85).split(",")[1];
   }
   function showPage(i){if(i<0||i>=pages.current.length)return;curRef.current=i;strokes.current=pages.current[i];redraw();setPgUI({i,n:pages.current.length});}
   function addPage(){pages.current.push([]);showPage(pages.current.length-1);}

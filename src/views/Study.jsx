@@ -373,7 +373,7 @@ function Study({deck:initial,subjects,onExit}){
           "너는 손글씨 OCR 전문가야. 이 학습 답안을 읽어줘. 이미지 크기: "+sz.w+"×"+sz.h+"px (좌상단이 0,0).\n"+
           "정말 읽기 어려운 글자·기호·수식이 있으면, 그 부분마다 그것을 '딱 감싸는 최소 크기'의 박스를 따로따로 잡아줘. 한 덩어리로 크게 잡지 말고 안 읽히는 글자만 좁게, 최대 6개. 잘 읽히면 '없음'.\n\n"+
           "다음 형식으로만 출력:\nTEXT: 인식된 전체 텍스트 (안 읽히는 글자는 □로 표시)\nUNCLEAR: 없음 (또는 불명확한 영역을 x,y,너비,높이 픽셀 단위로 — 여러 개면 | 로 구분)",
-          [{type:"image",source:{type:"base64",media_type:"image/png",data:img}}],
+          [{type:"image",source:{type:"base64",media_type:"image/jpeg",data:img}}],
           false,{maxTok:400,model:ocrModel()},abortRef.current?.signal
         );
         const ocr=parseOcrCheck(ocrRaw);
@@ -391,7 +391,7 @@ function Study({deck:initial,subjects,onExit}){
     }
     try{
       const userBlocks=[];
-      if(img)userBlocks.push({type:"image",source:{type:"base64",media_type:"image/png",data:img}});
+      if(img)userBlocks.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:img}});
       const qtype=q?.qtype||'understand';
       const qtypeCtx=qtype==='recall'
         ?"이 문제는 【암기 확인·단답형】 유형이야. 정의·공식·용어·연도·목록을 정확히 썼는지가 핵심이야. 단답형이니 답만 정확하면 correct로 인정하고, 추가 설명·서술이 없다고 깎지 마라(표현부족으로 판정 금지). 핵심이 맞으면 correct, 일부 빠지거나 틀리면 partial, 못 쓰면 incorrect."
@@ -486,7 +486,7 @@ function Study({deck:initial,subjects,onExit}){
     setFollowupBusy(true);setSubmitErr("");
     try{
       const userBlocks=[];
-      if(img)userBlocks.push({type:"image",source:{type:"base64",media_type:"image/png",data:img}});
+      if(img)userBlocks.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:img}});
       const textParts=["개념: "+concept.name,"원래 질문: "+q.question,"후속 질문: "+followupQ];
       if(hasTxt)textParts.push("\n학습자 답변:\n"+answer.trim());
       if(img)textParts.push("\n이미지에는 학습자의 '원래 답(검은펜/파란펜)'과 후속 질문에 답하려고 새로 보탠 '빨간펜 보완'이 함께 있어. 빨간펜으로 새로 보탠 내용을 중심으로, 후속 질문에 제대로 답했는지 평가해줘.");
@@ -542,7 +542,7 @@ function Study({deck:initial,subjects,onExit}){
     const img=hasInk?padRef.current.getImageBase64():null;
     setDeriveChecking(true);setDeriveHintShow(false);setSubmitErr("");
     const userBlocks=[];
-    if(img)userBlocks.push({type:"image",source:{type:"base64",media_type:"image/png",data:img}});
+    if(img)userBlocks.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:img}});
     const histTxt=deriveHistory.length?"이전 단계들:\n"+deriveHistory.map((h,i)=>(i+1)+". "+h).join("\n")+"\n\n":"";
     userBlocks.push({type:"text",text:
       "개념: "+concept.name+"\n현재 단계: "+(deriveIdx+1)+"/"+derivePlan.totalSteps+"\n"+histTxt+
@@ -589,7 +589,7 @@ function Study({deck:initial,subjects,onExit}){
     const timer=setTimeout(()=>ctrl.abort("timeout"),60000);
     try{
       const userBlocks=[];
-      if(img)userBlocks.push({type:"image",source:{type:"base64",media_type:"image/png",data:img}});
+      if(img)userBlocks.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:img}});
       const parts=["개념: "+concept.name,"질문: "+q.question];
       if(hasTxt)parts.push("학습자가 지금까지 쓴 답(텍스트):\n"+answer.trim());
       if(img)parts.push("학습자가 노트에 손으로 쓴 답도 이미지로 첨부됨 — 읽어서 어디까지 갔는지 파악해.");
