@@ -4,16 +4,16 @@
 학생이 스스로 설명하게 만들고, 그 과정을 분석해 약점을 채우는 자기주도 학습 플랫폼.
 "설명할 수 있어야 진짜 아는 것이다" — 지식 소비가 아닌 설명 능력을 기른다.
 
-## 기술 스택 (2026-07-07 결정: Next.js 전환 — 학생별 분석·기록 화면의 서버 렌더링 수요, docs/ADR.md ADR-012 참고)
-- 목표: Next.js(App Router) + React (TypeScript 전환 병행)
-- 현재: Vite 6 + React 18 SPA (JavaScript/JSX) — 마이그레이션 완료 전 신규 기능은 기존 구조를 따른다
-- 배포: 현재 GitHub Pages (`.github/workflows/deploy.yml`) — SSR 불가하므로 전환 시 Vercel(1순위) 또는 Cloudflare로 이전
+## 기술 스택 (2026-07-08 확정: React SPA 유지 — Next.js 전환 철회, docs/ADR.md ADR-013 참고)
+- 프론트: Vite 6 + React 18 SPA (JavaScript/JSX, TypeScript·Vitest 점진 도입 예정)
+- 배포: GitHub Pages (`.github/workflows/deploy.yml`) 유지
+- 서버 실행 지점(마스킹 강제·업로드 검증·AI 호출)은 Cloudflare Worker를 확장해 담당한다
 - AI 백엔드: Cloudflare Worker 프록시 (`proxy/worker.js`, `/claude` 엔드포인트, 학원코드→키 매핑은 `ACADEMY_KEYS` 시크릿)
 - 데이터/인증: Firebase (Auth + Firestore, CDN 스크립트 로드 — `src/core/platform.js`, 규칙은 `firestore.rules`)
 - 프론트 구조: `src/core/`(ai.js·platform.js·srs.js), `src/ui/`(공용 컴포넌트), `src/views/`(화면)
 
 ## 아키텍처 규칙
-- CRITICAL: AI 호출은 반드시 서버 사이드(현재 Cloudflare Worker 프록시 `proxy/worker.js`)를 경유한다. 클라이언트에서 AI API 키를 직접 사용하지 않는다. Next.js 전환 시 Worker를 API Route로 흡수할지는 미결정(ADR-012) — 결정 전까지 Worker 경유 유지.
+- CRITICAL: AI 호출은 반드시 서버 사이드(현재 Cloudflare Worker 프록시 `proxy/worker.js`)를 경유한다. 클라이언트에서 AI API 키를 직접 사용하지 않는다 (개인 BYOK 직접 호출은 제거 예정 — ADR-013 후속 조건).
 - CRITICAL: 모든 AI 파이프라인은 docs/ARCHITECTURE.md 의 파이프라인 설계를 따른다.
 - CRITICAL: OCR, 채점, 문제 생성, 튜터는 Worker 안에서 각각 독립된 엔드포인트로 분리한다 (현재 `/claude` 단일 — 신규 파이프라인 추가 시 분리).
 - CRITICAL: 채점 결과는 반드시 tool_use로 JSON 스키마를 강제한다. 자유 텍스트 파싱 금지.
@@ -34,7 +34,7 @@
 - 기획자 브랜치의 코드는 검증 전까지 신뢰하지 않는다. CRITICAL 규칙·아키텍처 위반, 보안 문제를 리뷰한 뒤 수정한다. 단, 기획자가 구현한 기능 동작(스펙)은 임의로 바꾸지 않는다.
 
 ## 개발 프로세스
-- CRITICAL: 새 기능 구현 시 테스트를 먼저 작성하고 통과하는 구현을 작성한다 (TDD). 단, 테스트 러너(Vitest)는 아직 미도입 — 도입 전까지는 `npm run lint` + 수동 스모크로 검증하고, Vitest 도입이 선행 과제다.
+- CRITICAL: 새 기능 구현 시 테스트를 먼저 작성하고 통과하는 구현을 작성한다 (TDD). 테스트 러너: Vitest(`src/**/__tests__/*.test.{js,jsx}`) + node --test(mathviz 전용) — `npm test`로 둘 다 실행.
 - 커밋 메시지는 conventional commits 형식 (feat:, fix:, docs:, refactor:) — PreToolUse 훅(`scripts/hooks/guard.py`)이 형식과 시크릿 포함 여부를 자동 검증한다.
 
 ## 명령어
