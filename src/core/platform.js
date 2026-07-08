@@ -4,10 +4,27 @@ let _idb=null;   // IndexedDB 핸들 (null이면 localStorage 폴백)
 let _cache={};   // ng:* 전체 메모리 미러 (동기 읽기용)
 let _meta={};    // 키별 마지막 수정 시각(ms) — 클라우드 병합용
 const META_KEY="ng:__meta";
+const CLOUD_CONSENT_KEY="ng:privacy:cloud";
 // 클라우드 동기화 제외: API 키(보안) + 내부 메타 + 시험 기록(손글씨 이미지가 커서 Firestore 1MB 초과)
 // + 기출은행(ng:bank: — 대량 축적 시 1MB 초과, 로컬 우선. 공유 단계에서 Firestore 컬렉션으로 이전)
-const SYNC_EXCLUDE=new Set(["ng:key","ng:geminiKey",META_KEY]);
-const noSync=(k)=>SYNC_EXCLUDE.has(k)||k.startsWith("ng:exam:")||k.startsWith("ng:bank:");
+// + 개인정보/동의 상태/학원 공유 토큰/닉네임은 기본 동기화 대상에서 제외
+const SYNC_EXCLUDE=new Set(["ng:key","ng:geminiKey",META_KEY,CLOUD_CONSENT_KEY,"ng:aca:link"]);
+const noSync=(k)=>SYNC_EXCLUDE.has(k)||k.startsWith("ng:__")||k.startsWith("ng:exam:")||k.startsWith("ng:bank:")||k.startsWith("ng:nick:");
+
+/* ── 데이터 스키마 버전 (ADR-014 A1): 구버전 데이터 기기 × 신버전 앱 충돌 방지 ──
+   저장 형식을 바꾸는 변경은 SCHEMA_VERSION을 올리고 _MIGRATIONS[새버전]에 변환 함수를 추가한다.
+   변환 함수는 cache를 직접 수정하고, 바뀐 키 배열을 반환한다(반환된 키만 디스크에 다시 쓴다). */
+const SCHEMA_KEY="ng:__schema";
+const SCHEMA_VERSION=1;
+const _MIGRATIONS={ /* 예) 2:(cache)=>{ cache["ng:decks"]=...; return ["ng:decks"]; } */ };
+function migrateSchema(cache,fromV,toV,migrations){
+  const changed=[];
+  for(let v=fromV+1;v<=toV;v++){
+    const fn=migrations[v];
+    if(fn){const ks=fn(cache);if(Array.isArray(ks))changed.push(...ks);}
+  }
+  return changed;
+}
 
 function _idbOpen(){
   return new Promise((res,rej)=>{
@@ -65,14 +82,27 @@ async function initStorage(){
     try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith("ng:")){try{_cache[k]=JSON.parse(localStorage.getItem(k));}catch{_cache[k]=localStorage.getItem(k);}}}}catch(_){}
   }
   _meta=(_cache[META_KEY]&&typeof _cache[META_KEY]==="object")?_cache[META_KEY]:{};
+  // A1: 스키마 마이그레이션 — 버전 없는 기존 데이터는 v1으로 간주, 낮은 버전은 순차 변환 후 버전 스탬프
+  try{
+    const from=typeof _cache[SCHEMA_KEY]==="number"?_cache[SCHEMA_KEY]:1;
+    if(from<SCHEMA_VERSION)migrateSchema(_cache,from,SCHEMA_VERSION,_MIGRATIONS).forEach(k=>_writeLocal(k,_cache[k]));
+    else if(from>SCHEMA_VERSION){console.warn("[schema] 데이터("+from+")가 앱("+SCHEMA_VERSION+")보다 새 버전 — 앱 업데이트 필요");return;}
+    if(_cache[SCHEMA_KEY]!==SCHEMA_VERSION)_writeLocal(SCHEMA_KEY,SCHEMA_VERSION);
+  }catch(e){console.warn("[schema]",e);}
 }
 
 // 로컬에만 기록 (클라우드 푸시 없음) — 동기화 시 역방향 루프 방지
 function _writeLocal(k,v){
   _cache[k]=v;
-  try{if(_idb)_idbPut(k,v);else localStorage.setItem(k,JSON.stringify(v));return true;}
+  try{
+    if(_idb)_idbPut(k,v);
+    else if(typeof localStorage!=="undefined")localStorage.setItem(k,JSON.stringify(v));
+    return true;
+  }
   catch(e){console.error("[LS] 저장 실패:",k,e);return false;}
 }
+const hasCloudConsent=()=>LS.get(CLOUD_CONSENT_KEY)===true;
+function setCloudConsent(on){return _writeLocal(CLOUD_CONSENT_KEY,!!on);}
 const LS = {
   get(k){return Object.prototype.hasOwnProperty.call(_cache,k)?_cache[k]:null;},
   set(k,v){
@@ -84,7 +114,7 @@ const LS = {
     return ok;
   },
   del(k){
-    delete _cache[k];try{if(_idb)_idbDel(k);else localStorage.removeItem(k);}catch{}
+    delete _cache[k];try{if(_idb)_idbDel(k);else if(typeof localStorage!=="undefined")localStorage.removeItem(k);}catch{}
     if(k.startsWith("ng:")&&k!==META_KEY){
       delete _meta[k];_writeLocal(META_KEY,_meta);
       cloudMaybeDelete(k);
@@ -96,7 +126,8 @@ const LS = {
     _cache[k]=v;
     let ok;
     if(_idb)ok=await _idbPutAwait(k,v);
-    else{try{localStorage.setItem(k,JSON.stringify(v));ok=true;}catch(e){console.error("[LS] 저장 실패:",k,e);ok=false;}}
+    else if(typeof localStorage!=="undefined"){try{localStorage.setItem(k,JSON.stringify(v));ok=true;}catch(e){console.error("[LS] 저장 실패:",k,e);ok=false;}}
+    else ok=true;
     if(!ok){if(had)_cache[k]=prev;else delete _cache[k];return false;}
     if(k.startsWith("ng:")&&k!==META_KEY){_meta[k]=Date.now();_writeLocal(META_KEY,_meta);cloudMaybePush(k);}
     return true;
@@ -241,32 +272,49 @@ function withTimeout(p,ms,label){
 function encKey(k){return encodeURIComponent(k).replace(/%/g,"_");}  // Firestore 문서 ID 안전화
 function _dataCol(uid){return _db.collection("users").doc(uid).collection("data");}
 async function cloudPushKey(uid,key){
-  if(noSync(key)||!_db)return;
+  if(noSync(key)||!_db||!hasCloudConsent())return;
   const v=Object.prototype.hasOwnProperty.call(_cache,key)?_cache[key]:null;
   await withTimeout(_dataCol(uid).doc(encKey(key)).set({k:key,v:v===undefined?null:v,t:_meta[key]||Date.now()}),12000,"업로드");
 }
+async function cloudPushKeys(uid,keys){
+  if(!_db||!uid||!hasCloudConsent())return 0;
+  const clean=[...new Set(keys)].filter(k=>!noSync(k));
+  let pushed=0;
+  for(let i=0;i<clean.length;i+=450){
+    const chunk=clean.slice(i,i+450);
+    const batch=_db.batch();
+    chunk.forEach(key=>{
+      const v=Object.prototype.hasOwnProperty.call(_cache,key)?_cache[key]:null;
+      batch.set(_dataCol(uid).doc(encKey(key)),{k:key,v:v===undefined?null:v,t:_meta[key]||Date.now()});
+    });
+    await withTimeout(batch.commit(),15000,"일괄 업로드");
+    pushed+=chunk.length;
+  }
+  return pushed;
+}
 async function cloudDeleteKey(uid,key){if(!_db)return;await withTimeout(_dataCol(uid).doc(encKey(key)).delete(),12000,"삭제");}
 function cloudMaybePush(k){
-  if(!_db||!_uid||_syncing||noSync(k))return;
+  if(!_db||!_uid||_syncing||noSync(k)||!hasCloudConsent())return;
   _pending.add(k);clearTimeout(_pendTimer);_pendTimer=setTimeout(flushPending,1200);
 }
 async function flushPending(){
-  if(!_db||!_uid)return;
+  if(!_db||!_uid||!hasCloudConsent())return;
   const keys=[..._pending];_pending.clear();
   if(!keys.length)return;
   _emitSync({busy:true});let ok=true;
-  for(const k of keys){try{await cloudPushKey(_uid,k);}catch(e){ok=false;console.warn("[cloud push]",k,e);}}
+  try{await cloudPushKeys(_uid,keys);}
+  catch(e){ok=false;console.warn("[cloud push batch]",e);}
   _emitSync({busy:false,ok,at:Date.now()});
 }
 function cloudMaybeDelete(k){
-  if(!_db||!_uid||_syncing||noSync(k))return;
+  if(!_db||!_uid||_syncing||noSync(k)||!hasCloudConsent())return;
   _emitSync({busy:true});
   cloudDeleteKey(_uid,k).then(()=>_emitSync({busy:false,ok:true,at:Date.now()}))
     .catch(e=>{console.warn("[cloud del]",k,e);_emitSync({busy:false,ok:false});});
 }
 // 로그인 시: 클라우드와 로컬을 시각 비교로 병합 (최신 우선, 비기면 로컬 유지+업로드)
 async function cloudSyncOnLogin(uid){
-  if(!_db||!uid)return{pulled:0,pushed:0,ok:false};
+  if(!_db||!uid||!hasCloudConsent())return{pulled:0,pushed:0,ok:false,consent:false};
   _syncing=true;let pulled=0,pushed=0,ok=true;
   _emitSync({busy:true});
   try{
@@ -275,22 +323,30 @@ async function cloudSyncOnLogin(uid){
     snap.forEach(d=>{const x=d.data();if(x&&typeof x.k==="string")cloud[x.k]={v:x.v,t:x.t||0};});
     const localKeys=Object.keys(_cache).filter(k=>k.startsWith("ng:")&&!noSync(k));
     const keys=new Set([...localKeys,...Object.keys(cloud)]);
-    const toPush=[];
+    const toPush=[],backup={};   // A2(ADR-014): 클라우드가 로컬을 덮기 전 원본 1회분 보존 — 잘못 병합 시 수동 복구용
     keys.forEach(key=>{
       if(noSync(key))return;
       const hasLocal=Object.prototype.hasOwnProperty.call(_cache,key);
       const lt=_meta[key]||0;
       const c=cloud[key];
       if(!c){if(hasLocal)toPush.push(key);return;}      // 클라우드에 없음 → 올림
-      if(!hasLocal||c.t>lt){_writeLocal(key,c.v);_meta[key]=c.t;pulled++;return;} // 클라우드가 최신 → 받음
+      if(!hasLocal||c.t>lt){if(hasLocal)backup[key]={v:_cache[key],t:lt};_writeLocal(key,c.v);_meta[key]=c.t;pulled++;return;} // 클라우드가 최신 → 받음
       toPush.push(key);                                  // 로컬이 최신/동률 → 올림
     });
+    if(Object.keys(backup).length)_writeLocal("ng:__syncBackup",{at:Date.now(),items:backup});
     _writeLocal(META_KEY,_meta);
-    for(const key of toPush){if(!_meta[key])_meta[key]=Date.now();try{await cloudPushKey(uid,key);pushed++;}catch(e){console.warn("[cloud push]",key,e);}}
+    toPush.forEach(key=>{if(!_meta[key])_meta[key]=Date.now();});
+    if(toPush.length)pushed=await cloudPushKeys(uid,toPush);
     if(pushed)_writeLocal(META_KEY,_meta);
   }catch(e){console.warn("[cloud] 로그인 동기화 실패 (Firestore 설정 확인)",e);ok=false;}
   _syncing=false;_emitSync({busy:false,ok,at:ok?Date.now():0});return{pulled,pushed,ok};
 }
 // 사용자가 직접 고르는 모델은 클로드만(니가교수=클로드). GPT/Gemini는 클로드 장애 시 서버가 자동으로 쓰는 백업.
 
-export { setUid, DB_NAME, DB_STORE, _idb, _cache, _meta, META_KEY, SYNC_EXCLUDE, noSync, _idbOpen, _idbAll, _idbPut, _idbDel, _idbPutAwait, initStorage, _writeLocal, LS, getStorageSize, STORAGE_CAP, estimateStorage, byteSize, formatSize, fmtClock, DECKS_KEY, SUBJS_KEY, dk, exportBackup, importBackup, SUBJ_COLORS, defaultSubjects, CFG, loadCFG, tr, detectLang, RICH_FMT, ocrModel, FIREBASE_CONFIG, _auth, _db, initFirebase, nickKey, _uid, _syncing, _pending, _syncCb, setSyncListener, _emitSync, withTimeout, encKey, _dataCol, cloudPushKey, cloudDeleteKey, cloudMaybePush, flushPending, cloudMaybeDelete, cloudSyncOnLogin };
+function clearLocalStudyData({keepKeys=true}={}){
+  const keys=Object.keys(_cache).filter(k=>k.startsWith("ng:")&&(!keepKeys||!["ng:key","ng:geminiKey","ng:model","ng:qmodel"].includes(k)));
+  keys.forEach(k=>LS.del(k));
+  return keys.length;
+}
+
+export { setUid, DB_NAME, DB_STORE, _idb, _cache, _meta, META_KEY, CLOUD_CONSENT_KEY, SYNC_EXCLUDE, noSync, SCHEMA_KEY, SCHEMA_VERSION, migrateSchema, _idbOpen, _idbAll, _idbPut, _idbDel, _idbPutAwait, initStorage, _writeLocal, hasCloudConsent, setCloudConsent, LS, getStorageSize, STORAGE_CAP, estimateStorage, byteSize, formatSize, fmtClock, DECKS_KEY, SUBJS_KEY, dk, exportBackup, importBackup, clearLocalStudyData, SUBJ_COLORS, defaultSubjects, CFG, loadCFG, tr, detectLang, RICH_FMT, ocrModel, FIREBASE_CONFIG, _auth, _db, initFirebase, nickKey, _uid, _syncing, _pending, _syncCb, setSyncListener, _emitSync, withTimeout, encKey, _dataCol, cloudPushKey, cloudPushKeys, cloudDeleteKey, cloudMaybePush, flushPending, cloudMaybeDelete, cloudSyncOnLogin };
