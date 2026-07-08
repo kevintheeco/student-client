@@ -1,5 +1,6 @@
 import { CFG, ocrModel } from "./platform.js";
 import { normErrType, normStage } from "./knowledgeGraph.js";
+import { redactAiPayload } from "./privacy.js";
 const MODELS=[
   {id:"claude-sonnet-4-6",label:"Sonnet 4.6 · 추천"},
   {id:"claude-haiku-4-5-20251001",label:"Haiku 4.5 · 가장 저렴"},
@@ -141,6 +142,8 @@ async function callProxyClaude(system,userContent,wantJson,opts={},signal){
   return parseJsonLoose(clean.slice(s,e>s?e+1:clean.length));
 }
 async function callAI(system,userContent,wantJson,opts={},signal){
+  const priv=redactAiPayload(system,userContent,opts);
+  system=priv.system;userContent=priv.userContent;opts=priv.opts||opts;
   if(opts.lang==="en")system=
     "WRITE YOUR ENTIRE RESPONSE IN ENGLISH. Even though the instructions below and the study material may be in Korean, every sentence you output — questions, feedback, explanations, hints, model answers, table cells, graph labels — MUST be in natural English. Translate ideas from Korean source material into English; never reply in Korean prose. The ONLY exception: if a strict output format below lists fixed Korean tokens for the fields QTYPE / GAP_TYPE / DEPTH / VERDICT, keep those exact tokens (recall/understand/apply; 개념누락/이해얕음/핵심비껴감/표현부족/갭없음; 암기 수준/이해 수준/설명가능 수준/응용가능 수준; correct/partial/incorrect). Everything else = English.\n\n"
     +system
@@ -158,21 +161,26 @@ async function callAI(system,userContent,wantJson,opts={},signal){
   for(let i=0;i<delays.length;i++){
     if(signal&&signal.aborted)throw new DOMException("aborted","AbortError");
     if(delays[i])await _sleep(delays[i]);
-    try{return await runPrimary();}
+    try{
+      const r=await runPrimary();
+      if(primaryGemini&&opts.onDelta&&!wantJson&&typeof r==="string"){try{opts.onDelta(r);}catch{}}
+      return r;
+    }
     catch(e){lastErr=e;if(!_aiRetriable(e))break;}
   }
   // 2) 그래도 실패 → 다른 경로로 자동 폴백 (순서대로 시도, 먼저 성공하는 걸 사용)
   if(!_aiRetriable(lastErr))throw lastErr;
   if(COMPANY_MODE)throw lastErr;   // 학원: 프록시가 이미 클로드→제미나이→o3 다 시도함(프록시 자체 불통이면 끝)
   const fallbacks=[];
+  const noStreamOpts={...opts,onDelta:null};
   if(primaryGemini){
     // Gemini 장애 → 클로드(개인키 있으면) → 공용 프록시
-    if(CFG.key)fallbacks.push(()=>callClaude(system,userContent,wantJson,{...opts,model:CFG.model},signal));
+    if(CFG.key)fallbacks.push(()=>callClaude(system,userContent,wantJson,{...noStreamOpts,model:CFG.model},signal));
   }else{
     // 클로드 장애 → 개인 Gemini 키(있으면) → 공용 프록시(Gemini→GPT)
-    if(CFG.geminiKey)fallbacks.push(()=>callGemini(system,userContent,wantJson,{...opts,model:_geminiFallbackModel(m)},signal));
+    if(CFG.geminiKey)fallbacks.push(()=>callGemini(system,userContent,wantJson,{...noStreamOpts,model:_geminiFallbackModel(m)},signal));
   }
-  if(PROXY_URL)fallbacks.push(()=>callProxy(system,userContent,wantJson,opts,signal));
+  if(PROXY_URL)fallbacks.push(()=>callProxy(system,userContent,wantJson,noStreamOpts,signal));
   for(const fb of fallbacks){
     if(signal&&signal.aborted)throw new DOMException("aborted","AbortError");
     try{

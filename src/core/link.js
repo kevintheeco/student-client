@@ -6,6 +6,7 @@
    절대 포함 안 됨: 손글씨 이미지, API 키, 자료 원문. */
 import { LS, _db, withTimeout } from "./platform.js";
 import { ATT_KEY, MAX_ATTEMPTS } from "./attempts.js";
+import { sanitizeSharedDoc } from "./privacy.js";
 
 const LINK_KEY="ng:aca:link";   // {code, on} — 학생 쪽 연동 설정
 const getLink=()=>LS.get(LINK_KEY)||null;
@@ -17,9 +18,9 @@ async function shareNow(uid,name){
   if(!link||!link.on||!link.code)throw new Error("연동이 꺼져 있어");
   if(!_db)throw new Error("클라우드(Firestore)를 쓸 수 없어");
   if(!uid)throw new Error("로그인이 필요해");
-  const attempts=(LS.get(ATT_KEY)||[]).slice(-600);   // 텍스트만 ~120KB (문서 1MB 한도 내)
-  const doc={code:String(link.code),uid,name:name||"",t:Date.now(),v:1,
-    attempts,agg:LS.get("ng:attagg")||{},misclex:LS.get("ng:misclex")||{}};
+  const attempts=(LS.get(ATT_KEY)||[]).slice(-600);   // 텍스트 신호만 공유. 원문 답안·이미지는 sanitizeSharedDoc에서 제거.
+  const doc=sanitizeSharedDoc({code:String(link.code).slice(0,80),uid,name:name||"",t:Date.now(),v:1,
+    attempts,agg:LS.get("ng:attagg")||{},misclex:LS.get("ng:misclex")||{}});
   await withTimeout(_db.collection("aca_shared").doc(link.code+"__"+uid).set(doc),15000,"학원 공유");
   return attempts.length;
 }
