@@ -1,5 +1,5 @@
 import { AddMaterial } from "./AddMaterial.jsx";
-import { CFG, DECKS_KEY, LS, SUBJS_KEY, SUBJ_COLORS, _auth, _db, cloudSyncOnLogin, defaultSubjects, dk, fmtClock, nickKey, setSyncListener, setUid, tr } from "../core/platform.js";
+import { CFG, DECKS_KEY, LS, SUBJS_KEY, SUBJ_COLORS, _auth, _db, cloudSyncOnLogin, defaultSubjects, dk, fmtClock, hasCloudConsent, nickKey, setSyncListener, setUid, tr } from "../core/platform.js";
 import { COMPANY_MODE, MODELS, uid } from "../core/ai.js";
 import { getLink, maybeShare, setLink, shareNow } from "../core/link.js";
 import { Exam } from "./Exam.jsx";
@@ -72,9 +72,11 @@ function App({edition="general"}){
       setUser(u);userRef.current=u;
       if(!u){setUid(null);setNick("");return;}
       setUid(u.uid);
-      if(_db){
+      if(_db&&hasCloudConsent()){
         try{await cloudSyncOnLogin(u.uid);}catch(e){console.warn("[sync]",e);}
         refresh();setSubjects(defaultSubjects());
+      }else if(!hasCloudConsent()){
+        setCloudStatus("off");
       }
       const stored=LS.get(nickKey(u.uid));
       const n=stored||u.displayName||(u.email?u.email.split("@")[0]:tr("학습자","Learner"));
@@ -171,8 +173,8 @@ function App({edition="general"}){
             <div style={{borderTop:"1px solid var(--line)",paddingTop:12}}>
               <div style={{fontSize:12.5,fontWeight:800,color:"var(--ink)",marginBottom:4}}>🏫 {tr("학원 연동","Academy link")}</div>
               <div style={{fontSize:11.5,color:"var(--sub)",lineHeight:1.6,marginBottom:8}}>
-                {tr("학원 코드를 넣고 켜면, 집에서 공부한 성장 기록(시도·오개념·학습 습관)이 학원 선생님의 분석 화면에 연결돼. 손글씨 이미지·API 키는 절대 안 올라가.",
-                   "Enter your academy code to share your growth signals (no handwriting images, no keys).")}
+                {tr("학원 코드를 넣고 켜면, 집에서 공부한 성장 기록(시도·오개념·학습 습관)이 학원 선생님의 분석 화면에 연결돼. 손글씨 이미지·API 키·원문 답안은 올리지 않고, 연락처 같은 식별자는 자동 마스킹돼.",
+                   "Enter your academy code to share growth signals. No handwriting images, keys, or raw answers; identifiers are redacted.")}
               </div>
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
                 <input className="field" placeholder={tr("학원 코드","Academy code")} value={acaLink.code}
@@ -212,7 +214,7 @@ function App({edition="general"}){
       {view==="tutor"&&activeDeck&&<Tutor deck={activeDeck} onExit={()=>{refresh();setView("home");}} onPractice={(cid,mode)=>openConcept(activeDeck.id,cid,mode)} onExam={(topic)=>{setExamTopic(topic);setView("exam");}}/>}
       {view==="notes"&&noteDeck&&<WeakNotes deck={noteDeck} onBack={()=>{refresh();setView("home");}} onStudy={studyWeak}/>}
 
-      <div className="footer">{tr("키와 자료는 이 기기에만 저장","Keys & data stay on this device only")} · {MODELS.find(m=>m.id===CFG.model)?.label.split(" ·")[0]||"Claude"}</div>
+      <div className="footer">{hasCloudConsent()?tr("동의한 계정에만 클라우드 동기화","Cloud sync only with consent"):tr("키와 자료는 이 기기에만 저장","Keys & data stay on this device only")} · {MODELS.find(m=>m.id===CFG.model)?.label.split(" ·")[0]||"Claude"}</div>
     </>
   );
 }

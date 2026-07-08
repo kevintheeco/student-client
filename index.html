@@ -5,6 +5,11 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>니가 교수</title>
+<script>
+  // 기본 진입(해시 없음) → 학원 팀 앱으로. #student·#general 등 명시 진입은 그대로.
+  // 번들(ai.js)이 import 시점에 해시를 읽어 COMPANY_MODE를 정하므로, 모듈 로드 전 여기서 먼저 설정해야 한다.
+  if (!location.hash || location.hash === "#") location.hash = "academy=team";
+</script>
 <link rel="icon" type="image/svg+xml" href="favicon.svg" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet" />

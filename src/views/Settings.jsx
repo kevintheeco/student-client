@@ -1,4 +1,4 @@
-import { CFG, LS, STORAGE_CAP, _idb, exportBackup, formatSize, getStorageSize, importBackup, tr } from "../core/platform.js";
+import { CFG, LS, STORAGE_CAP, _idb, clearLocalStudyData, exportBackup, formatSize, getStorageSize, hasCloudConsent, importBackup, setCloudConsent, tr } from "../core/platform.js";
 import { COMPANY_MODE, MODELS, QMODELS, callClaude, callGemini } from "../core/ai.js";
 import { Prof } from "../ui/common.jsx";
 import React from "react";
@@ -23,6 +23,8 @@ function Settings({onDone}){
   const barColor=pct>=90?"var(--rose)":pct>=70?"var(--gold)":"var(--mint)";
   const fileRef=useRef(null);
   const [backupMsg,setBackupMsg]=useState("");
+  const [cloudOn,setCloudOn]=useState(()=>hasCloudConsent());
+  const [privacyMsg,setPrivacyMsg]=useState("");
   function doExport(){try{exportBackup();setBackupMsg(tr("✓ 백업 파일을 내려받았어. 안전한 곳에 보관해줘!","✓ Backup file downloaded. Keep it somewhere safe!"));}catch(e){setBackupMsg(tr("내보내기 실패: ","Export failed: ")+e.message);}}
   async function doImport(e){
     const f=e.target.files&&e.target.files[0];if(!f)return;
@@ -30,6 +32,18 @@ function Settings({onDone}){
     try{const n=await importBackup(f);setBackupMsg(tr("✓ 복원 완료 ("+n+"개 항목). 새로고침할게…","✓ Restored ("+n+" items). Reloading…"));setTimeout(()=>location.reload(),900);}
     catch(err){setBackupMsg(tr("복원 실패: ","Restore failed: ")+err.message);}
     e.target.value="";
+  }
+  function toggleCloud(on){
+    setCloudConsent(on);setCloudOn(on);
+    setPrivacyMsg(on
+      ?tr("클라우드 동기화를 켰어. 다음 로그인/저장부터 자료와 학습 신호가 내 계정에 동기화돼.","Cloud sync is on. From the next sign-in/save, study data syncs to your account.")
+      :tr("클라우드 동기화를 껐어. 새 변경사항은 이 기기에만 저장돼.","Cloud sync is off. New changes stay on this device."));
+  }
+  function wipeLocal(){
+    if(!confirm(tr("이 기기의 자료·학습기록·닉네임·학원 연동 설정을 삭제할까?\nAPI 키/모델 설정은 남겨둘게. 되돌릴 수 없어.","Delete this device's materials, progress, nickname, and academy link?\nAPI keys/model settings stay. This cannot be undone.")))return;
+    const n=clearLocalStudyData({keepKeys:true});
+    setPrivacyMsg(tr("삭제 완료: ","Deleted ")+n+tr("개 항목. 새로고침할게…"," item(s). Reloading…"));
+    setTimeout(()=>location.reload(),900);
   }
   return(
     <div className="card panel">
@@ -41,6 +55,23 @@ function Settings({onDone}){
         </div>
         <div className="bar"><i style={{width:pct+"%",background:barColor}}/></div>
         {pct>=80&&<p className="err" style={{fontSize:12.5,marginTop:8}}>{tr("⚠️ 저장 공간이 부족해. 오래된 자료를 삭제해줘.","⚠️ Storage is almost full. Delete old materials.")}</p>}
+      </div>
+      <div style={{borderTop:"1px solid var(--line)",paddingTop:14}}>
+        <div style={{fontSize:12.5,color:"var(--sub)",marginBottom:8}}>🔐 {tr("개인정보·동기화","Privacy & sync")}</div>
+        <label style={{display:"flex",gap:10,alignItems:"flex-start",padding:"10px 12px",border:"1px solid var(--line)",borderRadius:12,background:cloudOn?"#F0FDF4":"#FBFAFF",marginBottom:8,cursor:"pointer"}}>
+          <input type="checkbox" checked={cloudOn} onChange={e=>toggleCloud(e.target.checked)} style={{marginTop:3,accentColor:"var(--pri)"}}/>
+          <span style={{fontSize:12.5,lineHeight:1.6}}>
+            <b>{tr("내 계정으로 클라우드 동기화 허용","Allow cloud sync to my account")}</b><br/>
+            {tr("끄면 자료와 학습기록은 이 기기 브라우저에만 남아. 켜도 API 키·학원 코드·닉네임·시험 손글씨 이미지는 동기화하지 않아.",
+               "When off, materials and progress stay in this browser. Even when on, API keys, academy code, nickname, and exam handwriting images are not synced.")}
+          </span>
+        </label>
+        <div className="warn" style={{fontSize:12.5,lineHeight:1.6}}>
+          {tr("AI 채점/요약을 위해 자료·답안 텍스트 일부가 선택한 AI 제공자 또는 학원 프록시로 전송될 수 있어. 이메일·전화번호·주민번호·API 키처럼 명백한 식별자는 자동 마스킹해.",
+             "For AI grading/summaries, parts of materials/answers may be sent to your AI provider or organization proxy. Emails, phone numbers, resident IDs, and API keys are redacted automatically.")}
+        </div>
+        <button className="btn gho sm" onClick={wipeLocal} style={{marginTop:8,color:"#B91C1C"}}>{tr("이 기기 학습 데이터 삭제","Delete local study data")}</button>
+        {privacyMsg&&<p style={{fontSize:12.5,marginTop:8,color:privacyMsg.includes("완료")||privacyMsg.includes("Deleted")?"var(--mint)":"var(--sub)"}}>{privacyMsg}</p>}
       </div>
       <div style={{borderTop:"1px solid var(--line)",paddingTop:14}}>
         <div style={{fontSize:12.5,color:"var(--sub)",marginBottom:8}}>{tr("💾 데이터 백업 ","💾 Data backup ")}<span style={{fontSize:11}}>{tr("(자료·학습기록을 파일로 저장 / 복원. API 키는 제외)","(save/restore data & progress to a file. API keys excluded)")}</span></div>
