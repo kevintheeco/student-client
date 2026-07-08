@@ -8,5 +8,9 @@ export default defineConfig({
   build: {
     outDir: "dist",
     sourcemap: true
+  },
+  test: {
+    environment: "node",
+    include: ["src/**/__tests__/*.test.{js,jsx}"]   // mathviz *.test.mjs는 기존 node --test로 실행
   }
 });
