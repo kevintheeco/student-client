@@ -2,6 +2,20 @@ import React, { useState, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 import { initStorage, loadCFG, initFirebase } from "./core/platform.js";
+import { PROXY_URL } from "./core/ai.js";
+
+// A5(ADR-014): 최소 에러 리포팅 — 처리 안 된 예외를 Worker /log로 전송. 메시지·스택 앞부분만(개인정보·학습데이터 없음).
+let _errN=0;
+function reportError(msg,stack){
+  if(!PROXY_URL||++_errN>5)return;   // 세션당 5건 캡 — 에러 루프로 인한 전송 폭주 방지
+  try{
+    fetch(PROXY_URL+"/log",{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({msg:String(msg||"").slice(0,500),stack:String(stack||"").slice(0,1500),url:location.hash.slice(0,100)})
+    }).catch(()=>{});
+  }catch{/* 리포팅 실패는 무시 */}
+}
+window.addEventListener("error",e=>reportError(e.message,e.error&&e.error.stack));
+window.addEventListener("unhandledrejection",e=>reportError((e.reason&&e.reason.message)||e.reason,e.reason&&e.reason.stack));
 import { App } from "./views/AppShell.jsx";
 import { AcademyApp } from "./views/Academy.jsx";
 import { VizDemo } from "./views/VizDemo.jsx";

@@ -15,29 +15,53 @@ export default {
 
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     if (request.method !== "POST") return json({ error: "POST only" }, 405, cors);
+    if (!bodySizeAllowed(request, env)) return json({ error: "request too large" }, 413, cors);
 
     // Origin 필수 — 없으면(curl/봇 등 비브라우저) 거부. 정상 트래픽은 전부 크로스 오리진이라 항상 Origin이 붙는다.
     const origin = request.headers.get("Origin");
     if (!originAllowed(origin, env)) return json({ error: "forbidden origin" }, 403, cors);
 
+    const path = new URL(request.url).pathname.replace(/\/$/, "");
+    const limited = await rateLimited(request, env, path || "/");
+    if (limited) return json({ error: "rate limited" }, 429, cors);
+
     let body;
     try { body = await request.json(); }
     catch { return json({ error: "bad json" }, 400, cors); }
 
-    const path = new URL(request.url).pathname.replace(/\/$/, "");
-    if (path === "/claude") return handleClaude(body, env, cors);   // 회사키(학원) 메인 경로
+    if (path === "/log") return handleLog(body, cors);              // 클라이언트 에러 리포트 (A5)
+
+    const invalid = validateAiBody(body);
+    if (invalid) return json({ error: invalid }, 400, cors);
+    if (path !== "/claude" && env.BACKUP_TOKEN && request.headers.get("x-yp-token") !== env.BACKUP_TOKEN) {
+      return json({ error: "missing backup token" }, 403, cors);
+    }
+    if (path === "/claude") return handleClaude(body, env, cors, request);   // 회사키(학원) 메인 경로
     return handleBackup(body, env, cors);                            // 백업 전용 경로(개인 BYO 폴백)
   },
 };
 
+// A5: 클라이언트 에러 수집 — 저장 없이 콘솔 로그만(wrangler tail·대시보드에서 확인). 사용자 늘어 시끄러워지면 Sentry.
+function handleLog(body, cors) {
+  const msg = String(body.msg || "").slice(0, 500);
+  if (!msg) return json({ error: "empty" }, 400, cors);
+  console.log("[client-error]", JSON.stringify({ msg, stack: String(body.stack || "").slice(0, 1500), url: String(body.url || "").slice(0, 100) }));
+  return json({ ok: true }, 200, cors);
+}
+
 const ALLOWED_CLAUDE_MODELS = new Set(["claude-sonnet-4-6", "claude-haiku-4-5-20251001"]);
 
 // 회사키(학원) 경로: 클로드(학원 워크스페이스 키) → 실패 시 Gemini → OpenAI. 스트리밍 passthrough.
-async function handleClaude(body, env, cors) {
+async function handleClaude(body, env, cors, request) {
   const { academyCode = "", system = "", messages = [], wantJson = false, maxTok, model, stream = false } = body;
+  if (!/^[A-Za-z0-9_-]{8,80}$/.test(academyCode)) return json({ error: "invalid academy code" }, 403, cors);
   const keys = parseJson(env.ACADEMY_KEYS) || {};
   const key = academyCode && keys[academyCode];
   if (!key) return json({ error: "unknown academy code" }, 403, cors);
+  // 학원 코드 단위 분당 상한(IP 제한과 별개) — 코드가 유출돼도 여러 IP에서의 남용이 학원 키 요금을 태우지 못하게
+  if (await rateLimited(request, env, "aca", academyCode, clampInt(env.RATE_LIMIT_ACADEMY_PER_MIN, 1, 3000, 240))) {
+    return json({ error: "academy rate limited" }, 429, cors);
+  }
   const tokens = clampInt(maxTok, 16, 8192, wantJson ? 2048 : 1024);
   // 모델은 서버에서 고정 — 학원 키로 비싼/임의 모델 호출 차단 (보안점검 2026-07-04 §2). 목록 밖 요청은 Sonnet으로 강제.
   const useModel = ALLOWED_CLAUDE_MODELS.has(model) ? model : "claude-sonnet-4-6";
@@ -161,6 +185,53 @@ async function oaRequest(env, model, oaMsgs, maxTok) {
 function originAllowed(origin, env) {
   const list = (env.ALLOWED_ORIGIN || "").split(",").map((s) => s.trim()).filter(Boolean);
   return list.includes(origin);
+}
+function bodySizeAllowed(request, env) {
+  const max = clampInt(env.MAX_BODY_BYTES, 1024, 25 * 1024 * 1024, 12 * 1024 * 1024);
+  const len = Number(request.headers.get("content-length") || 0);
+  return !len || len <= max;
+}
+// bucket+id 단위 분당 카운터. id 생략 시 요청 IP. limitOverride 생략 시 RATE_LIMIT_PER_MIN.
+async function rateLimited(request, env, bucket, id, limitOverride) {
+  const limit = limitOverride || clampInt(env.RATE_LIMIT_PER_MIN, 1, 300, 60);
+  if (!limit || typeof caches === "undefined") return false;
+  try {
+    const who = id || request.headers.get("CF-Connecting-IP") || "unknown";
+    const minute = Math.floor(Date.now() / 60000);
+    const key = new Request("https://rate.local/" + encodeURIComponent(bucket) + "/" + encodeURIComponent(who) + "/" + minute);
+    const hit = await caches.default.match(key);
+    const count = hit ? Number(await hit.text()) || 0 : 0;
+    if (count >= limit) return true;
+    await caches.default.put(key, new Response(String(count + 1), { headers: { "cache-control": "max-age=90" } }));
+  } catch (_) {}
+  return false;
+}
+function validateAiBody(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return "bad body";
+  if (body.system != null && typeof body.system !== "string") return "bad system";
+  if (body.system && body.system.length > 60000) return "system too large";
+  if (!Array.isArray(body.messages) || body.messages.length < 1 || body.messages.length > 20) return "bad messages";
+  let total = body.system ? body.system.length : 0;
+  for (const msg of body.messages) {
+    if (!msg || typeof msg !== "object") return "bad message";
+    if (!["user", "assistant"].includes(msg.role)) return "bad role";
+    const c = msg.content;
+    if (typeof c === "string") total += c.length;
+    else if (Array.isArray(c)) {
+      if (c.length > 12) return "too many content blocks";
+      for (const b of c) {
+        if (!b || typeof b !== "object") return "bad content block";
+        if (b.type === "text") total += String(b.text || "").length;
+        else if (b.type === "image" || b.type === "document") {
+          const data = b.source && b.source.data;
+          if (typeof data !== "string") return "bad file block";
+          total += data.length;
+        } else return "bad content type";
+      }
+    } else return "bad content";
+    if (total > 10 * 1024 * 1024) return "payload too large";
+  }
+  return "";
 }
 function corsHeaders(request, env) {
   const origin = request.headers.get("Origin");

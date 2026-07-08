@@ -8,6 +8,7 @@ ALLOWED_ORIGIN = "https://youareprofessor.github.io,https://kevintheeco.github.i
 # OpenAI 폴백 모델 (필요 시 변경)
 OPENAI_MODEL_SMART = "gpt-4o"
 OPENAI_MODEL_FAST = "gpt-4o-mini"
+# 레이트리밋(선택): RATE_LIMIT_PER_MIN(IP당, 기본 60) · RATE_LIMIT_ACADEMY_PER_MIN(학원코드당, 기본 240)
 
 # 키는 여기 두지 말 것! 아래 명령으로 시크릿 등록:
 #   wrangler secret put GEMINI_KEY
