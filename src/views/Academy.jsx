@@ -26,7 +26,7 @@ function AcademyApp(){
   const [openSubj,setOpenSubj]=useState(null);
   const [keyReady,setKeyReady]=useState(!!(CFG.key||CFG.geminiKey));
   const DIFFS=[["easy",tr("쉬움","Easy")],["medium",tr("보통","Medium")],["hard",tr("어려움","Hard")]];
-  const toPersonal=()=>{location.hash="";location.reload();};
+  const toPersonal=()=>{location.hash="general";location.reload();};   // 빈 해시는 index.html이 academy로 되돌리므로 명시 진입
   const saveStudent=(v)=>{setStudent(v);LS.set("ng:academy:student",v);};
 
   // ── 학생 명단: 한 기기 다중 학생 — 학생별로 시도 로그·숙련도·오개념 사전 분리 ──
@@ -89,7 +89,12 @@ function AcademyApp(){
     try{
       if(_auth&&!_auth.currentUser)await _auth.signInWithPopup(new window.firebase.auth.GoogleAuthProvider());
       setSharedList(await fetchShared(ACADEMY_CODE||"test"));
-    }catch(e){setLinkMsg("⚠️ "+(e.message||e));}
+    }catch(e){
+      const s=String((e&&(e.code||e.message))||e);
+      setLinkMsg("⚠️ "+(/permission|insufficient/i.test(s)
+        ?tr("이 구글 계정이 학원 관리자로 등록돼 있지 않아. 운영자에게 계정 등록을 요청해줘.","This Google account isn't registered as an academy admin. Ask the operator to register it.")
+        :(e.message||e)));
+    }
     setLinkBusy(false);
   }
   function doImport(sh){

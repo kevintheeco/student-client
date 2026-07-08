@@ -75,15 +75,34 @@ service cloud.firestore {
       allow read: if signedIn() && request.auth.token.email == 'soomin020114@gmail.com';
     }
 
+    // 학원 관리자 명단: aca_admins/{code} = {uids: [관리자 uid, ...]} — 운영자가 콘솔에서 관리.
+    // ⚠️ 이 규칙 게시 전에 학원 코드별 aca_admins 문서를 먼저 만들 것 — 없으면 그 학원의 연동 목록 조회가 거부됨.
+    match /aca_admins/{code} {
+      allow read, write: if signedIn() && request.auth.token.email == 'soomin020114@gmail.com';
+    }
+
     // 니가교수 학원 연동: 학생이 옵트인으로 공유한 학습 신호 (aca_shared/{code}__{uid})
     // 쓰기: 본인(uid가 문서 id 끝과 일치 + 데이터의 uid 필드도 본인)만.
-    // 읽기: 로그인 사용자 (v1 — 학원 코드는 사실상 접근 토큰. TODO: aca_admins/{code} 관리자 명단으로 조이기)
+    // 읽기: 본인 문서 or aca_admins/{code} 명단의 관리자만. 관리자 조회는 반드시 where('code','==',코드) 필터 필요.
     match /aca_shared/{docId} {
       allow write: if signedIn()
+        && request.resource.data.keys().hasOnly(['code', 'uid', 'name', 't', 'v', 'attempts', 'agg', 'misclex'])
         && request.resource.data.uid == request.auth.uid
+        && request.resource.data.code is string
+        && request.resource.data.code.size() >= 2
+        && request.resource.data.code.size() <= 80
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.t is number
+        && request.resource.data.v is number
+        && request.resource.data.attempts is list
+        && request.resource.data.attempts.size() <= 600
         && docId == request.resource.data.code + '__' + request.auth.uid;
       allow delete: if signedIn() && docId.matches('.*__' + request.auth.uid);
-      allow read: if signedIn();
+      allow read: if signedIn() && (
+        docId.matches('.*__' + request.auth.uid)
+        || get(/databases/$(database)/documents/aca_admins/$(resource.data.code)).data.uids.hasAny([request.auth.uid])
+      );
     }
 
     // 워크스페이스 컬렉션(ws_*) — 멤버만 읽기/쓰기
