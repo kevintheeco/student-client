@@ -6,16 +6,53 @@ const MathVizLazy=React.lazy(()=>import("./mathviz/MathViz.jsx").then(m=>({defau
 // 블록 파스는 공용 계약(scenescript)의 관대한 파서 사용 — 트레일링 콤마 등 사소한 위반 복구, 실패 시 null
 import { parseSceneBlock as _parseSceneBlock } from "./mathviz/scenescript.js";
 
-function sanitizeSvg(s){
-  return s
+const SVG_ALLOWED_TAGS=new Set(["svg","g","path","line","polyline","polygon","circle","ellipse","rect","text","tspan","defs","marker","lineargradient","radialgradient","stop"]);
+const SVG_ALLOWED_ATTRS=new Set([
+  "viewbox","width","height","x","y","x1","y1","x2","y2","cx","cy","r","rx","ry","d","points",
+  "fill","stroke","stroke-width","stroke-linecap","stroke-linejoin","stroke-dasharray","stroke-opacity","fill-opacity","opacity",
+  "font-size","font-weight","font-family","text-anchor","dominant-baseline","transform","marker-end","marker-start",
+  "offset","stop-color","stop-opacity","id","class","xmlns"
+]);
+function _basicSvgScrub(s){
+  return String(s||"")
     .replace(/<!--[\s\S]*?-->/g,"")
     // 유니코드 조합문자(벡터 화살표 b⃗의 U+20D7, 오버라인 등)는 SVG 폰트가 못 그려 ▯로 깨짐 — 제거
     .replace(/[\u0300-\u036F\u20D0-\u20FF]/g,"")
     .replace(/<script[\s\S]*?<\/script>/gi,"")
+    .replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi,"")
+    .replace(/<(?:iframe|object|embed|audio|video|canvas|image)\b[\s\S]*?\/?>/gi,"")
     .replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi,"")
     .replace(/javascript\s*:/gi,"")
+    .replace(/vbscript\s*:/gi,"")
     .replace(/data\s*:\s*text\/html/gi,"")
     .replace(/<a\s[^>]*href\s*=[^>]*>/gi,(m)=>m.replace(/href\s*=\s*["'][^"']*["']/gi,""));
+}
+function sanitizeSvg(s){
+  const scrubbed=_basicSvgScrub(s);
+  if(typeof DOMParser==="undefined")return scrubbed;
+  try{
+    const doc=new DOMParser().parseFromString(scrubbed,"image/svg+xml");
+    const root=doc.documentElement;
+    if(!root||root.nodeName.toLowerCase()==="parsererror"||root.nodeName.toLowerCase()!=="svg")return "";
+    const walk=(node)=>{
+      [...node.children].forEach(walk);
+      const tag=node.nodeName.toLowerCase();
+      if(!SVG_ALLOWED_TAGS.has(tag)){node.remove();return;}
+      [...node.attributes].forEach(attr=>{
+        const name=attr.name.toLowerCase();
+        const value=attr.value||"";
+        if(!SVG_ALLOWED_ATTRS.has(name)||name.includes(":")||/url\s*\(|javascript:|vbscript:|data:/i.test(value)){
+          node.removeAttribute(attr.name);
+        }
+      });
+      node.removeAttribute("style");
+    };
+    walk(root);
+    root.setAttribute("xmlns","http://www.w3.org/2000/svg");
+    return root.outerHTML;
+  }catch{
+    return scrubbed;
+  }
 }
 
 /* ── 수식+그래프 렌더러 ──
@@ -43,7 +80,11 @@ function _balanceMath(s){
     }
     if(s[i]==="$"){                                          // 인라인 $..$
       const c=s.indexOf("$",i+1),nl=s.indexOf("\n",i+1);
-      if(c>=0&&(nl<0||c<nl)){out+=s.slice(i,c+1);i=c+1;}     // 같은 줄에서 정상 닫힘
+      const closed=c>=0&&(nl<0||c<nl);
+      // 이스케이프 안 된 통화($500 등): $+숫자인데 ①같은 줄에 닫는 $가 없거나 ②닫는 후보가 $$의 일부거나
+      // ③닫는 $ 바로 뒤도 숫자(금액 나열)면 통화로 판정 → 리터럴 보호. $5$·$5x+3=0$ 같은 진짜 수식은 통과.
+      if(/[0-9]/.test(s[i+1]||"")&&(!closed||s[c+1]==="$"||/[0-9]/.test(s[c+1]||""))){out+="\\$";i++;continue;}
+      if(closed){out+=s.slice(i,c+1);i=c+1;}                 // 같은 줄에서 정상 닫힘
       else{const end=nl<0?n:nl;out+="$"+s.slice(i+1,end).replace(/\s+$/,"")+"$";i=end;}  // 안 닫힘 → 줄 끝에서 닫아줌
       continue;
     }
