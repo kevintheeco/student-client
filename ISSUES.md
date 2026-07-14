@@ -1,3 +1,10 @@
+> **⚠️ 이 파일은 2026-07-14부로 동결되었습니다 — 과거 기록 아카이브로만 유지합니다.**
+> 새 이슈·요구사항·버그는 [GitHub Issues](https://github.com/YouareProfessor/student-client/issues)에 등록합니다 (템플릿: 기능 요청 폼 / 버그 신고 폼 / 기능 명세).
+> 동결 시점의 미결 항목은 모두 이전 완료:
+> - #0 통화 `$` 미이스케이프 수식 깨짐 → [GitHub #4](https://github.com/YouareProfessor/student-client/issues/4)
+> - #8 개념 편집 불가 → [GitHub #5](https://github.com/YouareProfessor/student-client/issues/5)
+> - #9 세션 종료 화면 → [GitHub #6](https://github.com/YouareProfessor/student-client/issues/6)
+
 # 니가교수 앱 점검 리포트 (2026-06-16)
 
 ## ✅ 처리 현황 (2026-06-16 업데이트)
