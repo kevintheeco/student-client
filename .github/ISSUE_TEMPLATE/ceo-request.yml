@@ -1,0 +1,52 @@
+name: 🙋 기능 요청 (요구사항 전달)
+description: 새 기능·개선 아이디어를 개발팀에 전달합니다. 빈칸만 채우면 됩니다 — 비개발자용.
+title: "[요청] "
+labels: ["enhancement", "요구사항"]
+assignees: ["sonsalmon"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        다섯 칸만 채워주세요. **"완료됐다고 판단하는 기준"이 가장 중요합니다** — 이게 있어야 만든 것과 상상한 것이 달라지는 사고를 막을 수 있어요.
+  - type: dropdown
+    id: user
+    attributes:
+      label: 어떤 사용자를 위한 기능인가요?
+      options:
+        - 학생
+        - 학원 관리자
+        - 학부모
+        - 내부 운영(우리 팀)
+        - 기타 (아래 설명에 적어주세요)
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: 어떤 상황에서 무엇을 하고 싶나요?
+      placeholder: "예: 학원 관리자가 월요일 아침에 지난주 학생들 학습 현황을 학부모에게 보내고 싶다"
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: 왜 지금 필요한가요?
+      description: 배경과 기대 효과. 이유를 알면 개발팀이 더 빠르고 싼 대안을 제시할 수 있습니다.
+      placeholder: "예: 3월 계약한 학원 2곳이 공통으로 요청. 재계약 조건으로 언급됨"
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: 완료됐다고 판단하는 기준
+      description: '"이게 되면 완료"를 2~3개, 체크박스로 적어주세요.'
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: refs
+    attributes:
+      label: 참고 자료 (선택)
+      description: 스케치 사진, 경쟁 서비스 링크, 직접 만들어본 데모(바이브코딩 브랜치 이름) 등. 데모 코드는 그대로 반영되지 않고 요구사항 참고자료로 쓰입니다.

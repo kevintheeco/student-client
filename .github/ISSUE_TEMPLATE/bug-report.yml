@@ -1,0 +1,35 @@
+name: 🐛 버그 신고
+description: 서비스가 이상하게 동작할 때 신고합니다.
+title: "[버그] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: where-what
+    attributes:
+      label: 어디서 무엇이 잘못됐나요?
+      placeholder: "예: 공부 화면에서 손글씨 답안을 제출하면 아무 반응이 없다"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 다시 일으키는 방법
+      description: 순서대로 적어주세요. 매번 생기는지, 가끔 생기는지도.
+      placeholder: |
+        1. 덱을 열고
+        2. 손글씨로 답을 쓰고
+        3. 제출을 누르면 → 멈춤
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 원래 어떻게 되어야 하나요?
+      placeholder: "예: 채점 진행률 바가 뜨고 결과 화면으로 넘어가야 한다"
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: 환경·스크린샷 (선택)
+      description: 기기(갤럭시탭/아이패드/PC), 브라우저, 화면 캡처를 붙여주세요.
