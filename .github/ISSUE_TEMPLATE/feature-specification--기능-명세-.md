@@ -1,7 +1,7 @@
 ---
 name: Feature Specification (기능 명세)
 about: 구현할 기능의 요구사항을 작성합니다.
-title: "[FEAT]"
+title: "[FEAT] "
 labels: enhancement
 assignees: Jimin0430
 
@@ -10,7 +10,25 @@ assignees: Jimin0430
 ## Background
 
 <!--
-이 기능이 필요한 배경과 목적을 작성합니다.
+왜  필요한 기능인지, 해결하려는 문제 배경과 목적을 작성합니다.
+-->
+
+---
+
+
+## User Scenario
+
+**Actor**
+
+<!--
+이 기능을 사용하는 사람
+예) 학생 / 학원 관리자 / 학부모
+-->
+
+**Scenario**
+
+<!--
+어떤 상황에서 무엇을 하고 싶은지 작성합니다.
 -->
 
 ---
@@ -52,7 +70,7 @@ assignees: Jimin0430
 ## References
 
 <!--
-관련 문서(Figma, API 명세, 관련 이슈 등)를 첨부합니다.
+관련 문서(바이브 코딩 결과물, Figma, API 명세, 관련 이슈 등)를 첨부합니다.
 -->
 
 -
