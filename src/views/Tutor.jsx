@@ -145,6 +145,53 @@ OPTIONS: 보기1 | 보기2 | 보기3
     sysRef.current=tutorSystem(c);
     turn({role:"user",content:`'${c.name}' 개념 과외 시작해 주세요. 1단계 큰 질문부터 한 단계씩.`},[]);
   }
+
+  // ── 문제 과외: 학생이 가져온 실제 시험 문제(기출 덱)를 선생님처럼 해부→개념→유도→정리 ──
+  function problemSystem(eq,label){
+    const grade=deck.k12?(deck.k12us?"미국 중·고등(Common Core·SAT·AP)":"대한민국 중·고등(내신·수능)"):"";
+    return `너는 학생의 1:1 ${grade} 수학 과외 교수다(학생은 너를 '교수님'이라 부른다. 답변에서 너 자신을 '선생님'이라 쓰지 말고 '교수님' 또는 '나'라고 해라). 학생이 실제 시험 문제를 가져왔다. 목표는 답을 불러주는 게 아니라, **이 문제를 풀기 위한 이해와 구조를 잡아줘서 학생이 스스로 풀게 만드는 것**이다.
+
+[학생이 가져온 문제 — ${label}]
+${(eq.question||"").slice(0,2000)}
+${eq.answer?`
+[자료에 있던 공식 정답·해설 — 절대 먼저 노출 금지. 학생 풀이 확인·유도의 기준으로만 써라]
+${(""+eq.answer).slice(0,1200)}`:""}
+
+# 진행 방식 (문제 과외 4단계) — 한 답변에 한 단계씩, 학생이 따라왔는지 확인하고 넘어가라
+1단계 — 문제 해부: 문제를 짧게 다시 보여주고, "주어진 조건"과 "구하라는 것"을 학생이 직접 나눠 말하게 하라.
+2단계 — 개념 지도: 이 문제를 풀기 위해 필요한 개념·공식이 무엇인지 짚어라. 학생이 그걸 아는지 가볍게 확인하고(OPTIONS 활용), 모르는 조각만 그 자리에서 짧게 가르쳐라.
+3단계 — 풀이 유도: 풀이를 단계로 쪼개고, 각 단계를 학생이 직접 손으로 쓰게 하라. **다음 단계를 절대 대신 풀어주지 마라** — 막히면 그 단계로 향하는 힌트 하나만. 학생이 쓴 풀이는 있는 그대로 읽고 정직하게 교정하라(틀린 걸 맞다고 하지 마라 — 가장 큰 잘못이다).
+4단계 — 유형 루틴: 다 풀면 "이 유형을 시험장에서 만나면 이렇게 판단한다"를 한 줄로 정리하고, 처음부터 끝까지 혼자 다시 풀어보게 하라.
+
+# 답변 끝 제어 신호 (매우 중요)
+매 답변 맨 마지막 줄에 다음 중 하나를 정확히 붙여라(학생에게 안 보이니 부가설명 없이 형식 그대로):
+· CONTROL: ASK    — 학생이 조건 구분·풀이 단계를 직접 쓰거나 말하게 시켰을 때 (문제 과외의 기본)
+· CONTROL: COPY   — 새로 가르친 공식을 "따라 써봐"라고 시켰을 때
+· CONTROL: RECALL — 4단계에서 "안 보고 처음부터 다시 풀어봐"라고 시켰을 때
+· CONTROL: NEXT   — 시킬 게 없는 짧은 전환일 때만(아껴 써라)
+· CONTROL: DONE   — 4단계까지 끝났고 학생이 혼자 다시 풀어내는 데 성공했을 때
+
+# 탭해서 고르기 (OPTIONS)
+답이 몇 갈래로 정해진 질문(양자택일·이해 점검·예/아니오)은 CONTROL 줄 바로 위에 'OPTIONS: 보기1 | 보기2 | 보기3' 형식으로 보기를 붙여라(구분은 양옆 공백의 ' | '만, 보기 안 수식의 세로막대는 \\lvert \\rvert·\\mid로). 직접 손으로 써야 하는 과제(풀이 ASK·COPY·RECALL)에는 붙이지 마라.
+
+# 피드백 규칙 (절대)
+학생이 과제 답을 낸 직후의 답변은 반드시 그 답에 대한 구체적 피드백부터 시작하라 — 무엇이 맞았고 어디서 틀렸고 어떤 기호·단계를 빠뜨렸는지. 손글씨 이미지는 있는 그대로 판독하고, 안 읽히면 추측하지 말고 다시 써달라고 하라. 피드백 없이 새 과제로 점프 금지.
+
+# 수식·표기
+수식은 LaTeX(인라인 $...$, 여러 줄·행렬은 $$...$$)로, 여는 기호는 반드시 닫아라. 함수 그래프·도형·벡터가 도움되면 \`\`\`mathviz 장면 스크립트(JSON)로 그려라 — 예: \`\`\`mathviz
+{"version":1,"theme":"algebra","view":{"x":[-4,4],"y":[-3,3]},"steps":[{"type":"axes","ticks":1},{"type":"plot","id":"f","expr":"x^2-4*x+3","domain":[-1,5],"color":"accent"},{"type":"intercepts","of":"f"}]}
+\`\`\` (expr는 사칙·^·sin·cos·tan·exp·log·ln·sqrt·abs·pi·e·x만, 교점·극점은 intercepts/intersections/extrema 스텝으로 자동 계산.)
+
+말투는 친절하되 과한 칭찬 없이 정확하게. 지금부터 1단계 문제 해부로 시작하라.`;
+  }
+  function startProblem(eq,i){
+    abortRef.current?.abort();
+    const label=tr("문제 ","Problem ")+(i+1);
+    setConcept({id:"examq_"+i,name:label+(eq.concept?" · "+eq.concept:"")});
+    setTurns([]);setControl(null);setErr("");setInput("");setPenMode(true);
+    sysRef.current=problemSystem(eq,label);
+    turn({role:"user",content:"이 문제 과외 시작해 주세요. 1단계 문제 해부부터."},[]);
+  }
   // 책 시험: 선택한 대단원들의 src를 모아 문항 수 지정해 출제(Exam topic으로)
   function startBookExam(){
     if(!onExam)return;
@@ -154,7 +201,7 @@ OPTIONS: 보기1 | 보기2 | 보기3
     const src=chosen.map(c=>"["+(c.u1||"")+(c.u2?" > "+c.u2:"")+" / "+c.name+"]\n"+(c.src||c.name)).join("\n\n");
     const unitNames=[...new Set(chosen.map(c=>c.u1).filter(Boolean))];
     const n=Math.max(1,Math.min(40,Number(examN)||10));
-    onExam({id:deck.id+"_be"+Date.now().toString(36),label:deck.name+" "+tr("시험","Exam"),src,count:n,unitNames});
+    onExam({id:deck.id+"_be"+Date.now().toString(36),label:deck.name+" "+tr("시험","Exam"),src,count:n,unitNames,...(deck.k12?{k12:true}:{}),...(deck.k12us?{k12us:true}:{})});
   }
   // 학생이 '과제(ASK/COPY/RECALL)' 답을 막 냈을 때만, 모델에게 '피드백 먼저, 새 과제 점프 금지'를 숨겨서 상기시킨다(채팅엔 안 보임).
   function fbHint(){
@@ -223,6 +270,24 @@ OPTIONS: 보기1 | 보기2 | 보기3
       ):(
         <button className="btn gho" onClick={()=>setExamOpen(true)} style={{marginBottom:12,borderColor:"var(--pri)",color:"var(--pri-d)",fontWeight:700}}>📝 {tr("시험 보기 — 단원 골라 출제","Take a test — pick units")}</button>
       ))}
+      {deck.isExam&&Array.isArray(deck.examQuestions)&&deck.examQuestions.length>0&&(
+        <div style={{border:"1.5px solid var(--pri)",borderRadius:14,padding:"13px 14px",marginBottom:12,background:"var(--pri-s)"}}>
+          <div style={{fontWeight:800,color:"var(--pri-d)",fontSize:14,marginBottom:4}}>🧑‍🏫 {tr("문제 과외 — 가져온 문제로 바로 배우기","Problem tutoring — learn from your own problems")}</div>
+          <div style={{fontSize:12,color:"var(--sub)",marginBottom:9}}>{tr("문제를 고르면 교수님이 이 문제를 풀기 위한 조건·개념·구조부터 잡아주고, 한 단계씩 직접 풀게 이끌어줘.","Pick a problem — the prof breaks down its conditions, concepts and structure, then guides you step by step.")}</div>
+          <div style={{display:"flex",flexDirection:"column",gap:7,maxHeight:280,overflowY:"auto"}}>
+            {deck.examQuestions.map((eq,i)=>(
+              <button key={i} className="card" onClick={()=>startProblem(eq,i)}
+                style={{textAlign:"left",padding:"11px 13px",cursor:"pointer",display:"flex",gap:10,alignItems:"center",border:"1.5px solid var(--line)",background:"#fff"}}>
+                <span style={{fontSize:14,fontWeight:800,color:"var(--pri-d)",flexShrink:0}}>{i+1}</span>
+                <span style={{flex:1,minWidth:0,fontSize:13,color:"var(--ink)",lineHeight:1.5,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>
+                  <MathText text={(eq.question||"").slice(0,140)} tag="span"/>
+                </span>
+                {eq.concept&&<span style={{fontSize:10.5,color:"var(--sub)",flexShrink:0,maxWidth:90,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{eq.concept}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <div style={{display:"flex",flexDirection:"column",gap:9}}>
         {concepts.length===0&&<div className="empty">{tr("이 자료엔 아직 개념이 없어.","No concepts in this material yet.")}</div>}
         {(()=>{
