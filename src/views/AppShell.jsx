@@ -1,5 +1,5 @@
 import { AddMaterial } from "./AddMaterial.jsx";
-import { CFG, DECKS_KEY, LS, SUBJS_KEY, SUBJ_COLORS, _auth, _db, cloudSyncOnLogin, defaultSubjects, dk, fmtClock, nickKey, setSyncListener, setUid, tr } from "../core/platform.js";
+import { CFG, DECKS_KEY, LS, SUBJS_KEY, SUBJ_COLORS, _auth, _db, cloudSyncOnLogin, defaultSubjects, dk, fmtClock, inAppBrowser, nickKey, setSyncListener, setUid, tr } from "../core/platform.js";
 import { COMPANY_MODE, MODELS, uid } from "../core/ai.js";
 import { getLink, maybeShare, setLink, shareNow } from "../core/link.js";
 import { Exam } from "./Exam.jsx";
@@ -87,6 +87,11 @@ function App({edition="general"}){
 
   async function login(){
     if(!_auth){alert(tr("로그인 기능을 쓸 수 없어. 인터넷 연결이나 설정을 확인해줘.","Sign-in isn't available. Check your connection or settings."));return;}
+    if(inAppBrowser()){
+      alert(tr("카카오톡·슬랙 같은 '앱 안 브라우저'에서는 구글 정책상 로그인이 차단돼(액세스 차단 오류).\n\n화면 오른쪽 위 메뉴(⋮ 또는 공유 버튼)에서 'Chrome으로 열기' 또는 '다른 브라우저로 열기'를 누른 뒤 다시 로그인해줘.",
+        "Google blocks sign-in inside in-app browsers (KakaoTalk, Slack…). Open this page in Chrome/Safari via the ⋮ menu, then sign in again."));
+      return;
+    }
     try{
       await _auth.signInWithPopup(new window.firebase.auth.GoogleAuthProvider());
     }catch(e){

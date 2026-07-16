@@ -194,6 +194,12 @@ const RICH_FMT="\n\n[출력 형식 규칙 — 가독성 최우선, 반드시 지
 "4-1) [비함수 개념 도식은 <svg>] 함수식이 아닌 정성적 도식(경제 모형, 개념도, 구조도)은 기존처럼 <svg>를 코드블록 없이 직접, 아끼지 말고 그려(필요하면 여러 개): viewBox 사용, width≤520 height≤380. 축마다 라벨(예: 가로 수량 Q·실질소득 Y, 세로 가격 P·실질이자율 r), 곡선마다 라벨, 교점(균형점)은 점+좌표/값 표시, 곡선 이동·변화는 '이동 전(점선·회색) → 이동 후(실선)' + 방향 화살표로. 색은 반드시 앱 팔레트만: 축선·글자=#221C39, 곡선·강조=#6C5CE7(주색)·#27C2A0·#FFC24B, 배경 #FFFDF8 — 원색 red/green/blue 금지, 빨강·장미 계열(#FF6B8A 등)도 금지(오답 표시와 혼동). 글자 11~13px, <text>에 유니코드 조합문자(b⃗의 ⃗ 등) 절대 금지(폰트가 못 그려 깨짐 — 벡터 표기는 굵은 이탤릭 글자로만).\n"+
 "4-2) 특히 경제학: 그래프로 표현되는 개념은 글로만 때우지 말고 반드시 그려라(수요·공급, 한계비용·평균비용 곡선, IS곡선, LM·MP곡선, AD–AS, 필립스곡선, IS–MP에서 AD 도출 등). 여러 곡선이 얽힌 모형은 서로 '유기적으로 연결'되게 그려라 — 같은 축·같은 균형점을 정렬하거나, 패널을 세로로 쌓아 한 패널의 균형값(예: r* 또는 Y*)이 다음 패널의 입력이 되도록 점선 보조선으로 이어서, 인과 흐름이 한눈에 보이게.\n"+
 "4-3) SVG는 간결하게 그려라(불필요한 점·격자·장식 최소화) — 그래야 안 잘린다. 모든 <svg>는 반드시 </svg>로, 모든 ```mathviz 블록은 반드시 ```로 닫아라(안 닫히면 그래프가 안 보임).";
+// 인앱 브라우저(카톡·인스타·슬랙 등 내장 웹뷰) 감지 — 구글이 웹뷰 OAuth를 차단(403 disallowed_useragent)해
+// "액세스 차단됨: 구글 정책 미준수" 에러가 뜨므로, 로그인 시도 전에 안내하기 위한 판별
+function inAppBrowser(){
+  const ua=navigator.userAgent||"";
+  return /KAKAOTALK|Instagram|FBAN|FBAV|FB_IAB|Line\/|NAVER\(inapp|DaumApps|Slack|; wv\)/i.test(ua);
+}
 // 이미지·PDF 인식용 모델: 가진 키 기준 (Claude 우선, 없으면 Gemini) — Gemini-only 유저도 동작
 function ocrModel(){
   if(CFG.key)return"claude-sonnet-4-6";
@@ -293,4 +299,4 @@ async function cloudSyncOnLogin(uid){
 }
 // 사용자가 직접 고르는 모델은 클로드만(니가교수=클로드). GPT/Gemini는 클로드 장애 시 서버가 자동으로 쓰는 백업.
 
-export { setUid, DB_NAME, DB_STORE, _idb, _cache, _meta, META_KEY, SYNC_EXCLUDE, noSync, _idbOpen, _idbAll, _idbPut, _idbDel, _idbPutAwait, initStorage, _writeLocal, LS, getStorageSize, STORAGE_CAP, estimateStorage, byteSize, formatSize, fmtClock, DECKS_KEY, SUBJS_KEY, dk, exportBackup, importBackup, SUBJ_COLORS, defaultSubjects, CFG, loadCFG, tr, detectLang, RICH_FMT, ocrModel, FIREBASE_CONFIG, _auth, _db, initFirebase, nickKey, _uid, _syncing, _pending, _syncCb, setSyncListener, _emitSync, withTimeout, encKey, _dataCol, cloudPushKey, cloudDeleteKey, cloudMaybePush, flushPending, cloudMaybeDelete, cloudSyncOnLogin };
+export { setUid, DB_NAME, DB_STORE, _idb, _cache, _meta, META_KEY, SYNC_EXCLUDE, noSync, _idbOpen, _idbAll, _idbPut, _idbDel, _idbPutAwait, initStorage, _writeLocal, LS, getStorageSize, STORAGE_CAP, estimateStorage, byteSize, formatSize, fmtClock, DECKS_KEY, SUBJS_KEY, dk, exportBackup, importBackup, SUBJ_COLORS, defaultSubjects, CFG, loadCFG, tr, detectLang, RICH_FMT, inAppBrowser, ocrModel, FIREBASE_CONFIG, _auth, _db, initFirebase, nickKey, _uid, _syncing, _pending, _syncCb, setSyncListener, _emitSync, withTimeout, encKey, _dataCol, cloudPushKey, cloudDeleteKey, cloudMaybePush, flushPending, cloudMaybeDelete, cloudSyncOnLogin };

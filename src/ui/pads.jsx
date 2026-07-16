@@ -444,7 +444,7 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
       </div>
       <div style={{position:"relative",width:"100%"}}>
         <canvas ref={canvasRef} className={"pad"+(tool==="eraser"?" eraser":"")}
-          style={{touchAction:penOnly?"pan-y":"none",...(disabled?{opacity:.55,pointerEvents:"none"}:{})}}
+          style={{touchAction:"none",...(disabled?{opacity:.55,pointerEvents:"none"}:{})}}
           onPointerDown={down} onPointerMove={move} onPointerUp={up}
           onPointerLeave={up} onPointerCancel={cancel}
           onContextMenu={e=>{e.preventDefault();const p=pt(e);eraseAt(p.x,p.y);}}/>
