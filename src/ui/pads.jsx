@@ -18,6 +18,20 @@ function eraseNow(e,lastSeenRef,toolIsEraser){
   return false;
 }
 
+/* ── 팜 리젝션: 펜이 쓰기 칸 근처에 있는 동안(호버·필기·직후 0.9초) 문서 전체의
+   터치 스크롤을 차단한다. 캔버스 자체는 touch-action:none으로 잠갔지만, 받치는
+   손바닥이 캔버스 '바깥'에 닿으면 페이지가 스크롤돼 화면이 흔들리던 문제의 근본 봉쇄. ── */
+const _penNearAt={t:0};
+const penSeen=()=>{_penNearAt.t=Date.now();};
+function usePalmBlock(drawingRef){
+  useEffect(()=>{
+    const block=(e)=>{if(drawingRef.current||Date.now()-_penNearAt.t<900)e.preventDefault();};
+    document.addEventListener("touchstart",block,{passive:false});
+    document.addEventListener("touchmove",block,{passive:false});
+    return()=>{document.removeEventListener("touchstart",block);document.removeEventListener("touchmove",block);};
+  },[]);
+}
+
 /* ── 해설 오버레이 캔버스 (투명, 형광펜·초록펜이 텍스트 위에 직접 표시) ── */
 const AnnotPad=React.forwardRef(function AnnotPad({disabled,tool},fwdRef){
   const cvs=useRef(null);
@@ -25,6 +39,7 @@ const AnnotPad=React.forwardRef(function AnnotPad({disabled,tool},fwdRef){
   const drawing=useRef(false);
   const eraseGesture=useRef(false);
   const lastBtn=useRef(0);
+  usePalmBlock(drawing);
   React.useImperativeHandle(fwdRef,()=>({
     getImageBase64:()=>cvs.current?.toDataURL("image/png").split(",")[1]||null,
     hasStrokes:()=>strokes.current.length>0,
@@ -80,6 +95,7 @@ const AnnotPad=React.forwardRef(function AnnotPad({disabled,tool},fwdRef){
     strokes.current.push({pts:[p],col:tool==="hl"?"rgb(255,230,0)":"#27AE60",sz:tool==="hl"?20:2.5});
   }
   function down(e){
+    if(e.pointerType==="pen")penSeen();
     if(disabled||e.pointerType!=="pen")return;
     e.preventDefault();
     try{e.target.setPointerCapture(e.pointerId);}catch(_){}
@@ -89,6 +105,7 @@ const AnnotPad=React.forwardRef(function AnnotPad({disabled,tool},fwdRef){
     startStroke(p);
   }
   function move(e){
+    if(e.pointerType==="pen")penSeen();
     if(disabled||e.pointerType!=="pen")return;
     const p=pt(e);
     if(eraseNow(e,lastBtn,tool==="eraser")){
@@ -122,6 +139,7 @@ const AnnotPad=React.forwardRef(function AnnotPad({disabled,tool},fwdRef){
 const QuestionPad=React.forwardRef(function QuestionPad({disabled,tool="pen",onInk},fwdRef){
   const cvs=useRef(null);const strokes=useRef([]);const drawing=useRef(false);
   const eraseGesture=useRef(false);const lastBtn=useRef(0);
+  usePalmBlock(drawing);
   const notifyInk=()=>onInk&&onInk(strokes.current.length>0);
   React.useImperativeHandle(fwdRef,()=>({
     getImageBase64:()=>cvs.current?.toDataURL("image/png").split(",")[1]||null,
@@ -169,6 +187,7 @@ const QuestionPad=React.forwardRef(function QuestionPad({disabled,tool="pen",onI
     strokes.current.push({pts:[p]});
   }
   function down(e){
+    if(e.pointerType==="pen")penSeen();
     if(disabled)return;
     if(e.pointerType!=="pen")return;
     e.preventDefault();
@@ -179,6 +198,7 @@ const QuestionPad=React.forwardRef(function QuestionPad({disabled,tool="pen",onI
     startStroke(p);
   }
   function move(e){
+    if(e.pointerType==="pen")penSeen();
     if(e.pointerType!=="pen"){drawing.current=false;return;}
     if(disabled)return;
     const p=pt(e);
@@ -220,6 +240,7 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
   const drawing=useRef(false);
   const eraseGesture=useRef(false);   // 지금 버튼-지우개 중인지
   const lastBtn=useRef(0);            // 버튼 신호 마지막으로 본 시각(디바운스용)
+  usePalmBlock(drawing);
   const [tool,setTool]=useState("pen");
   const [color,setColor]=useState(PEN_COLORS[0]);
   const [size,setSize]=useState(1);
@@ -322,6 +343,7 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
     strokes.current.push({pts:[p],col:color,sz:size});
   }
   function down(e){
+    if(e.pointerType==="pen")penSeen();
     if(disabled)return;
     if(penOnly&&e.pointerType!=="pen")return;
     e.preventDefault();
@@ -337,6 +359,7 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
     startStroke(p);
   }
   function move(e){
+    if(e.pointerType==="pen")penSeen();
     if(disabled)return;
     if(penOnly&&e.pointerType!=="pen"){drawing.current=false;return;}
     const p=pt(e);
@@ -442,7 +465,7 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
         {onTypeMode&&<button className="btn gho xs" onClick={onTypeMode} disabled={disabled}
           title={tr("타이핑으로 답하기 — 큰 답안지","Type your answer — big sheet")}>⌨️ {tr("타이핑","Type")}</button>}
       </div>
-      <div style={{position:"relative",width:"100%"}}>
+      <div style={{position:"relative",width:"100%",touchAction:"none"}}>
         <canvas ref={canvasRef} className={"pad"+(tool==="eraser"?" eraser":"")}
           style={{touchAction:"none",...(disabled?{opacity:.55,pointerEvents:"none"}:{})}}
           onPointerDown={down} onPointerMove={move} onPointerUp={up}
