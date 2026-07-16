@@ -8,6 +8,7 @@ function Home({decks,subjects,onAdd,onUnits,onOpen,onNotes,onChanged,nick,onInsi
   const [det,setDet]=useState({});
   const [pickFor,setPickFor]=useState(null);   // 공부 시작 시 모드 선택 시트 {id,def}
   const [openLib,setOpenLib]=useState(false);  // 학생용: '내 공부방' 서랍 펼침 (홈은 위젯 2개만, 덱 나열은 접어둠)
+  const [openSubjKey,setOpenSubjKey]=useState(null);  // 책장: 펼친 과목(책) — 책을 눌러야 그 과목 자료들이 보임
   useEffect(()=>{
     const o={};decks.forEach(d=>{const f=LS.get(dk(d.id));if(f)o[d.id]={...deckSummary(f),createdAt:f.createdAt,isExam:f.isExam,examCount:(f.examQuestions||[]).length,studyType:f.studyType};});setDet(o);
   },[decks]);
@@ -99,11 +100,57 @@ function Home({decks,subjects,onAdd,onUnits,onOpen,onNotes,onChanged,nick,onInsi
       </article>
     );
   };
-  // 학생용 '내 공부방': 과목(폴더)별로 묶어서 표시 — 구분 없는 나열 금지 (대표 지시 2026-07-16)
+  // 공부방 = 책장: 과목마다 책 한 권, 책을 누르면 그 과목 자료들이 펼쳐짐 (대표 지시 2026-07-16, 전 에디션 공통)
   const deckGroups=[
     ...subjects.map(sj=>({key:sj.id,name:sj.name,color:sj.color,list:decks.filter(d=>d.subjId===sj.id)})),
-    {key:"_etc",name:tr("기타","Other"),color:"#999",list:decks.filter(d=>!subjects.some(sj=>sj.id===d.subjId))},
+    {key:"_etc",name:tr("기타","Other"),color:"#FFFDF8",list:decks.filter(d=>!subjects.some(sj=>sj.id===d.subjId))},
   ].filter(g=>g.list.length>0);
+  const openedGroup=deckGroups.find(g=>g.key===openSubjKey)||(deckGroups.length===1?deckGroups[0]:null);
+
+  // 책 표지 색이 어두우면 흰 글씨, 밝으면(흰·노랑 책) 먹색 글씨
+  const isDarkColor=(hex)=>{
+    const h=String(hex||"").replace("#","");
+    if(h.length<6)return false;
+    const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);
+    return (r*299+g*587+b*114)/1000<160;
+  };
+  const bookTile=(g)=>{
+    const open=openedGroup&&openedGroup.key===g.key;
+    const due=g.list.reduce((n,d)=>n+(det[d.id]?.due||0),0);
+    const dark=isDarkColor(g.color);
+    const pale=!dark;   // 흰·노랑 등 밝은 표지
+    return(
+      <button key={g.key} onClick={()=>setOpenSubjKey(k=>k===g.key?null:g.key)}
+        title={g.name}
+        style={{width:124,height:164,cursor:"pointer",position:"relative",textAlign:"left",
+          borderRadius:"7px 14px 14px 7px",
+          border:pale?"1.5px solid var(--line)":"1.5px solid rgba(34,28,57,.08)",
+          outline:open?"2.5px solid var(--ink)":"none",outlineOffset:2,
+          background:"linear-gradient(155deg, rgba(255,255,255,"+(dark?".16":".55")+") 0%, rgba(255,255,255,0) 46%), "+(g.color||"#FFFDF8"),
+          boxShadow:open?"0 12px 24px rgba(34,28,57,.26)":"0 6px 16px rgba(34,28,57,.13)",
+          padding:"16px 12px 13px 22px",display:"flex",flexDirection:"column",
+          transform:open?"translateY(-5px)":"none",transition:"all .18s ease"}}>
+        <span style={{position:"absolute",left:9,top:10,bottom:10,width:2.5,borderRadius:2,
+          background:dark?"rgba(255,255,255,.42)":"rgba(34,28,57,.16)"}}/>
+        <span style={{fontFamily:"'Jua',sans-serif",fontSize:15.5,lineHeight:1.35,wordBreak:"keep-all",
+          color:dark?"#fff":"var(--ink)",display:"-webkit-box",WebkitLineClamp:4,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{g.name}</span>
+        <span style={{marginTop:"auto",fontSize:11.5,fontWeight:700,
+          color:dark?"rgba(255,255,255,.88)":"rgba(34,28,57,.55)"}}>{g.list.length}{tr("개 자료"," items")}{open?" ▾":""}</span>
+        {due>0&&<span style={{position:"absolute",top:-8,right:-8,background:"var(--gold,#FFC24B)",color:"#221C39",
+          borderRadius:999,fontSize:10.5,fontWeight:800,padding:"3px 8px",boxShadow:"0 3px 8px rgba(34,28,57,.22)"}}>{due}</span>}
+      </button>
+    );
+  };
+  const bookshelf=(
+    <div style={{marginBottom:14}}>
+      <div style={{display:"flex",flexWrap:"wrap",gap:16,padding:"4px 2px 14px",alignItems:"flex-end"}}>
+        {deckGroups.map(bookTile)}
+      </div>
+      {openedGroup&&(
+        <div className="grid" style={{marginTop:2}}>{openedGroup.list.map(renderDeck)}</div>
+      )}
+    </div>
+  );
 
   return(
     <section>
@@ -161,22 +208,7 @@ function Home({decks,subjects,onAdd,onUnits,onOpen,onNotes,onChanged,nick,onInsi
       )}
       {decks.length===0?(
         onUnits?null:<div className="empty">{tr("아직 자료가 없네! 공부한 거 던져주면 문제 낼게 📚","No materials yet! Drop in what you studied and I'll quiz you 📚")}</div>
-      ):(onUnits&&!openLib)?null:onUnits?(
-        <div style={{display:"flex",flexDirection:"column",gap:20,marginBottom:14}}>
-          {deckGroups.map(g=>(
-            <div key={g.key}>
-              <div style={{display:"flex",alignItems:"center",gap:8,margin:"0 2px 9px"}}>
-                <span style={{width:9,height:9,borderRadius:"50%",background:g.color,flexShrink:0}}/>
-                <span style={{fontFamily:"'Jua',sans-serif",fontSize:14.5,color:"var(--ink)"}}>{g.name}</span>
-                <span style={{fontSize:11.5,color:"var(--sub)"}}>{g.list.length}{tr("개","")}</span>
-              </div>
-              <div className="grid">{g.list.map(renderDeck)}</div>
-            </div>
-          ))}
-        </div>
-      ):(
-        <div className="grid">{decks.map(renderDeck)}</div>
-      )}
+      ):(onUnits&&!openLib)?null:bookshelf}
       {pickFor&&(
         <div onClick={()=>setPickFor(null)} style={{position:"fixed",inset:0,background:"rgba(34,28,57,.42)",zIndex:60,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
           <div onClick={e=>e.stopPropagation()} className="card" style={{maxWidth:360,width:"100%",padding:22,display:"flex",flexDirection:"column",gap:12}}>
