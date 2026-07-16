@@ -65,7 +65,7 @@ function KeyForm({onSaved,cta,showCancel,onCancel}){
   const [err,setErr]=useState("");
   async function save(){
     if(COMPANY_MODE){   // 회사가 키·모델 제공 → 사용자는 언어만 저장하면 됨(키 입력 불필요)
-      CFG.lang=lang;LS.set("ng:lang",CFG.lang);onSaved();return;
+      CFG.lang=lang;LS.set("ng:lang",CFG.lang);LS.set("ng:langChosen","1");onSaved();return;
     }
     const hasA=key.trim().length>0,hasG=geminiKey.trim().length>0;
     if(!hasA&&!hasG){setErr(tr("최소 하나의 API 키를 입력해줘.","Enter at least one API key."));return;}
@@ -74,7 +74,7 @@ function KeyForm({onSaved,cta,showCancel,onCancel}){
     try{
       if(hasA)await callClaude("ping","'ok'라고만 답해.",false);
       else await callGemini("ping","'ok'라고만 답해.",false,{model:"gemini-2.5-flash"});
-      LS.set("ng:key",CFG.key);LS.set("ng:model",CFG.model);LS.set("ng:qmodel",CFG.qmodel);LS.set("ng:geminiKey",CFG.geminiKey);LS.set("ng:lang",CFG.lang);
+      LS.set("ng:key",CFG.key);LS.set("ng:model",CFG.model);LS.set("ng:qmodel",CFG.qmodel);LS.set("ng:geminiKey",CFG.geminiKey);LS.set("ng:lang",CFG.lang);LS.set("ng:langChosen","1");
       setTesting(false);onSaved();
     }catch(e){setTesting(false);setErr(tr("연결 실패: ","Connection failed: ")+e.message);}
   }

@@ -17,8 +17,14 @@ const { useState, useEffect, useRef, useCallback } = React;
 // edition: "general"(범용 — 무엇이든 넣어 공부) | "student"(한국 중·고등 수학) | "us"(미국 수학) — 둘 다 단원별 공부 포함
 function App({edition="general"}){
   const isStudent=edition==="student"||edition==="us";
-  // 미국판(#us)은 기본 언어를 영어로 — tr(ko,en) 전역 스위치라 이 한 줄로 화면 문구 전체가 전환됨
-  useEffect(()=>{if(edition==="us"&&CFG.lang!=="en"){CFG.lang="en";LS.set("ng:lang","en");}},[edition]);
+  // 미국판(#us)은 '접속해 있는 동안만' 영어 — 저장하지 않아 한국판(#student)에 번지지 않음
+  useEffect(()=>{
+    if(edition==="us"){CFG.lang="en";return;}
+    let stored=LS.get("ng:lang")||"ko";
+    // 자가치유: 예전 버그가 #us 방문 시 'en'을 저장해버렸음 — 설정에서 직접 고른 적 없는 en은 ko로 복구
+    if(stored==="en"&&!LS.get("ng:langChosen")){stored="ko";LS.set("ng:lang","ko");}
+    CFG.lang=stored;
+  },[edition]);
   const [view,setView]=useState((CFG.key||COMPANY_MODE)?"home":"onboard");
   const [decks,setDecks]=useState([]);
   const [subjects,setSubjects]=useState(defaultSubjects());
