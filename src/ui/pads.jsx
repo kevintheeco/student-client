@@ -63,7 +63,7 @@ const AnnotPad=React.forwardRef(function AnnotPad({disabled,tool},fwdRef){
   },[]);
   useEffect(()=>{
     const c=cvs.current;if(!c)return;
-    const prev=(e)=>{if(e.touches[0]?.touchType==="stylus"||e.touches[0]?.radiusX===0)e.preventDefault();};
+    const prev=(e)=>e.preventDefault();   // 쓰기 칸 위에선 어떤 터치·펜도 스크롤 금지 — 써지는 기능만 (touch-action:none의 이중 안전장치)
     c.addEventListener("touchstart",prev,{passive:false});
     c.addEventListener("touchmove",prev,{passive:false});
     return()=>{c.removeEventListener("touchstart",prev);c.removeEventListener("touchmove",prev);};
@@ -152,7 +152,7 @@ const QuestionPad=React.forwardRef(function QuestionPad({disabled,tool="pen",onI
   useEffect(()=>{setup();const f=()=>setup();window.addEventListener("resize",f);return()=>window.removeEventListener("resize",f);},[]);
   useEffect(()=>{
     const c=cvs.current;if(!c)return;
-    const prev=(e)=>{if(e.touches[0]?.touchType==="stylus"||e.touches[0]?.radiusX===0)e.preventDefault();};
+    const prev=(e)=>e.preventDefault();   // 쓰기 칸 위에선 어떤 터치·펜도 스크롤 금지 — 써지는 기능만 (touch-action:none의 이중 안전장치)
     c.addEventListener("touchstart",prev,{passive:false});
     c.addEventListener("touchmove",prev,{passive:false});
     return()=>{c.removeEventListener("touchstart",prev);c.removeEventListener("touchmove",prev);};
@@ -295,7 +295,7 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
   useEffect(()=>{setup();const f=()=>setup();window.addEventListener("resize",f);return()=>window.removeEventListener("resize",f);},[]);
   useEffect(()=>{
     const c=canvasRef.current;if(!c)return;
-    const prev=(e)=>{if(e.touches[0]?.touchType==="stylus"||e.touches[0]?.radiusX===0)e.preventDefault();};
+    const prev=(e)=>e.preventDefault();   // 쓰기 칸 위에선 어떤 터치·펜도 스크롤 금지 — 써지는 기능만 (touch-action:none의 이중 안전장치)
     c.addEventListener("touchstart",prev,{passive:false});
     c.addEventListener("touchmove",prev,{passive:false});
     return()=>{c.removeEventListener("touchstart",prev);c.removeEventListener("touchmove",prev);};
