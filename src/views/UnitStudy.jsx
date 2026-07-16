@@ -93,7 +93,7 @@ function UnitStudy({edition="student",subjects,onSave,onDone,onCancel}){
         const deck={id,name:deckName,subjId:ef.id,
           material:(isUS?"US Math Curriculum — ":"대한민국 수학 교육과정 — ")+subjDef.name+" / "+chNames.join(", "),
           summary:tr("단원별 공부: ","Units: ")+chNames.join(" · "),createdAt:Date.now(),
-          isBook:true,isUnit:true,studyType:"explain",concepts};
+          isBook:true,isUnit:true,k12:true,...(isUS?{k12us:true}:{}),studyType:"explain",concepts};
 
         setBusyMsg(tr("저장 공간 확인 중…","Checking storage…"));
         const need=byteSize(dk(id),deck),est=await estimateStorage();

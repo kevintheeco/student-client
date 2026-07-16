@@ -82,7 +82,9 @@ function Exam({deck,topic,onExit,student,academy,academyName,preset}){
       if(topic&&topic.src){
         // 책(교재) 시험 — 선택 단원의 교재 내용(src)으로, 지정한 문항 수만큼 출제
         const n=Math.max(1,Math.min(40,Number(topic.count)||8));
-        sys="너는 대학 전공 교재로 시험을 출제하는 전문가야. 아래 [교재 내용]에 근거해서만 실전 시험지를 만들어(교재에 없는 내용은 절대 출제 금지). 반드시 정확히 "+n+"문항만 출제해. mc(객관식)·short(단답)·essay(서술)를 적절히 섞고 난이도는 쉬움→어려움 고루. 각 문항의 'unit'에 그 문항이 속한 단원명을 넣어.\n출제 규칙: ① 정답이 문제 문장에 드러나면 안 됨 ② 객관식 오답 3개는 모두 그럴듯(흔한 오개념) ③ 서술형은 단계적 풀이·근거를 요구 ④ 수식은 KaTeX로 렌더되는 유효한 LaTeX($...$)로 — 여는 $·중괄호 {}·\left\right는 반드시 닫고, 위/아래첨자(^_) 뒤엔 인자를 붙이고(x^2처럼), 인라인 안엔 줄바꿈 금지(여러 줄·행렬은 $$...$$). 유니코드 수학기호 대신 \times \le \int 등 명령 사용 ⑤ 범위 전반을 고르게. 배점: 객관식·단답 작게, 서술 크게.\n"+schema;
+        sys=(topic.k12
+          ?"너는 "+(topic.k12us?"미국":"대한민국")+" 중·고등학교 수학 내신·수능 출제위원이야. 실제 학교 시험에 나오는 실전 유형(조건 주어진 계산·객관식·단답 중심, 백지 서술 최소화)으로 출제해."
+          :"너는 대학 전공 교재로 시험을 출제하는 전문가야.")+" 아래 [교재 내용]에 근거해서만 실전 시험지를 만들어(교재에 없는 내용은 절대 출제 금지). 반드시 정확히 "+n+"문항만 출제해. mc(객관식)·short(단답)·essay(서술)를 적절히 섞고 난이도는 쉬움→어려움 고루. 각 문항의 'unit'에 그 문항이 속한 단원명을 넣어.\n출제 규칙: ① 정답이 문제 문장에 드러나면 안 됨 ② 객관식 오답 3개는 모두 그럴듯(흔한 오개념) ③ 서술형은 단계적 풀이·근거를 요구 ④ 수식은 KaTeX로 렌더되는 유효한 LaTeX($...$)로 — 여는 $·중괄호 {}·\left\right는 반드시 닫고, 위/아래첨자(^_) 뒤엔 인자를 붙이고(x^2처럼), 인라인 안엔 줄바꿈 금지(여러 줄·행렬은 $$...$$). 유니코드 수학기호 대신 \times \le \int 등 명령 사용 ⑤ 범위 전반을 고르게. 배점: 객관식·단답 작게, 서술 크게.\n"+schema;
         userMsg="[총 문항 수] 정확히 "+n+"문항\n[단원] "+((topic.unitNames||[]).join(", ")||"전체")+"\n[교재 내용]:\n"+(""+topic.src).slice(0,14000);
       }else if(topic&&Array.isArray(topic.units)&&topic.units.length){
         // 학원 레벨테스트 — 기출은행 우선: 단원별 검증 기출을 먼저 꺼내고, 모자란 만큼만 AI가 신규 제작
@@ -113,7 +115,9 @@ function Exam({deck,topic,onExit,student,academy,academyName,preset}){
         userMsg="[학년·과목] "+(topic.subject||"")+"\n[단원] "+(topic.unit||"")+(topic.sub?(" > "+topic.sub):"")+"\n이 단원 범위만 출제(다른 단원 내용은 섞지 마).";
       }else{
         const concepts=(deck.concepts||[]).map(c=>c.name).slice(0,40).join(", ");
-        sys="너는 대학·학원 단원평가 출제위원이야. 아래 [자료] 전체를 포괄하는 실전 시험지를 만들어. "+commonRule+"단, 자료에 근거가 있는 것만 출제.\n"+schema+"\n\n[자료]:\n"+studyMat.slice(0,7000);
+        sys=(deck.k12
+          ?"너는 "+(deck.k12us?"미국":"대한민국")+" 중·고등학교 수학 내신·수능 출제위원이야. 실제 학교 시험 유형(조건 주어진 계산·객관식·단답 중심)으로,"
+          :"너는 대학·학원 단원평가 출제위원이야.")+" 아래 [자료] 전체를 포괄하는 실전 시험지를 만들어. "+commonRule+"단, 자료에 근거가 있는 것만 출제.\n"+schema+"\n\n[자료]:\n"+studyMat.slice(0,7000);
         userMsg="개념 목록: "+concepts;
       }
       const r=await callAI(sys,userMsg,true,{maxTok:8000,model:qmodel,lang:examLang},ctrl.signal);
