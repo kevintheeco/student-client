@@ -66,10 +66,11 @@ function UnitStudy({edition="student",subjects,onSave,onDone,onCancel}){
           let made=null;
           try{
             const r=isUS?await callAI(
-              "You are an outstanding US math tutor who knows the Common Core / high-school & AP curriculum precisely. Keep grade-level rigor, write math in LaTeX ($...$). Output JSON only (no code fences).",
+              "You are an outstanding US math tutor who knows the Common Core / high-school & AP curriculum precisely. Keep grade-level rigor, write math in LaTeX ($...$). Output JSON only (no code fences)."+
+              (CFG.lang==="ko"?"\n\n중요: 이 학생은 미국 커리큘럼을 공부하는 한국어 사용자다. 소단원 이름(name)은 영어 원문 그대로 두되, 과외 내용(src)은 한국어로 써라 — 수학 용어는 영어를 유지하고 괄호로 한국어를 병기해도 좋다.":""),
               "Subject: "+subjDef.name+"\nUnit: "+ch.name+"\nSpecific lessons: "+ch.topics.join(", ")+
               "\n\nFor each lesson, write a focused 1:1 tutoring explanation (60-90 words) — include the definition, key formula, one worked example, and one common mistake. Keep lesson names exactly as listed. JSON only: {\"concepts\":[{\"name\":\"lesson name\",\"src\":\"tutoring content\"}]}",
-              true,{maxTok:7000}):await callAI(
+              true,{maxTok:7000,lang:CFG.lang}):await callAI(
               "너는 대한민국 중·고등학교 수학 교육과정을 정확히 아는 최고의 수학 과외 선생님이야. 교과서 수준을 지키고, 수식은 LaTeX($...$)로 써. JSON만 출력해(코드블록 없이).",
               "과목: "+subjDef.name+"\n대단원: "+ch.name+"\n소단원 목록: "+ch.topics.join(", ")+
               "\n\n각 소단원마다 1:1 과외용 핵심 내용을 300~500자로 써줘 — 정의·핵심 공식·대표 예시 1개·자주 하는 실수 1개 포함. 소단원 이름은 목록 그대로. JSON만: {\"concepts\":[{\"name\":\"소단원명\",\"src\":\"과외 내용\"}]}",

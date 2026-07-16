@@ -17,9 +17,11 @@ const { useState, useEffect, useRef, useCallback } = React;
 // edition: "general"(범용 — 무엇이든 넣어 공부) | "student"(한국 중·고등 수학) | "us"(미국 수학) — 둘 다 단원별 공부 포함
 function App({edition="general"}){
   const isStudent=edition==="student"||edition==="us";
-  // 미국판(#us)은 '접속해 있는 동안만' 영어 — 저장하지 않아 한국판(#student)에 번지지 않음
+  // 언어 정책 (대표 확정 2026-07-16): 한국수학(#student)=무조건 한국어 /
+  // 미국수학(#us)=전용 설정 ng:lang:us(기본 영어, 설정에서 한·영 선택) / 범용=기존 설정 따름
   useEffect(()=>{
-    if(edition==="us"){CFG.lang="en";return;}
+    if(edition==="student"){CFG.lang="ko";return;}
+    if(edition==="us"){CFG.lang=LS.get("ng:lang:us")==="ko"?"ko":"en";return;}
     let stored=LS.get("ng:lang")||"ko";
     // 자가치유: 예전 버그가 #us 방문 시 'en'을 저장해버렸음 — 설정에서 직접 고른 적 없는 en은 ko로 복구
     if(stored==="en"&&!LS.get("ng:langChosen")){stored="ko";LS.set("ng:lang","ko");}
@@ -223,8 +225,8 @@ function App({edition="general"}){
         </div>
       )}
 
-      {view==="onboard"&&<Onboard onDone={()=>setView("home")}/>}
-      {view==="settings"&&<Settings onDone={()=>setView((CFG.key||COMPANY_MODE)?"home":"onboard")}/>}
+      {view==="onboard"&&<Onboard edition={edition} onDone={()=>setView("home")}/>}
+      {view==="settings"&&<Settings edition={edition} onDone={()=>setView((CFG.key||COMPANY_MODE)?"home":"onboard")}/>}
       {view==="home"&&(
         <>
           {/* 학생용 홈은 위젯 2개만 — 과목 탭 줄도 숨김 (덱별 폴더 이동은 '내 공부방' 카드 안에서) */}

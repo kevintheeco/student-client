@@ -4,7 +4,7 @@ import { Prof } from "../ui/common.jsx";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
 
-function Onboard({onDone}){
+function Onboard({onDone,edition="general"}){
   return(
     <div className="card panel">
       <div style={{textAlign:"center"}}><Prof size={84}/></div>
@@ -12,11 +12,11 @@ function Onboard({onDone}){
       <p className="muted" style={{textAlign:"center",margin:0,fontSize:13.5,lineHeight:1.7}}>
         {tr("시작하려면 네 Anthropic API 키가 필요해. 공부한 걸 넣어주면 문제 내고 채점해줄게.","To start you'll need your Anthropic API key. Add what you studied and I'll quiz and grade you.")}
       </p>
-      <KeyForm onSaved={onDone} cta={tr("시작하기","Get started")}/>
+      <KeyForm onSaved={onDone} cta={tr("시작하기","Get started")} edition={edition}/>
     </div>
   );
 }
-function Settings({onDone}){
+function Settings({onDone,edition="general"}){
   const [storSize,setStorSize]=useState(()=>getStorageSize());
   const MAX=STORAGE_CAP();
   const pct=Math.min(100,Math.round(storSize/MAX*100));
@@ -51,11 +51,11 @@ function Settings({onDone}){
         </div>
         {backupMsg&&<p style={{fontSize:12.5,marginTop:8,color:backupMsg.startsWith("✓")?"var(--mint)":"var(--rose)"}}>{backupMsg}</p>}
       </div>
-      <KeyForm onSaved={onDone} cta={tr("저장","Save")} showCancel onCancel={onDone}/>
+      <KeyForm onSaved={onDone} cta={tr("저장","Save")} showCancel onCancel={onDone} edition={edition}/>
     </div>
   );
 }
-function KeyForm({onSaved,cta,showCancel,onCancel}){
+function KeyForm({onSaved,cta,showCancel,onCancel,edition="general"}){
   const [key,setKey]=useState(CFG.key);
   const [geminiKey,setGeminiKey]=useState(CFG.geminiKey);
   const [model,setModel]=useState(CFG.model);
@@ -63,18 +63,27 @@ function KeyForm({onSaved,cta,showCancel,onCancel}){
   const [lang,setLang]=useState(CFG.lang||"ko");
   const [testing,setTesting]=useState(false);
   const [err,setErr]=useState("");
+  // 언어 정책: 한국수학(#student)=무조건 한국어(선택칸 숨김) / 미국수학(#us)=전용 설정 ng:lang:us (기본 영어, 다른 판에 안 번짐)
+  const isStudentKo=edition==="student";
+  const isUS=edition==="us";
+  function saveLang(){
+    if(isStudentKo){CFG.lang="ko";return;}                        // 한국수학은 저장할 것도 없음
+    if(isUS){CFG.lang=lang;LS.set("ng:lang:us",lang);return;}     // 미국수학 전용 키
+    CFG.lang=lang;LS.set("ng:lang",CFG.lang);LS.set("ng:langChosen","1");
+  }
   async function save(){
     if(COMPANY_MODE){   // 회사가 키·모델 제공 → 사용자는 언어만 저장하면 됨(키 입력 불필요)
-      CFG.lang=lang;LS.set("ng:lang",CFG.lang);LS.set("ng:langChosen","1");onSaved();return;
+      saveLang();onSaved();return;
     }
     const hasA=key.trim().length>0,hasG=geminiKey.trim().length>0;
     if(!hasA&&!hasG){setErr(tr("최소 하나의 API 키를 입력해줘.","Enter at least one API key."));return;}
     setTesting(true);setErr("");
-    CFG.key=key.trim();CFG.model=model;CFG.qmodel=qmodel;CFG.geminiKey=geminiKey.trim();CFG.lang=lang;
+    CFG.key=key.trim();CFG.model=model;CFG.qmodel=qmodel;CFG.geminiKey=geminiKey.trim();
     try{
       if(hasA)await callClaude("ping","'ok'라고만 답해.",false);
       else await callGemini("ping","'ok'라고만 답해.",false,{model:"gemini-2.5-flash"});
-      LS.set("ng:key",CFG.key);LS.set("ng:model",CFG.model);LS.set("ng:qmodel",CFG.qmodel);LS.set("ng:geminiKey",CFG.geminiKey);LS.set("ng:lang",CFG.lang);LS.set("ng:langChosen","1");
+      LS.set("ng:key",CFG.key);LS.set("ng:model",CFG.model);LS.set("ng:qmodel",CFG.qmodel);LS.set("ng:geminiKey",CFG.geminiKey);
+      saveLang();
       setTesting(false);onSaved();
     }catch(e){setTesting(false);setErr(tr("연결 실패: ","Connection failed: ")+e.message);}
   }
@@ -100,11 +109,13 @@ function KeyForm({onSaved,cta,showCancel,onCancel}){
           {QMODELS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}
         </select></div>
         </>}
-      <div className="selectrow"><label>{tr("🌐 공부 언어","🌐 Study language")} <span className="muted" style={{fontWeight:400}}>{tr("(문제·피드백·설명 언어 + 앱 화면)","(questions, feedback & the whole app)")}</span></label>
+      {!isStudentKo&&(
+      <div className="selectrow"><label>{tr("🌐 공부 언어","🌐 Study language")} <span className="muted" style={{fontWeight:400}}>{isUS?tr("(미국판에만 적용)","(applies to the US edition only)"):tr("(문제·피드백·설명 언어 + 앱 화면)","(questions, feedback & the whole app)")}</span></label>
         <select className="field" value={lang} onChange={e=>setLang(e.target.value)}>
           <option value="ko">🇰🇷 한국어</option>
           <option value="en">🇬🇧 English</option>
         </select></div>
+      )}
       {!COMPANY_MODE&&<div className="warn">{tr("키는 ","Keys are stored ")}<b>{tr("이 기기 브라우저에만","only in this browser")}</b>{tr(" 저장돼.",".")}
         Anthropic: <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a></div>}
       {err&&<div className="err">{err}</div>}
