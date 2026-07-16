@@ -7,6 +7,7 @@ const { useState, useEffect, useRef, useCallback } = React;
 function Home({decks,subjects,onAdd,onUnits,onOpen,onNotes,onChanged,nick,onInsight}){
   const [det,setDet]=useState({});
   const [pickFor,setPickFor]=useState(null);   // 공부 시작 시 모드 선택 시트 {id,def}
+  const [openLib,setOpenLib]=useState(false);  // 학생용: '내 공부방' 서랍 펼침 (홈은 위젯 2개만, 덱 나열은 접어둠)
   useEffect(()=>{
     const o={};decks.forEach(d=>{const f=LS.get(dk(d.id));if(f)o[d.id]={...deckSummary(f),createdAt:f.createdAt,isExam:f.isExam,examCount:(f.examQuestions||[]).length,studyType:f.studyType};});setDet(o);
   },[decks]);
@@ -29,7 +30,17 @@ function Home({decks,subjects,onAdd,onUnits,onOpen,onNotes,onChanged,nick,onInsi
     LS.set(DECKS_KEY,(LS.get(DECKS_KEY)||[]).map(x=>x.id===id?{...x,studyType:type}:x));
     onChanged();
   }
+  function rename(id,cur){
+    const n=prompt(tr("이 자료의 새 이름을 입력해줘","New name for this material"),cur);
+    if(n===null)return;
+    const v=n.trim().slice(0,60);if(!v||v===cur)return;
+    const f=LS.get(dk(id));
+    if(f)LS.set(dk(id),{...f,name:v});
+    LS.set(DECKS_KEY,(LS.get(DECKS_KEY)||[]).map(x=>x.id===id?{...x,name:v}:x));
+    onChanged();
+  }
   const getSubj=(id)=>subjects.find(s=>s.id===id);
+  const dueTotal=decks.reduce((n,d)=>n+(det[d.id]?.due||0),0);
 
   return(
     <section>
@@ -52,20 +63,31 @@ function Home({decks,subjects,onAdd,onUnits,onOpen,onNotes,onChanged,nick,onInsi
       </div>
       {onUnits?(
         <>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))",gap:12,marginBottom:12}}>
-            <article className="card" onClick={onUnits} style={{cursor:"pointer",padding:"18px 20px",border:"1.5px solid var(--pri)",background:"var(--pri-s)"}}>
-              <div style={{fontSize:24}}>📚</div>
-              <div style={{fontFamily:"'Jua',sans-serif",fontSize:16,color:"var(--ink)",margin:"6px 0 4px"}}>{tr("단원별 공부","Study by unit")}</div>
-              <div style={{fontSize:12.5,color:"var(--sub)",lineHeight:1.6}}>{tr("교과서 목차에서 단원을 고르면 AI 교수님이 바로 과외 시작 — 자료 없어도 OK","Pick units from the curriculum — no material needed")}</div>
+          {/* 학생용 홈 = 위젯 2개가 전부 (대표 지시 2026-07-16). 덱 나열은 아래 '내 공부방' 서랍으로 */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:14,marginBottom:14}}>
+            <article className="card" onClick={onUnits} style={{cursor:"pointer",padding:"26px 22px",border:"1.5px solid var(--pri)",background:"var(--pri-s)"}}>
+              <div style={{fontSize:34}}>📚</div>
+              <div style={{fontFamily:"'Jua',sans-serif",fontSize:18,color:"var(--ink)",margin:"8px 0 5px"}}>{tr("단원별 공부","Study by unit")}</div>
+              <div style={{fontSize:13,color:"var(--sub)",lineHeight:1.6}}>{tr("교과서 목차에서 단원을 고르면 AI 교수님이 바로 과외 시작 — 자료 없어도 OK","Pick units from the curriculum — no material needed")}</div>
             </article>
-            <article className="card" onClick={onAdd} style={{cursor:"pointer",padding:"18px 20px"}}>
-              <div style={{fontSize:24}}>📎</div>
-              <div style={{fontFamily:"'Jua',sans-serif",fontSize:16,color:"var(--ink)",margin:"6px 0 4px"}}>{tr("학습자료 넣어 공부","Study my material")}</div>
-              <div style={{fontSize:12.5,color:"var(--sub)",lineHeight:1.6}}>{tr("학교 프린트·문제집·노트·PDF를 넣으면 핵심을 뽑아 복습시켜줘","Drop in handouts, notes, or PDFs")}</div>
+            <article className="card" onClick={onAdd} style={{cursor:"pointer",padding:"26px 22px",border:"1.5px solid var(--line)"}}>
+              <div style={{fontSize:34}}>📎</div>
+              <div style={{fontFamily:"'Jua',sans-serif",fontSize:18,color:"var(--ink)",margin:"8px 0 5px"}}>{tr("학습자료 넣어 공부","Study my material")}</div>
+              <div style={{fontSize:13,color:"var(--sub)",lineHeight:1.6}}>{tr("학교 프린트·문제집·노트·PDF를 넣으면 핵심을 뽑아 복습시켜줘","Drop in handouts, notes, or PDFs")}</div>
             </article>
           </div>
-          <div className="row" style={{marginBottom:18}}>
-            {onInsight&&<button className="btn gho" onClick={onInsight}>{tr("📊 성장 인사이트","📊 Growth insight")}</button>}
+          {decks.length>0&&(
+            <button className="card" onClick={()=>setOpenLib(v=>!v)}
+              style={{width:"100%",textAlign:"left",display:"flex",alignItems:"center",gap:10,padding:"15px 18px",cursor:"pointer",marginBottom:openLib?12:8,border:"1.5px solid var(--line)"}}>
+              <span style={{fontSize:20}}>🗂️</span>
+              <span style={{fontFamily:"'Jua',sans-serif",fontSize:15,color:"var(--ink)"}}>{tr("내 공부방","My decks")}</span>
+              <span style={{fontSize:12,color:"var(--sub)"}}>{decks.length}{tr("개","")}</span>
+              {dueTotal>0&&<span style={{fontSize:12,fontWeight:700,color:"var(--pri)"}}>{tr("오늘 복습 ","Due today ")}{dueTotal}</span>}
+              <span style={{marginLeft:"auto",color:"var(--sub)"}}>{openLib?"▾":"▸"}</span>
+            </button>
+          )}
+          <div className="row" style={{marginBottom:12}}>
+            {onInsight&&<button className="btn gho sm" onClick={onInsight}>{tr("📊 성장 인사이트","📊 Growth insight")}</button>}
           </div>
         </>
       ):(
@@ -75,8 +97,8 @@ function Home({decks,subjects,onAdd,onUnits,onOpen,onNotes,onChanged,nick,onInsi
         </div>
       )}
       {decks.length===0?(
-        <div className="empty">{tr("아직 자료가 없네! 공부한 거 던져주면 문제 낼게 📚","No materials yet! Drop in what you studied and I'll quiz you 📚")}</div>
-      ):(
+        onUnits?null:<div className="empty">{tr("아직 자료가 없네! 공부한 거 던져주면 문제 낼게 📚","No materials yet! Drop in what you studied and I'll quiz you 📚")}</div>
+      ):(onUnits&&!openLib)?null:(
         <div className="grid">
           {decks.map(d=>{
             const s=det[d.id];const subj=getSubj(d.subjId);
@@ -108,7 +130,11 @@ function Home({decks,subjects,onAdd,onUnits,onOpen,onNotes,onChanged,nick,onInsi
                   </div>
                   {s?.createdAt&&<span style={{fontSize:11,color:"var(--sub)",flexShrink:0,marginTop:2}}>{new Date(s.createdAt).toLocaleDateString(CFG.lang==="en"?"en-US":"ko-KR",{year:"numeric",month:"short",day:"numeric"})}</span>}
                 </div>
-                <div className="nm">{d.name}</div>
+                <div className="nm" style={{display:"flex",alignItems:"baseline",gap:6}}>
+                  <span style={{minWidth:0}}>{d.name}</span>
+                  <button onClick={()=>rename(d.id,d.name)} title={tr("이름 바꾸기","Rename")}
+                    style={{background:"none",border:"none",cursor:"pointer",padding:"0 2px",opacity:.5,fontSize:13,flexShrink:0}}>✎</button>
+                </div>
                 {s?(<>
                   <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:11}}>
                     <span style={{fontFamily:"'Jua',sans-serif",fontSize:18,color:"var(--ink)"}}>{s.total}</span>

@@ -207,8 +207,9 @@ function App({edition="general"}){
       {view==="settings"&&<Settings onDone={()=>setView((CFG.key||COMPANY_MODE)?"home":"onboard")}/>}
       {view==="home"&&(
         <>
-          <SubjectTabs subjects={subjects} active={filterSubj} onChange={setFilterSubj} onSave={saveSubjects}/>
-          <Home decks={filteredDecks} subjects={subjects} onAdd={()=>setView("add")} onUnits={isStudent?()=>setView("units"):null} onOpen={openStudy} onNotes={openNotes} onChanged={refresh} nick={nick} onInsight={()=>setView("insight")}/>
+          {/* 학생용 홈은 위젯 2개만 — 과목 탭 줄도 숨김 (덱별 폴더 이동은 '내 공부방' 카드 안에서) */}
+          {!isStudent&&<SubjectTabs subjects={subjects} active={filterSubj} onChange={setFilterSubj} onSave={saveSubjects}/>}
+          <Home decks={isStudent?decks:filteredDecks} subjects={subjects} onAdd={()=>setView("add")} onUnits={isStudent?()=>setView("units"):null} onOpen={openStudy} onNotes={openNotes} onChanged={refresh} nick={nick} onInsight={()=>setView("insight")}/>
         </>
       )}
       {view==="insight"&&<Insight onExit={()=>{refresh();setView("home");}}/>}
