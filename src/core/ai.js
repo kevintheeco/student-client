@@ -447,7 +447,7 @@ async function splitPdfPages(b64,per){
 // 한 chunk(PDF 일부)에서 대>중>소단원(개념) + 개념별 과외용 핵심내용(src) 추출
 async function analyzeBookChunk(b64,label,lang){
   const r=await callAI(
-    "너는 대학 전공 교재를 분석해 '목차 트리'로 정확히 정리하는 전문가다. 주어진 PDF 일부를 읽고 내용을 대단원>중단원>개념(소단원) 3계층으로 정리한다.\n"+
+    "너는 교재(전공서·수험서·교과서·문제집)를 분석해 '목차 트리'로 정확히 정리하는 전문가다. 주어진 PDF 일부를 읽고 내용을 대단원>중단원>개념(소단원) 3계층으로 정리한다.\n"+
     "★ 정확도 규칙:\n"+
     "- u1(대단원)·u2(중단원)은 교재가 실제로 쓰는 제목·번호를 그대로 따라라(예: '제3장 극한', '3.2 연속함수'). 번호가 있으면 번호도 포함. 네가 새 분류를 지어내지 마라.\n"+
     "- 교재에 나온 순서를 유지하라(앞에서 뒤로).\n"+
@@ -489,8 +489,37 @@ const toB64=(file)=>new Promise((res,rej)=>{
   const r=new FileReader();r.onload=()=>res(String(r.result).split(",")[1]);r.onerror=rej;r.readAsDataURL(file);
 });
 
+/* 첨부 이미지 정규화: Claude가 받는 형태(JPEG·5MB·8000px 이내)로 변환.
+   HEIC 등 브라우저가 못 읽는 포맷·손상 파일은 원인을 알 수 있는 에러로 안내.
+   시험지 촬영본(아이폰 HEIC·수 MB·긴 스캔)이 그대로 API에 가서 400 나던 문제의 근본 수리. */
+async function prepImage(file){
+  const url=URL.createObjectURL(file);
+  try{
+    const img=await new Promise((res,rej)=>{
+      const im=new Image();
+      im.onload=()=>res(im);
+      im.onerror=()=>rej(new Error("decode"));
+      im.src=url;
+    });
+    const MAX=2800;   // 장변 상한 — 시험지 글자가 또렷히 읽히면서 용량은 안전한 크기
+    let w=img.naturalWidth||img.width,h=img.naturalHeight||img.height;
+    if(!w||!h)throw new Error("decode");
+    const sc=Math.min(1,MAX/Math.max(w,h));
+    w=Math.max(1,Math.round(w*sc));h=Math.max(1,Math.round(h*sc));
+    const c=document.createElement("canvas");c.width=w;c.height=h;
+    const ctx=c.getContext("2d");
+    ctx.fillStyle="#fff";ctx.fillRect(0,0,w,h);   // 투명 PNG → 흰 배경
+    ctx.drawImage(img,0,0,w,h);
+    let q=0.86,dataUrl=c.toDataURL("image/jpeg",q);
+    while(dataUrl.length*0.75>4*1024*1024&&q>0.45){q-=0.1;dataUrl=c.toDataURL("image/jpeg",q);}
+    return {b64:dataUrl.split(",")[1],mime:"image/jpeg"};
+  }catch(_){
+    throw new Error((file.name||"이미지")+": 이 형식은 브라우저가 읽을 수 없어(아이폰 HEIC 사진일 가능성이 높아). 사진 앱에서 JPG/PNG로 저장하거나, 카카오톡 '사진 저장' 대신 스크린샷으로 다시 올려줘.");
+  }finally{URL.revokeObjectURL(url);}
+}
+
 
 let _uidSeq=0;
 const uid=()=>Date.now().toString(36)+(_uidSeq++).toString(36).padStart(3,'0')+Math.random().toString(36).slice(2,5);
 
-export { MODELS, QMODELS, callGemini, PROXY_URL, COMPANY_MODE, ACADEMY_CODE, _sleep, _aiRetriable, _geminiFallbackModel, _fbToastT, _notifyFallback, callProxy, _readClaudeSSE, callProxyClaude, callAI, fixJson, repairJson, parseJsonLoose, parseFactorsLine, parseGrading, parseDerivePlan, parseDeriveCheck, parseOcrCheck, parseQuestion, callClaude, transcribeFile, processPdf, extractExamQuestions, extractBankItems, extractAnswerKey, solveBankItem, splitPdfPages, analyzeBookChunk, ingestBook, toB64, _uidSeq, uid };
+export { MODELS, QMODELS, callGemini, PROXY_URL, COMPANY_MODE, ACADEMY_CODE, _sleep, _aiRetriable, _geminiFallbackModel, _fbToastT, _notifyFallback, callProxy, _readClaudeSSE, callProxyClaude, callAI, fixJson, repairJson, parseJsonLoose, parseFactorsLine, parseGrading, parseDerivePlan, parseDeriveCheck, parseOcrCheck, parseQuestion, callClaude, transcribeFile, processPdf, extractExamQuestions, extractBankItems, extractAnswerKey, solveBankItem, splitPdfPages, analyzeBookChunk, ingestBook, toB64, prepImage, _uidSeq, uid };

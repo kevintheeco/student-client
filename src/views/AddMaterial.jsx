@@ -1,11 +1,12 @@
 import { CFG, DECKS_KEY, LS, SUBJ_COLORS, byteSize, detectLang, dk, estimateStorage, formatSize, tr } from "../core/platform.js";
-import { COMPANY_MODE, callAI, extractExamQuestions, ingestBook, processPdf, toB64, transcribeFile, uid } from "../core/ai.js";
+import { COMPANY_MODE, callAI, extractExamQuestions, ingestBook, prepImage, processPdf, toB64, transcribeFile, uid } from "../core/ai.js";
 import { Cheer, FileDropZone } from "../ui/common.jsx";
 import { PenPad, PhotoButton } from "../ui/pads.jsx";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
 
-function AddMaterial({subjects,onSave,onDone,onCancel}){
+function AddMaterial({edition="general",subjects,onSave,onDone,onCancel}){
+  const isK12=edition==="student"||edition==="us";   // 학생용 입구에서 만든 덱 = 중·고등 실전형 출제 대상
   const [name,setName]=useState("");
   const [subjId,setSubjId]=useState(subjects[0]?.id||"");
   const [material,setMaterial]=useState("");
@@ -91,7 +92,7 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
         const u1s=[...new Set(bookConcepts.map(c=>c.u1).filter(Boolean))];
         const deck={id,name:name.trim()||pdf.name.replace(/\.pdf$/i,"")||tr("교재","Textbook"),subjId:useSubjId,
           material:"",summary:tr("교재 목차: ","Textbook TOC: ")+u1s.join(" · "),createdAt:Date.now(),
-          isBook:true,studyType:"explain",concepts:bookConcepts};
+          isBook:true,...(isK12?{k12:true}:{}),...(edition==="us"?{k12us:true}:{}),studyType:"explain",concepts:bookConcepts};
         setBusyMsg(tr("저장 공간 확인 중…","Checking storage…"));
         const need=byteSize(dk(id),deck),est=await estimateStorage();
         if(est.free<need*1.5){fail(tr("저장 공간이 부족해 (남은 ","Not enough storage (free ")+formatSize(est.free)+tr("). 오래된 자료를 삭제하고 다시 시도해줘.","). Delete old materials and retry."));return;}
@@ -113,15 +114,16 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
       if(isPdf&&f.size>30*1024*1024){fail(tr("PDF가 너무 커. 30MB 이하 파일만 지원해.","PDF is too big. Max 30MB."));return;}
       try{
         setBusyMsg(tr("파일 읽는 중… (","Reading file… (")+f.name+")");
-        const b64=await toB64(f);
         if(isPdf){
+          const b64=await toB64(f);
           setBusyMsg(tr("PDF 분석 중… ","Analyzing PDF… ")+f.name+tr(" (AI가 읽는 중, 1~2분 걸릴 수 있어)"," (AI reading, may take 1–2 min)"));
           const r=await processPdf(b64);
           if(r){pdfResults.push(r);}
           else{fileErrMsg+=f.name+tr(": PDF 분석 실패 (Claude 키 확인 필요). ",": PDF analysis failed (check Claude key). ");}
         }else{
           setBusyMsg(tr("이미지 읽는 중… (","Reading image… (")+f.name+")");
-          const t=await transcribeFile(b64,f.type||"image/jpeg","note");
+          const p=await prepImage(f);   // JPEG 변환·축소 — HEIC·대용량·고해상도 촬영본 안전 처리
+          const t=await transcribeFile(p.b64,p.mime,"note");
           imageText+=(t||"")+"\n";
         }
       }catch(e){
@@ -198,6 +200,7 @@ function AddMaterial({subjects,onSave,onDone,onCancel}){
     const materialToStore=summary?fullMaterial.slice(0,5000):fullMaterial.slice(0,12000);
     const deck={id,name:finalName,subjId:useSubjId,material:materialToStore,summary,createdAt:Date.now(),
       ...(deckLang!==CFG.lang?{lang:deckLang}:{}),
+      ...(isK12?{k12:true}:{}),...(edition==="us"?{k12us:true}:{}),
       isExam:isExam&&examQuestions.length>0,examQuestions,studyType:resolvedType,
       concepts:concepts.map(nm=>({id:uid(),name:String(nm).slice(0,80),box:1,dueAt:0,reps:0,lapses:0}))};
 

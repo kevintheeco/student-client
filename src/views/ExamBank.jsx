@@ -2,7 +2,7 @@
    흐름: 목록(필터·통계) → 업로드(출처·과목·파일) → AI 추출 → 사람 검수 → 저장.
    검수(verified) 통과분만 출제 검색 후보가 된다 — 0오류 보증선. */
 import { tr } from "../core/platform.js";
-import { callAI, extractAnswerKey, extractBankItems, solveBankItem, splitPdfPages, toB64, uid } from "../core/ai.js";
+import { callAI, extractAnswerKey, extractBankItems, prepImage, solveBankItem, splitPdfPages, toB64, uid } from "../core/ai.js";
 import { bankAll, bankAdd, bankUpdate, bankDel, bankStats } from "../core/examBank.js";
 import { FileDropZone, Prof, Stat } from "../ui/common.jsx";
 import { MathText } from "../ui/math.jsx";
@@ -261,7 +261,7 @@ function ExamBank({onExit}){
         const batch=imgs.slice(i,i+4);
         setBusyMsg(tr("이미지 분석 중… (","Reading images… (")+(i+1)+"~"+Math.min(i+4,imgs.length)+"/"+imgs.length+")");
         const blocks=[];
-        for(const f of batch)blocks.push({type:"image",source:{type:"base64",media_type:f.type||"image/jpeg",data:await toB64(f)}});
+        for(const f of batch){const p=await prepImage(f);blocks.push({type:"image",source:{type:"base64",media_type:p.mime,data:p.b64}});}
         out.push(...await extractBankItems(blocks,tagUnits,srcHint));
       }
       // PDF는 6쪽 단위로 쪼개 순차 추출 (시험지 여러 장도 안전)
@@ -302,10 +302,13 @@ function ExamBank({onExit}){
     setBusy(true);setErr("");
     try{
       setBusyMsg(tr("정답지 읽는 중… ","Reading answer key… ")+file.name);
-      const b64=await toB64(file);
-      const block=file.type==="application/pdf"
-        ?{type:"document",source:{type:"base64",media_type:"application/pdf",data:b64}}
-        :{type:"image",source:{type:"base64",media_type:file.type||"image/jpeg",data:b64}};
+      let block;
+      if(file.type==="application/pdf"){
+        block={type:"document",source:{type:"base64",media_type:"application/pdf",data:await toB64(file)}};
+      }else{
+        const p=await prepImage(file);
+        block={type:"image",source:{type:"base64",media_type:p.mime,data:p.b64}};
+      }
       const key=await extractAnswerKey([block]);
       let hit=0;
       const next=draft.map(d=>{

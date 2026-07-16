@@ -1,4 +1,4 @@
-import { toB64, transcribeFile } from "../core/ai.js";
+import { prepImage, transcribeFile } from "../core/ai.js";
 import { tr } from "../core/platform.js";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
@@ -515,7 +515,7 @@ function PhotoButton({kind,onText,label}){
   async function handle(e){
     const f=e.target.files&&e.target.files[0];e.target.value="";if(!f)return;
     setBusy(true);
-    try{const data=await toB64(f);const t=await transcribeFile(data,f.type||"image/jpeg",kind);onText((t||"").trim());}
+    try{const p=await prepImage(f);const t=await transcribeFile(p.b64,p.mime,kind);onText((t||"").trim());}
     catch(e){alert(tr("인식 실패: ","Recognition failed: ")+e.message);}
     setBusy(false);
   }
