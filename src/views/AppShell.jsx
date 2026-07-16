@@ -100,6 +100,13 @@ function App({edition="general"}){
     }
   }
   async function logout(){try{await _auth.signOut();}catch(e){}setShowProfile(false);}
+  // 앱 안 브라우저(카톡 등) 탈출: 카톡은 전용 스킴으로 기본 브라우저를 직접 열 수 있음
+  function openExternal(){
+    const url=location.href,ua=navigator.userAgent||"";
+    if(/KAKAOTALK/i.test(ua)){location.href="kakaotalk://web/openExternal?url="+encodeURIComponent(url);return;}
+    if(/Line\//i.test(ua)){location.href=url+(url.includes("?")?"&":"?")+"openExternalBrowser=1";return;}
+    alert(tr("화면 오른쪽 위 메뉴(⋮ 또는 공유)에서 '다른 브라우저로 열기'를 눌러줘.","Use the ⋮ / share menu → 'Open in browser'."));
+  }
   function saveNick(n){const v=(n||"").trim();if(!v||!user)return;setNick(v);LS.set(nickKey(user.uid),v);}
 
   function openStudy(id,mode){const d=LS.get(dk(id));if(!d)return;if(mode==="exam"){setExamTopic(null);setActiveDeck(d);setView("exam");return;}if(mode==="learn"){setActiveDeck(d);setView("tutor");return;}setActiveDeck({...d,studyType:mode||d.studyType||"explain"});setView("study");}
@@ -151,6 +158,13 @@ function App({edition="general"}){
         </div>
       </div>
 
+      {inAppBrowser()&&(
+        <div style={{background:"#FFF6E9",border:"1.5px solid #FBE3B8",borderRadius:12,padding:"10px 14px",marginBottom:12,
+          display:"flex",alignItems:"center",gap:10,fontSize:12.5,color:"#8A5A12",lineHeight:1.5}}>
+          <span>⚠️ {tr("지금 카카오톡(앱 안) 브라우저로 열려 있어요 — 여기서는 손글씨 필기와 구글 로그인이 제대로 안 돼요.","You're in an in-app browser — handwriting and Google sign-in won't work properly here.")}</span>
+          <button className="btn pri sm" style={{marginLeft:"auto",flexShrink:0}} onClick={openExternal}>{tr("Chrome으로 열기","Open in Chrome")}</button>
+        </div>
+      )}
       {showProfile&&user&&(
         <div onClick={()=>setShowProfile(false)} style={{position:"fixed",inset:0,background:"rgba(34,28,57,.42)",zIndex:60,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
           <div onClick={e=>e.stopPropagation()} className="card" style={{maxWidth:340,width:"100%",padding:22,display:"flex",flexDirection:"column",gap:14}}>
