@@ -42,6 +42,69 @@ function Home({decks,subjects,onAdd,onUnits,onOpen,onNotes,onChanged,nick,onInsi
   const getSubj=(id)=>subjects.find(s=>s.id===id);
   const dueTotal=decks.reduce((n,d)=>n+(det[d.id]?.due||0),0);
 
+  const renderDeck=(d)=>{
+    const s=det[d.id];const subj=getSubj(d.subjId);
+    return(
+      <article key={d.id} className="card deck">
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:6}}>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            <select
+              value={subjects.some(x=>x.id===d.subjId)?d.subjId:""}
+              onChange={e=>move(d.id,e.target.value)}
+              className="subj-badge"
+              style={{background:(subj?subj.color:"#888")+"22",color:subj?subj.color:"var(--sub)",
+                border:"none",cursor:"pointer",fontFamily:"inherit"}}
+              title={tr("폴더 이동","Move folder")}>
+              {!subjects.some(x=>x.id===d.subjId)&&<option value="" disabled>{tr("폴더 선택","Pick folder")}</option>}
+              {subjects.map(x=><option key={x.id} value={x.id}>📁 {x.name}</option>)}
+            </select>
+            {s?.isExam&&<div className="subj-badge" style={{background:"#FFF7E0",color:"#946200"}}>{tr("📜 기출","📜 Past exam")}</div>}
+            <select
+              value={s?.studyType==="quiz"?"quiz":"explain"}
+              onChange={e=>setMode(d.id,e.target.value)}
+              className="subj-badge"
+              style={{background:(s?.studyType==="quiz"?"#EAF3FF":"#F0EAFF"),color:(s?.studyType==="quiz"?"#1B5FB0":"#6A3FB0"),
+                border:"none",cursor:"pointer",fontFamily:"inherit"}}
+              title={tr("학습 방식 바꾸기","Change study mode")}>
+              <option value="explain">{tr("🧠 이해","🧠 Explain")}</option>
+              <option value="quiz">{tr("📇 암기","📇 Quiz")}</option>
+            </select>
+          </div>
+          {s?.createdAt&&<span style={{fontSize:11,color:"var(--sub)",flexShrink:0,marginTop:2}}>{new Date(s.createdAt).toLocaleDateString(CFG.lang==="en"?"en-US":"ko-KR",{year:"numeric",month:"short",day:"numeric"})}</span>}
+        </div>
+        <div className="nm" style={{display:"flex",alignItems:"baseline",gap:6}}>
+          <span style={{minWidth:0}}>{d.name}</span>
+          <button onClick={()=>rename(d.id,d.name)} title={tr("이름 바꾸기","Rename")}
+            style={{background:"none",border:"none",cursor:"pointer",padding:"0 2px",opacity:.5,fontSize:13,flexShrink:0}}>✎</button>
+        </div>
+        {s?(<>
+          <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:11}}>
+            <span style={{fontFamily:"'Jua',sans-serif",fontSize:18,color:"var(--ink)"}}>{s.total}</span>
+            <span style={{fontSize:11,color:"var(--sub)"}}>{tr("개념","concepts")}</span>
+            {s.due>0&&<span style={{marginLeft:"auto",fontSize:11,fontWeight:700,color:"var(--pri)"}}>{tr("오늘 복습 ","Due today ")}{s.due}</span>}
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            <RateBar label={tr("개념 진행률","Started")} pct={ratePct(s.started,s.total)} tone="pri"/>
+            <RateBar label={tr("복습 진도율","Reviewed")} pct={ratePct(s.reviewed,s.total)} tone="gold"/>
+            <RateBar label={tr("심화 진도율","Mastered")} pct={ratePct(s.deep,s.total)} tone="mint"/>
+          </div>
+        </>):<div className="muted">{tr("준비 중…","Preparing…")}</div>}
+        <div className="acts">
+          <button className="btn pri sm" onClick={()=>setPickFor({id:d.id,def:(s?.studyType==="quiz"?"quiz":"explain")})}>
+            {tr("공부 시작","Study")}{s&&s.due>0?" · "+s.due+tr("개",""):""}
+          </button>
+          <button className="btn gho sm" onClick={()=>onNotes(d.id)}>📓</button>
+          <button className="btn gho sm" onClick={()=>del(d.id,d.name)}>{tr("삭제","Delete")}</button>
+        </div>
+      </article>
+    );
+  };
+  // 학생용 '내 공부방': 과목(폴더)별로 묶어서 표시 — 구분 없는 나열 금지 (대표 지시 2026-07-16)
+  const deckGroups=[
+    ...subjects.map(sj=>({key:sj.id,name:sj.name,color:sj.color,list:decks.filter(d=>d.subjId===sj.id)})),
+    {key:"_etc",name:tr("기타","Other"),color:"#999",list:decks.filter(d=>!subjects.some(sj=>sj.id===d.subjId))},
+  ].filter(g=>g.list.length>0);
+
   return(
     <section>
       <div className="hero">
@@ -98,66 +161,21 @@ function Home({decks,subjects,onAdd,onUnits,onOpen,onNotes,onChanged,nick,onInsi
       )}
       {decks.length===0?(
         onUnits?null:<div className="empty">{tr("아직 자료가 없네! 공부한 거 던져주면 문제 낼게 📚","No materials yet! Drop in what you studied and I'll quiz you 📚")}</div>
-      ):(onUnits&&!openLib)?null:(
-        <div className="grid">
-          {decks.map(d=>{
-            const s=det[d.id];const subj=getSubj(d.subjId);
-            return(
-              <article key={d.id} className="card deck">
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:6}}>
-                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                    <select
-                      value={subjects.some(x=>x.id===d.subjId)?d.subjId:""}
-                      onChange={e=>move(d.id,e.target.value)}
-                      className="subj-badge"
-                      style={{background:(subj?subj.color:"#888")+"22",color:subj?subj.color:"var(--sub)",
-                        border:"none",cursor:"pointer",fontFamily:"inherit"}}
-                      title={tr("폴더 이동","Move folder")}>
-                      {!subjects.some(x=>x.id===d.subjId)&&<option value="" disabled>{tr("폴더 선택","Pick folder")}</option>}
-                      {subjects.map(x=><option key={x.id} value={x.id}>📁 {x.name}</option>)}
-                    </select>
-                    {s?.isExam&&<div className="subj-badge" style={{background:"#FFF7E0",color:"#946200"}}>{tr("📜 기출","📜 Past exam")}</div>}
-                    <select
-                      value={s?.studyType==="quiz"?"quiz":"explain"}
-                      onChange={e=>setMode(d.id,e.target.value)}
-                      className="subj-badge"
-                      style={{background:(s?.studyType==="quiz"?"#EAF3FF":"#F0EAFF"),color:(s?.studyType==="quiz"?"#1B5FB0":"#6A3FB0"),
-                        border:"none",cursor:"pointer",fontFamily:"inherit"}}
-                      title={tr("학습 방식 바꾸기","Change study mode")}>
-                      <option value="explain">{tr("🧠 이해","🧠 Explain")}</option>
-                      <option value="quiz">{tr("📇 암기","📇 Quiz")}</option>
-                    </select>
-                  </div>
-                  {s?.createdAt&&<span style={{fontSize:11,color:"var(--sub)",flexShrink:0,marginTop:2}}>{new Date(s.createdAt).toLocaleDateString(CFG.lang==="en"?"en-US":"ko-KR",{year:"numeric",month:"short",day:"numeric"})}</span>}
-                </div>
-                <div className="nm" style={{display:"flex",alignItems:"baseline",gap:6}}>
-                  <span style={{minWidth:0}}>{d.name}</span>
-                  <button onClick={()=>rename(d.id,d.name)} title={tr("이름 바꾸기","Rename")}
-                    style={{background:"none",border:"none",cursor:"pointer",padding:"0 2px",opacity:.5,fontSize:13,flexShrink:0}}>✎</button>
-                </div>
-                {s?(<>
-                  <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:11}}>
-                    <span style={{fontFamily:"'Jua',sans-serif",fontSize:18,color:"var(--ink)"}}>{s.total}</span>
-                    <span style={{fontSize:11,color:"var(--sub)"}}>{tr("개념","concepts")}</span>
-                    {s.due>0&&<span style={{marginLeft:"auto",fontSize:11,fontWeight:700,color:"var(--pri)"}}>{tr("오늘 복습 ","Due today ")}{s.due}</span>}
-                  </div>
-                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                    <RateBar label={tr("개념 진행률","Started")} pct={ratePct(s.started,s.total)} tone="pri"/>
-                    <RateBar label={tr("복습 진도율","Reviewed")} pct={ratePct(s.reviewed,s.total)} tone="gold"/>
-                    <RateBar label={tr("심화 진도율","Mastered")} pct={ratePct(s.deep,s.total)} tone="mint"/>
-                  </div>
-                </>):<div className="muted">{tr("준비 중…","Preparing…")}</div>}
-                <div className="acts">
-                  <button className="btn pri sm" onClick={()=>setPickFor({id:d.id,def:(s?.studyType==="quiz"?"quiz":"explain")})}>
-                    {tr("공부 시작","Study")}{s&&s.due>0?" · "+s.due+tr("개",""):""}
-                  </button>
-                  <button className="btn gho sm" onClick={()=>onNotes(d.id)}>📓</button>
-                  <button className="btn gho sm" onClick={()=>del(d.id,d.name)}>{tr("삭제","Delete")}</button>
-                </div>
-              </article>
-            );
-          })}
+      ):(onUnits&&!openLib)?null:onUnits?(
+        <div style={{display:"flex",flexDirection:"column",gap:20,marginBottom:14}}>
+          {deckGroups.map(g=>(
+            <div key={g.key}>
+              <div style={{display:"flex",alignItems:"center",gap:8,margin:"0 2px 9px"}}>
+                <span style={{width:9,height:9,borderRadius:"50%",background:g.color,flexShrink:0}}/>
+                <span style={{fontFamily:"'Jua',sans-serif",fontSize:14.5,color:"var(--ink)"}}>{g.name}</span>
+                <span style={{fontSize:11.5,color:"var(--sub)"}}>{g.list.length}{tr("개","")}</span>
+              </div>
+              <div className="grid">{g.list.map(renderDeck)}</div>
+            </div>
+          ))}
         </div>
+      ):(
+        <div className="grid">{decks.map(renderDeck)}</div>
       )}
       {pickFor&&(
         <div onClick={()=>setPickFor(null)} style={{position:"fixed",inset:0,background:"rgba(34,28,57,.42)",zIndex:60,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
