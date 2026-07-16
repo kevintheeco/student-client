@@ -1,6 +1,7 @@
 import { CFG, DECKS_KEY, LS, SUBJ_COLORS, byteSize, dk, estimateStorage, formatSize, tr } from "../core/platform.js";
 import { COMPANY_MODE, callAI, uid } from "../core/ai.js";
 import { LEVELS } from "../core/curriculum.js";
+import { LEVELS_US } from "../core/curriculumUS.js";
 import { Cheer } from "../ui/common.jsx";
 import React from "react";
 const { useState } = React;
@@ -9,9 +10,12 @@ const { useState } = React;
    단원별 공부 — 자료 없이 교육과정 목차에서 단원을 골라 바로 공부.
    선택한 단원마다 AI가 소단원별 과외 내용(src)을 써서
    교재 모드와 같은 형태의 덱을 만든다 → 과외·이해·암기·시험 엔진 재사용.
+   edition==="us"면 미국 커리큘럼(curriculumUS.js)+영어 프롬프트 사용.
 ════════════════════════════════════════════════════════════════ */
 
-function UnitStudy({subjects,onSave,onDone,onCancel}){
+function UnitStudy({edition="student",subjects,onSave,onDone,onCancel}){
+  const isUS=edition==="us";
+  const levels=isUS?LEVELS_US:LEVELS;
   const [openSubj,setOpenSubj]=useState(null);          // 펼친 과목 id
   const [picked,setPicked]=useState({});                // "subjId::단원명" → true
   const [busy,setBusy]=useState(false);
@@ -51,7 +55,7 @@ function UnitStudy({subjects,onSave,onDone,onCancel}){
     try{
       for(const sid of subjIds){
         let subjDef=null;
-        for(const lv of LEVELS){const f=lv.subjects.find(s=>s.id===sid);if(f){subjDef=f;break;}}
+        for(const lv of levels){const f=lv.subjects.find(s=>s.id===sid);if(f){subjDef=f;break;}}
         if(!subjDef)continue;
         const chapters=bySubj[sid].map(chName=>subjDef.chapters.find(c=>c.name===chName)).filter(Boolean);
 
@@ -61,7 +65,11 @@ function UnitStudy({subjects,onSave,onDone,onCancel}){
           setBusyMsg(tr("단원 내용 만드는 중… ","Writing unit content… ")+subjDef.name+" · "+ch.name+" ("+(doneCh+1)+"/"+totalCh+")");
           let made=null;
           try{
-            const r=await callAI(
+            const r=isUS?await callAI(
+              "You are an outstanding US math tutor who knows the Common Core / high-school & AP curriculum precisely. Keep grade-level rigor, write math in LaTeX ($...$). Output JSON only (no code fences).",
+              "Subject: "+subjDef.name+"\nUnit: "+ch.name+"\nSpecific lessons: "+ch.topics.join(", ")+
+              "\n\nFor each lesson, write a focused 1:1 tutoring explanation (60-90 words) — include the definition, key formula, one worked example, and one common mistake. Keep lesson names exactly as listed. JSON only: {\"concepts\":[{\"name\":\"lesson name\",\"src\":\"tutoring content\"}]}",
+              true,{maxTok:7000}):await callAI(
               "너는 대한민국 중·고등학교 수학 교육과정을 정확히 아는 최고의 수학 과외 선생님이야. 교과서 수준을 지키고, 수식은 LaTeX($...$)로 써. JSON만 출력해(코드블록 없이).",
               "과목: "+subjDef.name+"\n대단원: "+ch.name+"\n소단원 목록: "+ch.topics.join(", ")+
               "\n\n각 소단원마다 1:1 과외용 핵심 내용을 300~500자로 써줘 — 정의·핵심 공식·대표 예시 1개·자주 하는 실수 1개 포함. 소단원 이름은 목록 그대로. JSON만: {\"concepts\":[{\"name\":\"소단원명\",\"src\":\"과외 내용\"}]}",
@@ -83,7 +91,7 @@ function UnitStudy({subjects,onSave,onDone,onCancel}){
         const deckName=subjDef.name+" · "+(chNames.length>1?chNames[0]+tr(" 외 "," +")+(chNames.length-1)+tr("개 단원"," units"):chNames[0]);
         const id=uid();
         const deck={id,name:deckName,subjId:ef.id,
-          material:"대한민국 수학 교육과정 — "+subjDef.name+" / "+chNames.join(", "),
+          material:(isUS?"US Math Curriculum — ":"대한민국 수학 교육과정 — ")+subjDef.name+" / "+chNames.join(", "),
           summary:tr("단원별 공부: ","Units: ")+chNames.join(" · "),createdAt:Date.now(),
           isBook:true,isUnit:true,studyType:"explain",concepts};
 
@@ -111,7 +119,7 @@ function UnitStudy({subjects,onSave,onDone,onCancel}){
            "No material needed — pick units from the national curriculum and the AI prof writes tutoring content per topic.")}
       </p>
 
-      {LEVELS.map(lv=>(
+      {levels.map(lv=>(
         <div key={lv.levelId} style={{marginBottom:4}}>
           <div style={{fontFamily:"'Jua',sans-serif",fontSize:14.5,color:"var(--ink)",margin:"10px 0 8px"}}>{lv.level}</div>
           <div style={{display:"flex",flexDirection:"column",gap:8}}>

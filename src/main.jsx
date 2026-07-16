@@ -6,11 +6,12 @@ import { App } from "./views/AppShell.jsx";
 import { AcademyApp } from "./views/Academy.jsx";
 import { VizDemo } from "./views/VizDemo.jsx";
 
-// 진입로 3갈래: 기본=범용(무엇이든 넣어 공부) · #student=중고등 수학 학생용 · #academy=학원용
+// 진입로 4갈래: 기본=범용(무엇이든 넣어 공부) · #student=한국 중고등 수학 학생용 · #us=미국 수학 학생용 · #academy=학원용
 // + 개발용: #vizdemo(벡터 렌더러)·#geodemo(기하 상호작용) — student(/math/) 검사보다 먼저 봐야 함
 function route(){
   if(/vizdemo|geodemo/i.test(location.hash))return "vizdemo";
   if(/academy/i.test(location.hash))return "academy";
+  if(/^#us\b/i.test(location.hash))return "us";
   if(/student|math/i.test(location.hash))return "student";
   return "general";
 }

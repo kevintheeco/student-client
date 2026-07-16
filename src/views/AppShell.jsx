@@ -14,9 +14,11 @@ import { WeakNotes } from "./WeakNotes.jsx";
 import React from "react";
 const { useState, useEffect, useRef, useCallback } = React;
 
-// edition: "general"(범용 — 무엇이든 넣어 공부) | "student"(중·고등 수학 — 단원별 공부 포함)
+// edition: "general"(범용 — 무엇이든 넣어 공부) | "student"(한국 중·고등 수학) | "us"(미국 수학) — 둘 다 단원별 공부 포함
 function App({edition="general"}){
-  const isStudent=edition==="student";
+  const isStudent=edition==="student"||edition==="us";
+  // 미국판(#us)은 기본 언어를 영어로 — tr(ko,en) 전역 스위치라 이 한 줄로 화면 문구 전체가 전환됨
+  useEffect(()=>{if(edition==="us"&&CFG.lang!=="en"){CFG.lang="en";LS.set("ng:lang","en");}},[edition]);
   const [view,setView]=useState((CFG.key||COMPANY_MODE)?"home":"onboard");
   const [decks,setDecks]=useState([]);
   const [subjects,setSubjects]=useState(defaultSubjects());
@@ -206,7 +208,7 @@ function App({edition="general"}){
       )}
       {view==="insight"&&<Insight onExit={()=>{refresh();setView("home");}}/>}
       {view==="add"&&<AddMaterial subjects={subjects} onSave={saveSubjects} onDone={()=>{refresh();setView("home");}} onCancel={()=>setView("home")}/>}
-      {view==="units"&&<UnitStudy subjects={subjects} onSave={saveSubjects} onDone={()=>{refresh();setView("home");}} onCancel={()=>setView("home")}/>}
+      {view==="units"&&<UnitStudy edition={edition} subjects={subjects} onSave={saveSubjects} onDone={()=>{refresh();setView("home");}} onCancel={()=>setView("home")}/>}
       {view==="study"&&activeDeck&&<Study deck={activeDeck} subjects={subjects} onExit={()=>{refresh();setView("home");}}/>}
       {view==="exam"&&(activeDeck||examTopic)&&<Exam deck={examTopic?null:activeDeck} topic={examTopic} onExit={()=>{setExamTopic(null);refresh();setView("home");}}/>}
       {view==="tutor"&&activeDeck&&<Tutor deck={activeDeck} onExit={()=>{refresh();setView("home");}} onPractice={(cid,mode)=>openConcept(activeDeck.id,cid,mode)} onExam={(topic)=>{setExamTopic(topic);setView("exam");}}/>}
