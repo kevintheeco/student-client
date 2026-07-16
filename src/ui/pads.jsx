@@ -18,17 +18,36 @@ function eraseNow(e,lastSeenRef,toolIsEraser){
   return false;
 }
 
-/* ── 팜 리젝션: 펜이 쓰기 칸 근처에 있는 동안(호버·필기·직후 0.9초) 문서 전체의
-   터치 스크롤을 차단한다. 캔버스 자체는 touch-action:none으로 잠갔지만, 받치는
-   손바닥이 캔버스 '바깥'에 닿으면 페이지가 스크롤돼 화면이 흔들리던 문제의 근본 봉쇄. ── */
+/* ── 팜 리젝션: 펜이 쓰기 칸 근처에 오면(호버 포함) 페이지 스크롤을 통째로 얼린다.
+   손바닥이 '먼저' 닿아 브라우저가 이미 스크롤 제스처를 시작한 경우, 나중의 preventDefault로는
+   못 멈추므로(cancelable=false) overflow:hidden으로 스크롤 자체를 즉시 동결하는 방식.
+   펜이 떠나고 0.9초 지나면 자동 해제 — 펜을 치우면 손가락 스크롤은 평소처럼 동작. ── */
 const _penNearAt={t:0};
-const penSeen=()=>{_penNearAt.t=Date.now();};
+let _scrollLockT=null;
+function _freezeScroll(){
+  document.documentElement.style.overflow="hidden";
+  document.body.style.overflow="hidden";
+}
+function _thawScroll(){
+  document.documentElement.style.overflow="";
+  document.body.style.overflow="";
+}
+function penSeen(){
+  _penNearAt.t=Date.now();
+  _freezeScroll();
+  clearTimeout(_scrollLockT);
+  _scrollLockT=setTimeout(_thawScroll,900);
+}
 function usePalmBlock(drawingRef){
   useEffect(()=>{
-    const block=(e)=>{if(drawingRef.current||Date.now()-_penNearAt.t<900)e.preventDefault();};
+    const block=(e)=>{if(e.cancelable&&(drawingRef.current||Date.now()-_penNearAt.t<900))e.preventDefault();};
     document.addEventListener("touchstart",block,{passive:false});
     document.addEventListener("touchmove",block,{passive:false});
-    return()=>{document.removeEventListener("touchstart",block);document.removeEventListener("touchmove",block);};
+    return()=>{
+      document.removeEventListener("touchstart",block);
+      document.removeEventListener("touchmove",block);
+      clearTimeout(_scrollLockT);_thawScroll();   // 패드가 사라지면 스크롤 잠금도 반드시 해제
+    };
   },[]);
 }
 
