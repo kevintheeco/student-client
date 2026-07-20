@@ -899,7 +899,7 @@ function Study({deck:initial,subjects,onExit}){
                     background:q.qtype==='recall'?"#FFF0E6":q.qtype==='apply'?"#E6F7FF":"#F0EDFF",
                     color:q.qtype==='recall'?"#C05A00":q.qtype==='apply'?"#0066A3":"#5B21B6",
                     border:"none",fontSize:11
-                  }}>{q.qtype==='recall'?"암기":q.qtype==='apply'?"응용":"이해"}</span>}
+                  }}>{q.qtype==='recall'?T("암기","Recall"):q.qtype==='apply'?T("응용","Apply"):T("이해","Understand")}</span>}
                 </div>
                 {phase!=="followup"&&<MathText text={q?.question} tag="h2" className="q" style={{margin:"8px 0 0",overflowWrap:"break-word"}}/>}
               </div>
