@@ -1073,13 +1073,13 @@ function Study({deck:initial,subjects,onExit}){
                       {/* 해설 텍스트 + 오버레이 하이라이트 캔버스 */}
                       <div style={{position:"relative",borderRadius:14}}>
                         <div className="blk" style={{margin:0}}>
-                          <div className="bl">이렇게 답하면 완벽</div>
+                          <div className="bl">{T("이렇게 답하면 완벽","This is a complete answer")}</div>
                           <MathText text={ev.model_answer}/>
                         </div>
-                        {deeper&&<div className="blk deeper" style={{margin:0}}><div className="bl">더 풀어서</div><MathText text={deeper}/></div>}
+                        {deeper&&<div className="blk deeper" style={{margin:0}}><div className="bl">{T("더 풀어서","Going deeper")}</div><MathText text={deeper}/></div>}
                         {highlightActive&&<AnnotPad ref={annotPadRef} disabled={annotBusy} tool={annotTool}/>}
                       </div>
-                      {!deeper&&<button className="btn gho sm" onClick={explainMore} disabled={deepBusy}>{deepBusy?"불러오는 중…":"더 풀어서 설명해줘"}</button>}
+                      {!deeper&&<button className="btn gho sm" onClick={explainMore} disabled={deepBusy}>{deepBusy?T("불러오는 중…","Loading…"):T("더 풀어서 설명해줘","Explain in more depth")}</button>}
 
                       {/* 의문점 섹션 */}
                       <div className="annot-section">
@@ -1094,13 +1094,13 @@ function Study({deck:initial,subjects,onExit}){
                             <button className={"btn gho xs"+(annotTool==="pen"?" on":"")} onClick={()=>setAnnotTool("pen")}>🟢</button>
                             <button className={"btn gho xs"+(annotTool==="eraser"?" on":"")} onClick={()=>setAnnotTool("eraser")}>🧽</button>
                             <button className="btn gho xs" onClick={()=>annotPadRef.current?.clear()}>🗑️</button>
-                            <span className="note" style={{fontSize:11}}>S펜·Pencil만 인식</span>
+                            <span className="note" style={{fontSize:11}}>{T("S펜·Pencil만 인식","S Pen/Pencil only")}</span>
                           </>}
                         </div>
 
                         {/* 질문 영역 */}
                         <div className="annot-q-bar">
-                          <span className="muted" style={{fontSize:12,fontWeight:600}}>질문</span>
+                          <span className="muted" style={{fontSize:12,fontWeight:600}}>{T("질문","Question")}</span>
                           <button className="btn gho xs" onClick={()=>{setAnnotQMode(m=>m==="pen"?"type":"pen");setAnnotQInk(false);}}>
                             {annotQMode==="pen"?T("⌨ 타이핑으로","⌨ Type instead"):T("✍ 손글씨로","✍ Handwrite")}
                           </button>
@@ -1109,12 +1109,12 @@ function Study({deck:initial,subjects,onExit}){
                           ?(<div style={{display:"flex",flexDirection:"column",gap:4}}>
                               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:5}}>
                                 <div style={{display:"flex",gap:4}}>
-                                  <button className={"btn gho xs"+(annotQTool==="pen"?" on":"")} onClick={()=>setAnnotQTool("pen")}>✏️ 펜</button>
-                                  <button className={"btn gho xs"+(annotQTool==="eraser"?" on":"")} onClick={()=>setAnnotQTool("eraser")}>🧽 지우개</button>
+                                  <button className={"btn gho xs"+(annotQTool==="pen"?" on":"")} onClick={()=>setAnnotQTool("pen")}>✏️ {T("펜","Pen")}</button>
+                                  <button className={"btn gho xs"+(annotQTool==="eraser"?" on":"")} onClick={()=>setAnnotQTool("eraser")}>🧽 {T("지우개","Eraser")}</button>
                                 </div>
                                 <div style={{display:"flex",gap:4}}>
-                                  <button className="btn gho xs" onClick={()=>annotQPadRef.current?.undo()} disabled={annotBusy}>↩ 취소</button>
-                                  <button className="btn gho xs" onClick={()=>annotQPadRef.current?.clear()} disabled={annotBusy}>🗑️ 전체</button>
+                                  <button className="btn gho xs" onClick={()=>annotQPadRef.current?.undo()} disabled={annotBusy}>↩ {T("취소","Undo")}</button>
+                                  <button className="btn gho xs" onClick={()=>annotQPadRef.current?.clear()} disabled={annotBusy}>🗑️ {T("전체","Clear")}</button>
                                 </div>
                               </div>
                               <QuestionPad ref={annotQPadRef} disabled={annotBusy} tool={annotQTool} onInk={setAnnotQInk}/>
@@ -1165,13 +1165,13 @@ function Study({deck:initial,subjects,onExit}){
                     {submitErr&&<div className="err">{submitErr}</div>}
                     {deriveFeedback&&(
                       <div style={{background:"#FFF5F5",border:"1.5px solid #FECACA",borderRadius:11,padding:"10px 14px"}}>
-                        <div style={{fontSize:10,fontWeight:700,color:"#DC2626",letterSpacing:".4px",marginBottom:4}}>피드백</div>
+                        <div style={{fontSize:10,fontWeight:700,color:"#DC2626",letterSpacing:".4px",marginBottom:4}}>{T("피드백","Feedback")}</div>
                         <MathText text={deriveFeedback} tag="div" style={{fontSize:13,color:"#7F1D1D",lineHeight:1.6}}/>
                       </div>
                     )}
                     {deriveHintShow&&derivePlan?.hints[deriveIdx]&&(
                       <div className="derive-hint">
-                        <span style={{fontSize:11,fontWeight:700,display:"block",marginBottom:3}}>힌트</span>
+                        <span style={{fontSize:11,fontWeight:700,display:"block",marginBottom:3}}>{T("힌트","Hint")}</span>
                         <MathText text={derivePlan.hints[deriveIdx]} tag="span"/>
                       </div>
                     )}
@@ -1226,25 +1226,25 @@ function Study({deck:initial,subjects,onExit}){
                           <button className={"btn gho xs"+(annotTool==="pen"?" on":"")} onClick={()=>setAnnotTool("pen")}>🟢</button>
                           <button className={"btn gho xs"+(annotTool==="eraser"?" on":"")} onClick={()=>setAnnotTool("eraser")}>🧽</button>
                           <button className="btn gho xs" onClick={()=>annotPadRef.current?.clear()}>🗑️</button>
-                          <span className="note" style={{fontSize:11}}>S펜·Pencil만 인식</span>
+                          <span className="note" style={{fontSize:11}}>{T("S펜·Pencil만 인식","S Pen/Pencil only")}</span>
                         </>}
                       </div>
                       <div className="annot-q-bar">
-                        <span className="muted" style={{fontSize:12,fontWeight:600}}>질문</span>
+                        <span className="muted" style={{fontSize:12,fontWeight:600}}>{T("질문","Question")}</span>
                         <button className="btn gho xs" onClick={()=>{setAnnotQMode(m=>m==="pen"?"type":"pen");setAnnotQInk(false);}}>
-                          {annotQMode==="pen"?"⌨ 타이핑으로":"✍ 손글씨로"}
+                          {annotQMode==="pen"?T("⌨ 타이핑으로","⌨ Type instead"):T("✍ 손글씨로","✍ Handwrite")}
                         </button>
                       </div>
                       {annotQMode==="pen"
                         ?(<div style={{display:"flex",flexDirection:"column",gap:4}}>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:5}}>
                               <div style={{display:"flex",gap:4}}>
-                                <button className={"btn gho xs"+(annotQTool==="pen"?" on":"")} onClick={()=>setAnnotQTool("pen")} disabled={annotBusy}>✏️ 펜</button>
-                                <button className={"btn gho xs"+(annotQTool==="eraser"?" on":"")} onClick={()=>setAnnotQTool("eraser")} disabled={annotBusy}>🧽 지우개</button>
+                                <button className={"btn gho xs"+(annotQTool==="pen"?" on":"")} onClick={()=>setAnnotQTool("pen")} disabled={annotBusy}>✏️ {T("펜","Pen")}</button>
+                                <button className={"btn gho xs"+(annotQTool==="eraser"?" on":"")} onClick={()=>setAnnotQTool("eraser")} disabled={annotBusy}>🧽 {T("지우개","Eraser")}</button>
                               </div>
                               <div style={{display:"flex",gap:4}}>
-                                <button className="btn gho xs" onClick={()=>annotQPadRef.current?.undo()} disabled={annotBusy}>↩ 취소</button>
-                                <button className="btn gho xs" onClick={()=>annotQPadRef.current?.clear()} disabled={annotBusy}>🗑️ 전체</button>
+                                <button className="btn gho xs" onClick={()=>annotQPadRef.current?.undo()} disabled={annotBusy}>↩ {T("취소","Undo")}</button>
+                                <button className="btn gho xs" onClick={()=>annotQPadRef.current?.clear()} disabled={annotBusy}>🗑️ {T("전체","Clear")}</button>
                               </div>
                             </div>
                             <QuestionPad ref={annotQPadRef} disabled={annotBusy} tool={annotQTool} onInk={setAnnotQInk}/>
@@ -1257,7 +1257,7 @@ function Study({deck:initial,subjects,onExit}){
                       }
                       <button className="btn pri sm" onClick={()=>askAnnotation(dontknow)}
                         disabled={annotBusy||(!highlightActive&&!annotQInk&&!annotQ.trim())}>
-                        {annotBusy?"답변 불러오는 중…":"질문하기 →"}
+                        {annotBusy?T("답변 불러오는 중…","Getting answer…"):T("질문하기 →","Ask →")}
                       </button>
                       {annotAnswer&&<div className="annot-answer"><MathText text={annotAnswer} tag="div"/></div>}
                     </div>

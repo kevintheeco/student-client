@@ -458,8 +458,8 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
   return(
     <div className="pen-wrap">
       <div className="pen-toolbar">
-        <button className={"btn ico gho sm"+(tool==="pen"?" on":"")} onClick={()=>setTool("pen")} title="펜" disabled={disabled}>✏️</button>
-        <button className={"btn ico gho sm"+(tool==="eraser"?" on":"")} onClick={()=>setTool("eraser")} title="지우개" disabled={disabled}>🧽</button>
+        <button className={"btn ico gho sm"+(tool==="pen"?" on":"")} onClick={()=>setTool("pen")} title={tr("펜","Pen")} disabled={disabled}>✏️</button>
+        <button className={"btn ico gho sm"+(tool==="eraser"?" on":"")} onClick={()=>setTool("eraser")} title={tr("지우개","Eraser")} disabled={disabled}>🧽</button>
         <div className="sep"/>
         {PEN_COLORS.map((c,i)=>(
           <button key={c} className={"color-btn"+(color===c&&tool==="pen"?" on":"")}
