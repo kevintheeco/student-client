@@ -468,7 +468,7 @@ const PenPad=React.forwardRef(function PenPad({kind,onText,disabled,hideOcr,penO
         ))}
         <div className="sep"/>
         <div className="size-row">
-          <span>굵기</span>
+          <span>{tr("굵기","Size")}</span>
           <input type="range" min="1" max="10" step="0.5" value={size} onChange={e=>setSize(Number(e.target.value))}/>
           <span style={{minWidth:22,textAlign:"right"}}>{size}</span>
         </div>

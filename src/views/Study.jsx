@@ -978,7 +978,7 @@ function Study({deck:initial,subjects,onExit}){
                 </div>
               )}
               {!isDeriving&&phase!=="result"&&phase!=="followup"&&(
-                <p className="hint" style={{margin:"4px 0 0",overflowWrap:"break-word"}}>오른쪽 노트에 직접 써봐 ✍️</p>
+                <p className="hint" style={{margin:"4px 0 0",overflowWrap:"break-word"}}>{T("오른쪽 노트에 직접 써봐 ✍️","Write it out on the notepad to the right ✍️")}</p>
               )}
               {phase==="result"&&ev&&(
                 <div className="result" style={{marginTop:12}}>
