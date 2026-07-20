@@ -157,7 +157,7 @@ const APSTAT=[
 
 /* ── 트랙(학년) → 과목 ──
    Grade 8~11: 학년별 필수 1과목 / Grade 12+: 심화선택 6과목(택1 이상) */
-const LEVELS_US=[
+const ALL_LEVELS_US=[
   {level:"Grade 8",levelId:"g8",subjects:[
     {id:"prealg",name:"Pre-Algebra",chapters:PREALG},
   ]},
@@ -179,6 +179,11 @@ const LEVELS_US=[
     {id:"apstat",name:"AP Statistics",chapters:APSTAT},
   ]},
 ];
+
+/* ── MVP 데모(은우 공유용): Geometry만 노출 — 나머지 학년은 위 ALL_LEVELS_US에 그대로 보존,
+   확장할 땐 아래 배열에 levelId만 추가하면 됨 ── */
+const MVP_LEVEL_IDS=["g10"];
+const LEVELS_US=ALL_LEVELS_US.filter(lv=>MVP_LEVEL_IDS.includes(lv.levelId));
 
 /* ── 호환용: 옛 Academy 형식 (units = 대단원 이름 배열) ── */
 const CURRICULUM_US=LEVELS_US.map(lv=>({level:lv.level,subjects:lv.subjects.map(s=>({id:s.id,name:s.name,units:s.chapters.map(c=>c.name)}))}));
